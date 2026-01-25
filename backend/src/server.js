@@ -92,8 +92,17 @@ const renderRewardsPortal = ({
   total = null,
   error = null,
   rewards = [],
+  editReward = null,
 } = {}) => {
   const rewardsList = rewards;
+  const activeReward = editReward || {
+    id: '',
+    title: '',
+    description: '',
+    points: '',
+    value: '',
+    image: '',
+  };
   const rates = [
     { label: '1.000 pts', value: '$10.000' },
     { label: '2.000 pts', value: '$20.000' },
@@ -442,13 +451,28 @@ const renderRewardsPortal = ({
               Administra el catálogo de premios que los clientes pueden canjear.
             </p>
             <form class="form-grid" method="post" action="/admin/rewards/save">
-              <input type="hidden" name="id" value="" />
-              <input type="text" name="title" placeholder="Nombre del premio" required />
-              <input type="text" name="description" placeholder="Descripción" />
-              <input type="text" name="points" placeholder="Puntos (ej. 2000)" required />
-              <input type="text" name="value" placeholder="Valor (ej. $20.000)" />
-              <input type="text" name="image" placeholder="URL de imagen" />
-              <button type="submit">Agregar premio</button>
+              <input type="hidden" name="id" value="${escapeHtml(activeReward.id)}" />
+              <input type="text" name="title" placeholder="Nombre del premio" required value="${escapeHtml(
+                activeReward.title
+              )}" />
+              <input type="text" name="description" placeholder="Descripción" value="${escapeHtml(
+                activeReward.description
+              )}" />
+              <input type="text" name="points" placeholder="Puntos (ej. 2000)" required value="${escapeHtml(
+                activeReward.points
+              )}" />
+              <input type="text" name="value" placeholder="Valor (ej. $20.000)" value="${escapeHtml(
+                activeReward.value
+              )}" />
+              <input type="text" name="image" placeholder="URL de imagen" value="${escapeHtml(
+                activeReward.image
+              )}" />
+              <button type="submit">${activeReward.id ? 'Guardar cambios' : 'Agregar premio'}</button>
+              ${
+                activeReward.id
+                  ? '<a href="/admin/rewards#premios" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">Cancelar</a>'
+                  : ''
+              }
             </form>
             <div class="grid" style="margin-top:16px;">
               ${rewardsList
@@ -463,23 +487,8 @@ const renderRewardsPortal = ({
                       reward.value || ''
                     }</div>
                     <div class="reward-actions">
-                      <form method="post" action="/admin/rewards/save">
-                        <input type="hidden" name="id" value="${reward.id}" />
-                        <input type="hidden" name="title" value="${escapeHtml(
-                          reward.title
-                        )}" />
-                        <input type="hidden" name="description" value="${escapeHtml(
-                          reward.description || ''
-                        )}" />
-                        <input type="hidden" name="points" value="${escapeHtml(
-                          reward.points
-                        )}" />
-                        <input type="hidden" name="value" value="${escapeHtml(
-                          reward.value || ''
-                        )}" />
-                        <input type="hidden" name="image" value="${escapeHtml(
-                          reward.image || ''
-                        )}" />
+                      <form method="get" action="/admin/rewards">
+                        <input type="hidden" name="editId" value="${reward.id}" />
                         <button type="submit">Editar</button>
                       </form>
                       <form method="post" action="/admin/rewards/delete">
@@ -669,9 +678,13 @@ app.get('/admin', adminAuth, (_req, res) => {
 
 app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
+  const editId = String(req.query.editId || '').trim();
   const rewards = loadRewards();
+  const editReward = editId
+    ? rewards.find((reward) => String(reward.id) === editId) || null
+    : null;
   if (!cedula) {
-    return res.send(renderRewardsPortal({ rewards }));
+    return res.send(renderRewardsPortal({ rewards, editReward }));
   }
 
   try {
@@ -684,7 +697,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
-      renderRewardsPortal({ cedula, total, points, rewards })
+      renderRewardsPortal({ cedula, total, points, rewards, editReward })
     );
   } catch (error) {
     return res.send(
@@ -692,6 +705,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         cedula,
         error: error?.response?.data || error?.message || 'No se pudo calcular',
         rewards,
+        editReward,
       })
     );
   }
