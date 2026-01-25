@@ -8,6 +8,63 @@ import { woo } from './wooClient.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
+const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
+
+const normalizeKey = (value) => String(value || '').toLowerCase();
+
+const toNumber = (value) => {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+
+  let cleaned = raw.replace(/[^\d.,-]/g, '');
+  const hasDot = cleaned.includes('.');
+  const hasComma = cleaned.includes(',');
+  if (hasDot && hasComma) {
+    cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
+  } else if (hasComma && !hasDot) {
+    cleaned = cleaned.replace(/,/g, '.');
+  }
+
+  const parsed = Number.parseFloat(cleaned);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const parseMaybeJson = (value) => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return value;
+  }
+};
+
+const sumTotalsForKey = (data, totalKey) => {
+  const targetKey = normalizeKey(totalKey);
+  let sum = 0;
+
+  const walk = (node) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object') return;
+
+    Object.entries(node).forEach(([key, value]) => {
+      if (normalizeKey(key) === targetKey) {
+        sum += toNumber(value);
+      }
+      if (typeof value === 'object') {
+        walk(value);
+      }
+    });
+  };
+
+  walk(data);
+  return sum;
+};
 
 app.use(helmet());
 app.use(cors());
@@ -298,6 +355,48 @@ app.post('/api/cxc/trazabilidad', async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: 'No se pudo consultar trazabilidad de pedidos',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.post('/api/cxc/points', async (req, res) => {
+  try {
+    const { cedula, fecha, params, totalKey, divisor, debug } = req.body || {};
+    if (!cedula && !params) {
+      return res.status(400).json({ error: 'cedula o params son requeridos' });
+    }
+
+    const callParams = { ...(params || {}) };
+    if (cedula && !callParams.strPar_Cedula) {
+      callParams.strPar_Cedula = cedula;
+    }
+    if (fecha && !callParams.datPar_Fecha) {
+      callParams.datPar_Fecha = fecha;
+    }
+
+    const data = await cxc.detalleFacturasPedido(callParams);
+    if (debug) {
+      return res.json(data);
+    }
+
+    const payload = parseMaybeJson(
+      data.result ?? data.response ?? data.parsed ?? {}
+    );
+    const keyToUse = totalKey || 'total';
+    const total = sumTotalsForKey(payload, keyToUse);
+    const divisorValue = Number(divisor || CXC_POINTS_DIVISOR || 10000);
+    const points = divisorValue > 0 ? Math.floor(total / divisorValue) : 0;
+
+    return res.json({
+      total,
+      points,
+      divisor: divisorValue,
+      totalKey: keyToUse,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron calcular puntos desde CxC',
       details: error?.response?.data || error?.message,
     });
   }
