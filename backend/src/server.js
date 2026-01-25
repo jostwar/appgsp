@@ -2,6 +2,8 @@ import './env.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'fs';
+import path from 'path';
 import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
@@ -9,6 +11,7 @@ import { woo } from './wooClient.js';
 const app = express();
 const port = process.env.PORT || 4000;
 const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
+const rewardsPath = path.resolve(process.cwd(), 'data', 'rewards.json');
 
 const normalizeKey = (value) => String(value || '').toLowerCase();
 
@@ -86,33 +89,9 @@ const renderRewardsPortal = ({
   points = null,
   total = null,
   error = null,
+  rewards = [],
 } = {}) => {
-  const rewards = [
-    {
-      title: 'Dinero en saldo',
-      description: 'Convierte puntos en saldo para tus próximas compras.',
-      points: '2.000 pts',
-      value: '$20.000',
-      image:
-        'https://gsp.com.co/wp-content/uploads/2026/01/cropped-Identificador-GSP_LOGO_3.png',
-    },
-    {
-      title: 'Tarjeta regalo',
-      description: 'Canjea por tarjetas de regalo para tu equipo.',
-      points: '5.000 pts',
-      value: '$60.000',
-      image:
-        'https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      title: 'Accesorios premium',
-      description: 'Elige accesorios seleccionados en catálogo.',
-      points: '3.500 pts',
-      value: 'Item',
-      image:
-        'https://images.unsplash.com/photo-1518544889280-8f26f10db6c3?auto=format&fit=crop&w=800&q=80',
-    },
-  ];
+  const rewardsList = rewards;
   const rates = [
     { label: '1.000 pts', value: '$10.000' },
     { label: '2.000 pts', value: '$20.000' },
@@ -206,6 +185,33 @@ const renderRewardsPortal = ({
         flex-direction: column;
         gap: 20px;
       }
+      .layout {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .sidebar {
+        background: var(--card);
+        border-radius: 18px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        position: sticky;
+        top: 16px;
+      }
+      .sidebar a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 14px;
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+      .sidebar a:hover {
+        background: #0f1422;
+        color: var(--text);
+      }
       h1 {
         margin: 0;
         font-size: 26px;
@@ -278,6 +284,25 @@ const renderRewardsPortal = ({
         gap: 14px;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       }
+      .reward-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .btn-secondary {
+        background: transparent;
+        border: 1px solid #2a3347;
+        color: var(--text);
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .form-grid input {
+        width: 100%;
+      }
       .reward-image {
         width: 100%;
         height: 120px;
@@ -345,7 +370,7 @@ const renderRewardsPortal = ({
     <header>
       <div class="topbar">
         <div class="logo">
-          <img src="https://gsp.com.co/wp-content/uploads/2026/01/cropped-Identificador-GSP_LOGO_3.png" alt="GSP" />
+          <img src="https://gsp.com.co/wp-content/uploads/2026/01/Identificador-GSP_LOGO_3.png" alt="GSP" />
         </div>
         <nav class="nav">
           <a href="#inicio">Inicio</a>
@@ -355,72 +380,116 @@ const renderRewardsPortal = ({
       </div>
     </header>
     <div class="container">
-      <div id="inicio" class="card">
-        <h1>Dashboard GSPRewards</h1>
-        <p class="section-subtitle">
-          Consulta puntos por cliente y administra premios disponibles.
-        </p>
-        <div class="totals">
-          <div class="item">
-            <span>Saldo de puntos</span>
-            <strong>${pointsValue}</strong>
-          </div>
-          <div class="item">
-            <span>Total compras (CxC)</span>
-            <strong>${totalValue}</strong>
-          </div>
-          <div class="item">
-            <span>Regla de puntos</span>
-            <strong>1 punto / $10.000</strong>
-          </div>
-        </div>
-      </div>
+      <div class="layout">
+        <aside class="sidebar">
+          <strong>Menú</strong>
+          <a href="#inicio">Dashboard</a>
+          <a href="#clientes">Buscar cliente</a>
+          <a href="#premios">Premios</a>
+        </aside>
 
-      <div id="clientes" class="card">
-        <h2 class="section-title">Buscar cliente</h2>
-        <p class="section-subtitle">
-          Ingresa NIT o cédula para consultar el saldo.
-        </p>
-        <form class="form" method="get" action="/admin/rewards">
-          <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
-            cedula
-          )}" />
-          <button type="submit">Consultar</button>
-        </form>
-        ${
-          error
-            ? `<div class="alert">Error: ${escapeHtml(error)}</div>`
-            : ''
-        }
-      </div>
+        <main style="display:flex; flex-direction:column; gap:20px;">
+          <div id="inicio" class="card">
+            <h1>Dashboard GSPRewards</h1>
+            <p class="section-subtitle">
+              Consulta puntos por cliente y administra premios disponibles.
+            </p>
+            <div class="totals">
+              <div class="item">
+                <span>Saldo de puntos</span>
+                <strong>${pointsValue}</strong>
+              </div>
+              <div class="item">
+                <span>Total compras (CxC)</span>
+                <strong>${totalValue}</strong>
+              </div>
+              <div class="item">
+                <span>Regla de puntos</span>
+                <strong>1 punto / $10.000</strong>
+              </div>
+            </div>
+          </div>
 
-      <div class="card">
-        <div class="pill"><span class="dot"></span>Nivel Oro</div>
-        <div class="value">${pointsValue}</div>
-        <div class="muted">Próximo nivel en 1.550 pts</div>
-      </div>
+          <div id="clientes" class="card">
+            <h2 class="section-title">Buscar cliente</h2>
+            <p class="section-subtitle">
+              Ingresa NIT o cédula para consultar el saldo.
+            </p>
+            <form class="form" method="get" action="/admin/rewards">
+              <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
+                cedula
+              )}" />
+              <button type="submit">Consultar</button>
+            </form>
+            ${
+              error
+                ? `<div class="alert">Error: ${escapeHtml(error)}</div>`
+                : ''
+            }
+          </div>
 
-      <div id="premios" class="card">
-        <h2 class="section-title">Premios para redimir</h2>
-        <p class="section-subtitle">
-          Administra el catálogo de premios que los clientes pueden canjear.
-        </p>
-        <div class="grid">
-          ${rewards
-            .map(
-              (reward) => `<div class="subcard">
-                <img class="reward-image" src="${reward.image}" alt="${escapeHtml(
-                  reward.title
-                )}" />
-                <h3>${reward.title}</h3>
-                <div class="label">${reward.description}</div>
-                <div class="label">${reward.points} · ${reward.value}</div>
-                <button type="button">Habilitar premio</button>
-              </div>`
-            )
-            .join('')}
-        </div>
-      </div>
+          <div class="card">
+            <div class="pill"><span class="dot"></span>Nivel Oro</div>
+            <div class="value">${pointsValue}</div>
+            <div class="muted">Próximo nivel en 1.550 pts</div>
+          </div>
+
+          <div id="premios" class="card">
+            <h2 class="section-title">Premios para redimir</h2>
+            <p class="section-subtitle">
+              Administra el catálogo de premios que los clientes pueden canjear.
+            </p>
+            <form class="form-grid" method="post" action="/admin/rewards/save">
+              <input type="hidden" name="id" value="" />
+              <input type="text" name="title" placeholder="Nombre del premio" required />
+              <input type="text" name="description" placeholder="Descripción" />
+              <input type="text" name="points" placeholder="Puntos (ej. 2000)" required />
+              <input type="text" name="value" placeholder="Valor (ej. $20.000)" />
+              <input type="text" name="image" placeholder="URL de imagen" />
+              <button type="submit">Agregar premio</button>
+            </form>
+            <div class="grid" style="margin-top:16px;">
+              ${rewardsList
+                .map(
+                  (reward) => `<div class="subcard">
+                    <img class="reward-image" src="${reward.image}" alt="${escapeHtml(
+                      reward.title
+                    )}" />
+                    <h3>${reward.title}</h3>
+                    <div class="label">${reward.description || ''}</div>
+                    <div class="label">${formatNumber(reward.points)} pts · ${
+                      reward.value || ''
+                    }</div>
+                    <div class="reward-actions">
+                      <form method="post" action="/admin/rewards/save">
+                        <input type="hidden" name="id" value="${reward.id}" />
+                        <input type="hidden" name="title" value="${escapeHtml(
+                          reward.title
+                        )}" />
+                        <input type="hidden" name="description" value="${escapeHtml(
+                          reward.description || ''
+                        )}" />
+                        <input type="hidden" name="points" value="${escapeHtml(
+                          reward.points
+                        )}" />
+                        <input type="hidden" name="value" value="${escapeHtml(
+                          reward.value || ''
+                        )}" />
+                        <input type="hidden" name="image" value="${escapeHtml(
+                          reward.image || ''
+                        )}" />
+                        <button type="submit">Editar</button>
+                      </form>
+                      <form method="post" action="/admin/rewards/delete">
+                        <input type="hidden" name="id" value="${reward.id}" />
+                        <button type="submit" class="btn-secondary">Eliminar</button>
+                      </form>
+                    </div>
+                  </div>`
+                )
+                .join('')}
+            </div>
+          </div>
 
       <div class="card">
         <h2>Conversión rápida</h2>
@@ -467,6 +536,8 @@ const renderRewardsPortal = ({
           )
           .join('')}
       </div>
+        </main>
+      </div>
     </div>
   </body>
 </html>`;
@@ -475,6 +546,55 @@ const renderRewardsPortal = ({
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+const defaultRewards = [
+  {
+    id: 'saldo',
+    title: 'Dinero en saldo',
+    description: 'Convierte puntos en saldo para tus próximas compras.',
+    points: '2000',
+    value: '$20.000',
+    image:
+      'https://gsp.com.co/wp-content/uploads/2026/01/Identificador-GSP_LOGO_3.png',
+  },
+  {
+    id: 'tarjeta',
+    title: 'Tarjeta regalo',
+    description: 'Canjea por tarjetas de regalo para tu equipo.',
+    points: '5000',
+    value: '$60.000',
+    image:
+      'https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'accesorios',
+    title: 'Accesorios premium',
+    description: 'Elige accesorios seleccionados en catálogo.',
+    points: '3500',
+    value: 'Item',
+    image:
+      'https://images.unsplash.com/photo-1518544889280-8f26f10db6c3?auto=format&fit=crop&w=800&q=80',
+  },
+];
+
+const loadRewards = () => {
+  try {
+    const raw = fs.readFileSync(rewardsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+  } catch (_error) {
+    // ignore
+  }
+  return defaultRewards;
+};
+
+const saveRewards = (rewards) => {
+  fs.mkdirSync(path.dirname(rewardsPath), { recursive: true });
+  fs.writeFileSync(rewardsPath, JSON.stringify(rewards, null, 2));
+};
 
 const parseBasicAuth = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
@@ -541,8 +661,9 @@ app.get('/admin', adminAuth, (_req, res) => {
 
 app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
+  const rewards = loadRewards();
   if (!cedula) {
-    return res.send(renderRewardsPortal());
+    return res.send(renderRewardsPortal({ rewards }));
   }
 
   try {
@@ -555,16 +676,55 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
-      renderRewardsPortal({ cedula, total, points })
+      renderRewardsPortal({ cedula, total, points, rewards })
     );
   } catch (error) {
     return res.send(
       renderRewardsPortal({
         cedula,
         error: error?.response?.data || error?.message || 'No se pudo calcular',
+        rewards,
       })
     );
   }
+});
+
+app.post('/admin/rewards/save', adminAuth, (req, res) => {
+  const { id, title, description, points, value, image } = req.body || {};
+  if (!title || !points) {
+    return res.redirect('/admin/rewards#premios');
+  }
+  const rewards = loadRewards();
+  const rewardId = id || `${Date.now()}`;
+  const payload = {
+    id: rewardId,
+    title: String(title).trim(),
+    description: String(description || '').trim(),
+    points: String(points).trim(),
+    value: String(value || '').trim(),
+    image:
+      String(image || '').trim() ||
+      'https://gsp.com.co/wp-content/uploads/2026/01/Identificador-GSP_LOGO_3.png',
+  };
+  const index = rewards.findIndex((item) => item.id === rewardId);
+  if (index >= 0) {
+    rewards[index] = payload;
+  } else {
+    rewards.unshift(payload);
+  }
+  saveRewards(rewards);
+  return res.redirect('/admin/rewards#premios');
+});
+
+app.post('/admin/rewards/delete', adminAuth, (req, res) => {
+  const { id } = req.body || {};
+  if (!id) {
+    return res.redirect('/admin/rewards#premios');
+  }
+  const rewards = loadRewards();
+  const filtered = rewards.filter((reward) => reward.id !== id);
+  saveRewards(filtered);
+  return res.redirect('/admin/rewards#premios');
 });
 
 app.post('/api/login', async (req, res) => {
