@@ -7,6 +7,8 @@ const {
   WOO_POINTS_META_KEYS,
   WOO_CEDULA_META_KEYS,
   WOO_CUSTOMER_ROLE,
+  WOO_JWT_ENDPOINT,
+  WOO_WP_USER_ME_ENDPOINT,
 } = process.env;
 
 const normalizeCedula = (value) =>
@@ -69,6 +71,10 @@ const client = axios.create({
   baseURL: WOO_URL,
   timeout: 15000,
 });
+
+const getJwtEndpoint = () => WOO_JWT_ENDPOINT || '/wp-json/jwt-auth/v1/token';
+const getWpUserMeEndpoint = () =>
+  WOO_WP_USER_ME_ENDPOINT || '/wp-json/wp/v2/users/me';
 
 const fetchCustomersPage = async ({
   page,
@@ -148,6 +154,29 @@ const extractPointsFromCustomer = (customer) => {
 };
 
 export const woo = {
+  async login({ email, password }) {
+    ensureWooConfig();
+    if (!email || !password) {
+      throw new Error('email y password son requeridos');
+    }
+    const response = await client.post(getJwtEndpoint(), {
+      username: email,
+      password,
+    });
+    return response.data;
+  },
+
+  async getWpUserMe(token) {
+    if (!token) {
+      throw new Error('token es requerido');
+    }
+    const response = await client.get(getWpUserMeEndpoint(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
   async findCustomerByCedula(
     cedula,
     {
