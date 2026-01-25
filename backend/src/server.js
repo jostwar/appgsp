@@ -187,6 +187,23 @@ app.get('/api/woo/meta-keys', async (req, res) => {
   }
 });
 
+app.get('/api/woo/cedulas', async (req, res) => {
+  try {
+    const { perPage, pages, limit } = req.query;
+    const items = await woo.listCedulas({
+      perPage: perPage ? Number(perPage) : undefined,
+      pages: pages ? Number(pages) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+    return res.json({ items });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron listar cédulas de WooCommerce',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
 app.post('/api/cxc/call', async (req, res) => {
   try {
     const { method, params, debug } = req.body || {};

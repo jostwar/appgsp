@@ -172,6 +172,40 @@ export const woo = {
     return extractPointsFromCustomer(customer);
   },
 
+  async listCedulas({ perPage = 100, pages = 2, limit = 50 } = {}) {
+    ensureWooConfig();
+    const results = [];
+
+    for (let page = 1; page <= pages; page += 1) {
+      const customers = await fetchCustomersPage({ page, perPage });
+      if (!Array.isArray(customers) || customers.length === 0) {
+        break;
+      }
+
+      customers.forEach((customer) => {
+        const cedula = extractCedulaFromCustomer(customer);
+        if (cedula) {
+          results.push({
+            id: customer?.id,
+            cedula,
+            gsp_nit: customer?.gsp_nit || null,
+            billing_nit: customer?.billing_nit || null,
+          });
+        }
+      });
+
+      if (results.length >= limit) {
+        break;
+      }
+
+      if (customers.length < perPage) {
+        break;
+      }
+    }
+
+    return results.slice(0, limit);
+  },
+
   async listMetaKeys({ perPage = 100, pages = 2 } = {}) {
     ensureWooConfig();
     const keys = new Set();
