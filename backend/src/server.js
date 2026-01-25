@@ -88,9 +88,30 @@ const renderRewardsPortal = ({
   error = null,
 } = {}) => {
   const rewards = [
-    { title: 'Dinero en saldo', points: '2.000 pts', value: '$20.000' },
-    { title: 'Tarjeta regalo', points: '5.000 pts', value: '$60.000' },
-    { title: 'Accesorios premium', points: '3.500 pts', value: 'Item' },
+    {
+      title: 'Dinero en saldo',
+      description: 'Convierte puntos en saldo para tus próximas compras.',
+      points: '2.000 pts',
+      value: '$20.000',
+      image:
+        'https://gsp.com.co/wp-content/uploads/2026/01/cropped-Identificador-GSP_LOGO_3.png',
+    },
+    {
+      title: 'Tarjeta regalo',
+      description: 'Canjea por tarjetas de regalo para tu equipo.',
+      points: '5.000 pts',
+      value: '$60.000',
+      image:
+        'https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&w=800&q=80',
+    },
+    {
+      title: 'Accesorios premium',
+      description: 'Elige accesorios seleccionados en catálogo.',
+      points: '3.500 pts',
+      value: 'Item',
+      image:
+        'https://images.unsplash.com/photo-1518544889280-8f26f10db6c3?auto=format&fit=crop&w=800&q=80',
+    },
   ];
   const rates = [
     { label: '1.000 pts', value: '$10.000' },
@@ -141,8 +162,44 @@ const renderRewardsPortal = ({
         background: var(--bg);
         color: var(--text);
       }
+      header {
+        background: #0f1422;
+        border-bottom: 1px solid #1f2736;
+      }
+      .topbar {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo img {
+        width: 140px;
+        height: 40px;
+        object-fit: contain;
+      }
+      .nav {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .nav a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 14px;
+      }
+      .nav a:hover {
+        color: var(--text);
+      }
       .container {
-        max-width: 980px;
+        max-width: 1080px;
         margin: 0 auto;
         padding: 32px 20px 60px;
         display: flex;
@@ -157,6 +214,15 @@ const renderRewardsPortal = ({
         background: var(--card);
         border-radius: 18px;
         padding: 20px;
+      }
+      .section-title {
+        margin: 0 0 6px 0;
+        font-size: 20px;
+      }
+      .section-subtitle {
+        margin: 0 0 16px 0;
+        color: var(--muted);
+        font-size: 13px;
       }
       .row {
         display: flex;
@@ -211,6 +277,13 @@ const renderRewardsPortal = ({
         display: grid;
         gap: 14px;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .reward-image {
+        width: 100%;
+        height: 120px;
+        border-radius: 12px;
+        object-fit: cover;
+        margin-bottom: 8px;
       }
       .subcard {
         background: var(--surface);
@@ -269,9 +342,45 @@ const renderRewardsPortal = ({
     </style>
   </head>
   <body>
+    <header>
+      <div class="topbar">
+        <div class="logo">
+          <img src="https://gsp.com.co/wp-content/uploads/2026/01/cropped-Identificador-GSP_LOGO_3.png" alt="GSP" />
+        </div>
+        <nav class="nav">
+          <a href="#inicio">Inicio</a>
+          <a href="#clientes">Buscar cliente</a>
+          <a href="#premios">Premios</a>
+        </nav>
+      </div>
+    </header>
     <div class="container">
-      <h1>Portal GSPRewards</h1>
-      <div class="card">
+      <div id="inicio" class="card">
+        <h1>Dashboard GSPRewards</h1>
+        <p class="section-subtitle">
+          Consulta puntos por cliente y administra premios disponibles.
+        </p>
+        <div class="totals">
+          <div class="item">
+            <span>Saldo de puntos</span>
+            <strong>${pointsValue}</strong>
+          </div>
+          <div class="item">
+            <span>Total compras (CxC)</span>
+            <strong>${totalValue}</strong>
+          </div>
+          <div class="item">
+            <span>Regla de puntos</span>
+            <strong>1 punto / $10.000</strong>
+          </div>
+        </div>
+      </div>
+
+      <div id="clientes" class="card">
+        <h2 class="section-title">Buscar cliente</h2>
+        <p class="section-subtitle">
+          Ingresa NIT o cédula para consultar el saldo.
+        </p>
         <form class="form" method="get" action="/admin/rewards">
           <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
             cedula
@@ -283,16 +392,6 @@ const renderRewardsPortal = ({
             ? `<div class="alert">Error: ${escapeHtml(error)}</div>`
             : ''
         }
-        <div class="totals">
-          <div class="item">
-            <span>Saldo de puntos</span>
-            <strong>${pointsValue}</strong>
-          </div>
-          <div class="item">
-            <span>Total compras (CxC)</span>
-            <strong>${totalValue}</strong>
-          </div>
-        </div>
       </div>
 
       <div class="card">
@@ -301,17 +400,22 @@ const renderRewardsPortal = ({
         <div class="muted">Próximo nivel en 1.550 pts</div>
       </div>
 
-      <div class="card">
-        <h2>Programa GSPRewards</h2>
-        <div class="muted">Gana puntos por cada compra y canjéalos por dinero o productos.</div>
+      <div id="premios" class="card">
+        <h2 class="section-title">Premios para redimir</h2>
+        <p class="section-subtitle">
+          Administra el catálogo de premios que los clientes pueden canjear.
+        </p>
         <div class="grid">
           ${rewards
             .map(
               (reward) => `<div class="subcard">
+                <img class="reward-image" src="${reward.image}" alt="${escapeHtml(
+                  reward.title
+                )}" />
                 <h3>${reward.title}</h3>
-                <div class="label">${reward.points}</div>
-                <div class="label">${reward.value}</div>
-                <button type="button">Canjear</button>
+                <div class="label">${reward.description}</div>
+                <div class="label">${reward.points} · ${reward.value}</div>
+                <button type="button">Habilitar premio</button>
               </div>`
             )
             .join('')}
