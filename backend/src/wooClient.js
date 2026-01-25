@@ -13,6 +13,8 @@ const normalizeCedula = (value) =>
     .replace(/\s+/g, '')
     .replace(/[^\d]/g, '');
 
+const normalizeKey = (value) => String(value || '').toLowerCase();
+
 const matchesCedula = (candidate, target) => {
   if (!candidate || !target) return false;
   if (candidate === target) return true;
@@ -44,11 +46,12 @@ const getCedulaMetaKeys = () => {
       'nit',
       'identificacion',
       'documento',
-    ];
+    ].map(normalizeKey);
   }
   return WOO_CEDULA_META_KEYS.split(',')
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizeKey);
 };
 
 const ensureWooConfig = () => {
@@ -82,7 +85,14 @@ const extractCedulaFromCustomer = (customer) => {
   const metaCandidates = getCedulaMetaKeys();
 
   for (const key of metaCandidates) {
-    const entry = meta.find((item) => item?.key === key);
+    const entry = meta.find((item) => normalizeKey(item?.key) === key);
+    if (entry?.value) {
+      return normalizeCedula(entry.value);
+    }
+  }
+
+  for (const key of metaCandidates) {
+    const entry = meta.find((item) => normalizeKey(item?.key).includes(key));
     if (entry?.value) {
       return normalizeCedula(entry.value);
     }
