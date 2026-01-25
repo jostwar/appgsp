@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
@@ -11,7 +12,8 @@ import { woo } from './wooClient.js';
 const app = express();
 const port = process.env.PORT || 4000;
 const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
-const rewardsPath = path.resolve(process.cwd(), 'data', 'rewards.json');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 
 const normalizeKey = (value) => String(value || '').toLowerCase();
 
@@ -585,15 +587,21 @@ const loadRewards = () => {
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed;
     }
-  } catch (_error) {
-    // ignore
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer rewards.json:', error?.message || error);
   }
   return defaultRewards;
 };
 
 const saveRewards = (rewards) => {
-  fs.mkdirSync(path.dirname(rewardsPath), { recursive: true });
-  fs.writeFileSync(rewardsPath, JSON.stringify(rewards, null, 2));
+  try {
+    fs.mkdirSync(path.dirname(rewardsPath), { recursive: true });
+    fs.writeFileSync(rewardsPath, JSON.stringify(rewards, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar rewards.json:', error?.message || error);
+  }
 };
 
 const parseBasicAuth = (header) => {
