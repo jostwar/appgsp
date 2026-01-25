@@ -44,6 +44,7 @@ const getCedulaMetaKeys = () => {
       'billing_nit',
       'cedula',
       'nit',
+      'gsp_nit',
       'identificacion',
       'documento',
     ].map(normalizeKey);
