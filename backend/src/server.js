@@ -487,10 +487,7 @@ const renderRewardsPortal = ({
                       reward.value || ''
                     }</div>
                     <div class="reward-actions">
-                      <form method="get" action="/admin/rewards">
-                        <input type="hidden" name="editId" value="${reward.id}" />
-                        <button type="submit">Editar</button>
-                      </form>
+                      <a href="/admin/rewards?editId=${reward.id}#premios" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 12px;">Editar</a>
                       <form method="post" action="/admin/rewards/delete">
                         <input type="hidden" name="id" value="${reward.id}" />
                         <button type="submit" class="btn-secondary">Eliminar</button>
