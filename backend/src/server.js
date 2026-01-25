@@ -2,7 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
+import { woo } from './wooClient.js';
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -118,6 +120,142 @@ app.get('/api/points/history', async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: 'No se pudo obtener historial de puntos',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/woo/customer', async (req, res) => {
+  try {
+    const { cedula, perPage, maxPages } = req.query;
+    if (!cedula) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    const customer = await woo.findCustomerByCedula(cedula, {
+      perPage: perPage ? Number(perPage) : undefined,
+      maxPages: maxPages ? Number(maxPages) : undefined,
+    });
+    if (!customer) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    const points = woo.getCustomerPoints(customer);
+    return res.json({ customer, points });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo obtener cliente en WooCommerce',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/woo/points', async (req, res) => {
+  try {
+    const { cedula, perPage, maxPages } = req.query;
+    if (!cedula) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    const customer = await woo.findCustomerByCedula(cedula, {
+      perPage: perPage ? Number(perPage) : undefined,
+      maxPages: maxPages ? Number(maxPages) : undefined,
+    });
+    if (!customer) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    const points = woo.getCustomerPoints(customer);
+    return res.json({ points: points ?? 0 });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron obtener puntos de WooCommerce',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.post('/api/cxc/call', async (req, res) => {
+  try {
+    const { method, params, debug } = req.body || {};
+    if (!method) {
+      return res.status(400).json({ error: 'method es requerido' });
+    }
+    const data = await cxc.call(method, params);
+    if (debug) {
+      return res.json(data);
+    }
+    return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo ejecutar el servicio CxC',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/cxc/estado-cartera', async (req, res) => {
+  try {
+    const { fecha, cedula, vendedor, debug } = req.query;
+    if (!fecha) {
+      return res.status(400).json({ error: 'fecha es requerida' });
+    }
+    const data = await cxc.estadoCartera({ fecha, cedula, vendedor });
+    if (debug) {
+      return res.json(data);
+    }
+    return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar estado de cartera',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/cxc/clientes', async (req, res) => {
+  try {
+    const { vendedor, filas, pagina, debug } = req.query;
+    const data = await cxc.listadoClientes({
+      vendedor,
+      filas: filas ? Number(filas) : undefined,
+      pagina: pagina ? Number(pagina) : undefined,
+    });
+    if (debug) {
+      return res.json(data);
+    }
+    return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar listado de clientes',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.post('/api/cxc/detalle-facturas', async (req, res) => {
+  try {
+    const { params, debug } = req.body || {};
+    const data = await cxc.detalleFacturasPedido(params || {});
+    if (debug) {
+      return res.json(data);
+    }
+    return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar detalle de facturas',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.post('/api/cxc/trazabilidad', async (req, res) => {
+  try {
+    const { params, debug } = req.body || {};
+    const data = await cxc.trazabilidadPedidos(params || {});
+    if (debug) {
+      return res.json(data);
+    }
+    return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar trazabilidad de pedidos',
       details: error?.response?.data || error?.message,
     });
   }
