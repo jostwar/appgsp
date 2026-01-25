@@ -1,10 +1,12 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
+
+dotenv.config({ path: new URL('../.env', import.meta.url) });
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -392,6 +394,19 @@ const adminAuth = async (req, res, next) => {
     if (!credentials) {
       res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
       return res.status(401).send('Autenticación requerida.');
+    }
+
+    const fixedUser = process.env.ADMIN_PORTAL_USER;
+    const fixedPass = process.env.ADMIN_PORTAL_PASS;
+    if (fixedUser && fixedPass) {
+      if (
+        credentials.username === fixedUser &&
+        credentials.password === fixedPass
+      ) {
+        return next();
+      }
+      res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
+      return res.status(401).send('Credenciales inválidas.');
     }
 
     const login = await woo.login({
