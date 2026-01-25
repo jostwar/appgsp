@@ -1,0 +1,97 @@
+const baseUrl = process.env.EXPO_PUBLIC_WC_URL || 'https://gsp.com.co';
+const key = process.env.EXPO_PUBLIC_WC_KEY;
+const secret = process.env.EXPO_PUBLIC_WC_SECRET;
+
+export function hasWooCredentials() {
+  return Boolean(key && secret);
+}
+
+export function getBaseUrl() {
+  return baseUrl;
+}
+
+export function getCheckoutUrl() {
+  return `${baseUrl.replace(/\/$/, '')}/checkout/`;
+}
+
+export function getOrderPayUrl(orderId, orderKey) {
+  const base = baseUrl.replace(/\/$/, '');
+  return `${base}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${orderKey}`;
+}
+
+export async function fetchProducts({ page = 1, perPage = 50, categoryId } = {}) {
+  if (!hasWooCredentials()) {
+    return [];
+  }
+
+  const url = new URL('/wp-json/wc/v3/products', baseUrl);
+  url.searchParams.set('consumer_key', key);
+  url.searchParams.set('consumer_secret', secret);
+  url.searchParams.set('per_page', String(perPage));
+  url.searchParams.set('page', String(page));
+  url.searchParams.set('status', 'publish');
+  if (categoryId) {
+    url.searchParams.set('category', String(categoryId));
+  }
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error('No se pudieron cargar productos.');
+  }
+  return response.json();
+}
+
+export async function fetchAllProducts({ perPage = 50, maxPages = 10 } = {}) {
+  const all = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await fetchProducts({ page, perPage });
+    all.push(...batch);
+    if (batch.length < perPage) {
+      break;
+    }
+  }
+  return all;
+}
+
+export async function fetchCategories() {
+  if (!hasWooCredentials()) {
+    return [];
+  }
+
+  const url = new URL('/wp-json/wc/v3/products/categories', baseUrl);
+  url.searchParams.set('consumer_key', key);
+  url.searchParams.set('consumer_secret', secret);
+  url.searchParams.set('per_page', '20');
+  url.searchParams.set('hide_empty', 'true');
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error('No se pudieron cargar categorías.');
+  }
+  return response.json();
+}
+
+export async function createOrder(lineItems) {
+  if (!hasWooCredentials()) {
+    throw new Error('Faltan credenciales de WooCommerce.');
+  }
+
+  const url = new URL('/wp-json/wc/v3/orders', baseUrl);
+  url.searchParams.set('consumer_key', key);
+  url.searchParams.set('consumer_secret', secret);
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status: 'pending',
+      line_items: lineItems,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('No se pudo crear la orden.');
+  }
+
+  return response.json();
+}
