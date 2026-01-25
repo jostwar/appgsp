@@ -46,3 +46,7 @@ export function getRewardsPoints({ cedula }) {
     body: { cedula },
   });
 }
+
+export function getRewardsCatalog() {
+  return request('/api/rewards');
+}

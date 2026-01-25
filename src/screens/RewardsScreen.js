@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,32 +6,36 @@ import {
   ScrollView,
   Pressable,
   Linking,
+  Image,
 } from 'react-native';
 import { colors, spacing } from '../theme';
+import { getRewardsCatalog } from '../api/backend';
 
 export default function RewardsScreen() {
+  const [rewards, setRewards] = useState([]);
+  const [rewardsError, setRewardsError] = useState('');
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
   ];
-  const rewards = useMemo(
+  const fallbackRewards = useMemo(
     () => [
       {
         id: 'money',
         title: 'Dinero en saldo',
-        points: '2.000 pts',
+        points: '2.000',
         value: '$20.000',
       },
       {
         id: 'gift',
         title: 'Tarjeta regalo',
-        points: '5.000 pts',
+        points: '5.000',
         value: '$60.000',
       },
       {
         id: 'item',
         title: 'Accesorios premium',
-        points: '3.500 pts',
+        points: '3.500',
         value: 'Item',
       },
     ],
@@ -68,6 +72,30 @@ export default function RewardsScreen() {
     []
   );
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadRewards = async () => {
+      try {
+        const data = await getRewardsCatalog();
+        const items = Array.isArray(data?.rewards) ? data.rewards : [];
+        if (isMounted && items.length) {
+          setRewards(items);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setRewardsError(error?.message || 'No se pudieron cargar los premios');
+        }
+      }
+    };
+
+    loadRewards();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const rewardsToShow = rewards.length ? rewards : fallbackRewards;
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -88,11 +116,22 @@ export default function RewardsScreen() {
           <Text style={styles.sectionSubtitle}>
             Gana puntos por cada compra y canjéalos por dinero o productos.
           </Text>
+          {rewardsError ? (
+            <Text style={styles.inlineError}>{rewardsError}</Text>
+          ) : null}
           <View style={styles.rewardsGrid}>
-            {rewards.map((reward) => (
+            {rewardsToShow.map((reward) => (
               <View key={reward.id} style={styles.rewardCard}>
+                {reward.image ? (
+                  <Image
+                    source={{ uri: reward.image }}
+                    style={styles.rewardImage}
+                  />
+                ) : null}
                 <Text style={styles.rewardTitle}>{reward.title}</Text>
-                <Text style={styles.rewardPoints}>{reward.points}</Text>
+                <Text style={styles.rewardPoints}>
+                  {reward.points} pts
+                </Text>
                 <Text style={styles.rewardValue}>{reward.value}</Text>
                 <Pressable style={pressableStyle(styles.secondaryButton)}>
                   <Text style={styles.secondaryButtonText}>Canjear</Text>
@@ -221,6 +260,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.xs,
   },
+  rewardImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    marginBottom: spacing.xs,
+  },
   rewardTitle: {
     color: colors.textMain,
     fontWeight: '600',
@@ -279,6 +324,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  inlineError: {
+    color: colors.warning,
+    fontSize: 12,
   },
   stepsGrid: {
     gap: spacing.md,

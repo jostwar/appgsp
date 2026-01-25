@@ -774,6 +774,11 @@ app.post('/admin/rewards/delete', adminAuth, (req, res) => {
   return res.redirect('/admin/rewards#premios');
 });
 
+app.get('/api/rewards', (_req, res) => {
+  const rewards = loadRewards();
+  return res.json({ rewards });
+});
+
 app.post('/api/login', async (req, res) => {
   try {
     const { identificacion, tipo } = req.body || {};
