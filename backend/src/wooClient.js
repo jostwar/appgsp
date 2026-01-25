@@ -6,6 +6,7 @@ const {
   WOO_SECRET,
   WOO_POINTS_META_KEYS,
   WOO_CEDULA_META_KEYS,
+  WOO_CUSTOMER_ROLE,
 } = process.env;
 
 const normalizeCedula = (value) =>
@@ -154,7 +155,7 @@ export const woo = {
       maxPages = 50,
       orderBy = 'id',
       order = 'asc',
-      role,
+      role = WOO_CUSTOMER_ROLE,
     } = {}
   ) {
     ensureWooConfig();
@@ -202,7 +203,7 @@ export const woo = {
     limit = 50,
     orderBy = 'id',
     order = 'asc',
-    role,
+    role = WOO_CUSTOMER_ROLE,
   } = {}) {
     ensureWooConfig();
     const results = [];
