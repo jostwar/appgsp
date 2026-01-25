@@ -82,6 +82,20 @@ const fetchCustomersPage = async ({ page, perPage }) => {
 };
 
 const extractCedulaFromCustomer = (customer) => {
+  const directCandidates = [
+    customer?.gsp_nit,
+    customer?.billing_nit,
+    customer?.nit,
+    customer?.cedula,
+    customer?.identificacion,
+  ];
+
+  for (const value of directCandidates) {
+    if (value) {
+      return normalizeCedula(value);
+    }
+  }
+
   const meta = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
   const metaCandidates = getCedulaMetaKeys();
 
@@ -101,6 +115,7 @@ const extractCedulaFromCustomer = (customer) => {
 
   const billingCedula =
     customer?.billing?.cedula ||
+    customer?.billing?.billing_nit ||
     customer?.billing?.nit ||
     customer?.billing?.document;
   if (billingCedula) {
@@ -168,6 +183,11 @@ export const woo = {
       }
 
       customers.forEach((customer) => {
+        Object.keys(customer || {}).forEach((key) => {
+          if (key) {
+            keys.add(String(key));
+          }
+        });
         const meta = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
         meta.forEach((item) => {
           if (item?.key) {
