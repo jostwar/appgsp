@@ -171,6 +171,22 @@ app.get('/api/woo/points', async (req, res) => {
   }
 });
 
+app.get('/api/woo/meta-keys', async (req, res) => {
+  try {
+    const { perPage, pages } = req.query;
+    const keys = await woo.listMetaKeys({
+      perPage: perPage ? Number(perPage) : undefined,
+      pages: pages ? Number(pages) : undefined,
+    });
+    return res.json({ keys });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron listar meta keys de WooCommerce',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
 app.post('/api/cxc/call', async (req, res) => {
   try {
     const { method, params, debug } = req.body || {};

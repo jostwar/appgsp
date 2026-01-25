@@ -123,7 +123,7 @@ const extractPointsFromCustomer = (customer) => {
 };
 
 export const woo = {
-  async findCustomerByCedula(cedula, { perPage = 100, maxPages = 10 } = {}) {
+  async findCustomerByCedula(cedula, { perPage = 100, maxPages = 50 } = {}) {
     ensureWooConfig();
     const target = normalizeCedula(cedula);
     if (!target) {
@@ -155,5 +155,32 @@ export const woo = {
 
   getCustomerPoints(customer) {
     return extractPointsFromCustomer(customer);
+  },
+
+  async listMetaKeys({ perPage = 100, pages = 2 } = {}) {
+    ensureWooConfig();
+    const keys = new Set();
+
+    for (let page = 1; page <= pages; page += 1) {
+      const customers = await fetchCustomersPage({ page, perPage });
+      if (!Array.isArray(customers) || customers.length === 0) {
+        break;
+      }
+
+      customers.forEach((customer) => {
+        const meta = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
+        meta.forEach((item) => {
+          if (item?.key) {
+            keys.add(String(item.key));
+          }
+        });
+      });
+
+      if (customers.length < perPage) {
+        break;
+      }
+    }
+
+    return Array.from(keys).sort();
   },
 };
