@@ -127,7 +127,7 @@ app.get('/api/points/history', async (req, res) => {
 
 app.get('/api/woo/customer', async (req, res) => {
   try {
-    const { cedula, perPage, maxPages, orderBy, order } = req.query;
+    const { cedula, perPage, maxPages, orderBy, order, role } = req.query;
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
@@ -136,6 +136,7 @@ app.get('/api/woo/customer', async (req, res) => {
       maxPages: maxPages ? Number(maxPages) : undefined,
       orderBy,
       order,
+      role,
     });
     if (!customer) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -152,7 +153,7 @@ app.get('/api/woo/customer', async (req, res) => {
 
 app.get('/api/woo/points', async (req, res) => {
   try {
-    const { cedula, perPage, maxPages, orderBy, order } = req.query;
+    const { cedula, perPage, maxPages, orderBy, order, role } = req.query;
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
@@ -161,6 +162,7 @@ app.get('/api/woo/points', async (req, res) => {
       maxPages: maxPages ? Number(maxPages) : undefined,
       orderBy,
       order,
+      role,
     });
     if (!customer) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -193,13 +195,14 @@ app.get('/api/woo/meta-keys', async (req, res) => {
 
 app.get('/api/woo/cedulas', async (req, res) => {
   try {
-    const { perPage, pages, limit, orderBy, order } = req.query;
+    const { perPage, pages, limit, orderBy, order, role } = req.query;
     const items = await woo.listCedulas({
       perPage: perPage ? Number(perPage) : undefined,
       pages: pages ? Number(pages) : undefined,
       limit: limit ? Number(limit) : undefined,
       orderBy,
       order,
+      role,
     });
     return res.json({ items });
   } catch (error) {

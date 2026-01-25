@@ -69,7 +69,13 @@ const client = axios.create({
   timeout: 15000,
 });
 
-const fetchCustomersPage = async ({ page, perPage, orderBy, order }) => {
+const fetchCustomersPage = async ({
+  page,
+  perPage,
+  orderBy,
+  order,
+  role,
+} = {}) => {
   const response = await client.get('/wp-json/wc/v3/customers', {
     params: {
       consumer_key: WOO_KEY,
@@ -78,6 +84,7 @@ const fetchCustomersPage = async ({ page, perPage, orderBy, order }) => {
       page,
       orderby: orderBy,
       order,
+      role,
     },
   });
   return response.data;
@@ -142,7 +149,13 @@ const extractPointsFromCustomer = (customer) => {
 export const woo = {
   async findCustomerByCedula(
     cedula,
-    { perPage = 100, maxPages = 50, orderBy = 'id', order = 'asc' } = {}
+    {
+      perPage = 100,
+      maxPages = 50,
+      orderBy = 'id',
+      order = 'asc',
+      role,
+    } = {}
   ) {
     ensureWooConfig();
     const target = normalizeCedula(cedula);
@@ -156,6 +169,7 @@ export const woo = {
         perPage,
         orderBy,
         order,
+        role,
       });
       if (!Array.isArray(customers) || customers.length === 0) {
         break;
@@ -188,6 +202,7 @@ export const woo = {
     limit = 50,
     orderBy = 'id',
     order = 'asc',
+    role,
   } = {}) {
     ensureWooConfig();
     const results = [];
@@ -198,6 +213,7 @@ export const woo = {
         perPage,
         orderBy,
         order,
+        role,
       });
       if (!Array.isArray(customers) || customers.length === 0) {
         break;
