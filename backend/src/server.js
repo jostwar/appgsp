@@ -1,16 +1,10 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import './env.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 const port = process.env.PORT || 4000;
