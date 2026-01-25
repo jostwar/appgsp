@@ -1,18 +1,24 @@
 import { StyleSheet, Text, View, ScrollView, Pressable } from 'react-native';
 import { colors, spacing } from '../theme';
+import { useAuth } from '../store/auth';
 
 export default function ProfileScreen() {
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
   ];
+  const { user, signOut } = useAuth();
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.profileCard}>
           <View>
-            <Text style={styles.profileName}>María Rodríguez</Text>
-            <Text style={styles.profileEmail}>maria@gsp.com.co</Text>
+            <Text style={styles.profileName}>
+              {user?.name || 'Usuario GSP'}
+            </Text>
+            <Text style={styles.profileEmail}>
+              {user?.email || 'correo@gsp.com.co'}
+            </Text>
             <Text style={styles.profilePhone}>+57 300 555 0199</Text>
           </View>
           <View style={styles.levelBadge}>
@@ -39,6 +45,12 @@ export default function ProfileScreen() {
           </Pressable>
           <Pressable style={pressableStyle(styles.secondaryButton)}>
             <Text style={styles.secondaryButtonText}>Contactar soporte</Text>
+          </Pressable>
+          <Pressable
+            style={pressableStyle(styles.secondaryButton)}
+            onPress={signOut}
+          >
+            <Text style={styles.secondaryButtonText}>Cerrar sesión</Text>
           </Pressable>
         </View>
       </ScrollView>

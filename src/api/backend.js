@@ -33,42 +33,16 @@ async function request(path, { method = 'GET', body, params } = {}) {
   return data;
 }
 
-export async function backendHealth() {
-  try {
-    const data = await request('/health');
-    return { ok: data?.ok === true, data };
-  } catch (error) {
-    return { ok: false, error: error?.message || 'Sin conexión' };
-  }
-}
-
-export function login({ identificacion, tipo }) {
-  return request('/api/login', {
+export function loginWoo({ email, password }) {
+  return request('/api/woo/login', {
     method: 'POST',
-    body: { identificacion, tipo },
+    body: { email, password },
   });
 }
 
-export function getCustomer({ identificacion, tipo }) {
-  return request(`/api/customers/${encodeURIComponent(identificacion)}`, {
-    params: { tipo },
-  });
-}
-
-export function getOrders({ identificacion, tipo, page, perPage }) {
-  return request('/api/orders', {
-    params: { identificacion, tipo, page, perPage },
-  });
-}
-
-export function getPoints({ identificacion, tipo }) {
-  return request('/api/points', {
-    params: { identificacion, tipo },
-  });
-}
-
-export function getPointsHistory({ identificacion, tipo, page, perPage }) {
-  return request('/api/points/history', {
-    params: { identificacion, tipo, page, perPage },
+export function getRewardsPoints({ cedula }) {
+  return request('/api/cxc/points', {
+    method: 'POST',
+    body: { cedula },
   });
 }
