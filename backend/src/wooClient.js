@@ -69,13 +69,15 @@ const client = axios.create({
   timeout: 15000,
 });
 
-const fetchCustomersPage = async ({ page, perPage }) => {
+const fetchCustomersPage = async ({ page, perPage, orderBy, order }) => {
   const response = await client.get('/wp-json/wc/v3/customers', {
     params: {
       consumer_key: WOO_KEY,
       consumer_secret: WOO_SECRET,
       per_page: perPage,
       page,
+      orderby: orderBy,
+      order,
     },
   });
   return response.data;
@@ -138,7 +140,10 @@ const extractPointsFromCustomer = (customer) => {
 };
 
 export const woo = {
-  async findCustomerByCedula(cedula, { perPage = 100, maxPages = 50 } = {}) {
+  async findCustomerByCedula(
+    cedula,
+    { perPage = 100, maxPages = 50, orderBy = 'id', order = 'asc' } = {}
+  ) {
     ensureWooConfig();
     const target = normalizeCedula(cedula);
     if (!target) {
@@ -146,7 +151,12 @@ export const woo = {
     }
 
     for (let page = 1; page <= maxPages; page += 1) {
-      const customers = await fetchCustomersPage({ page, perPage });
+      const customers = await fetchCustomersPage({
+        page,
+        perPage,
+        orderBy,
+        order,
+      });
       if (!Array.isArray(customers) || customers.length === 0) {
         break;
       }
@@ -172,12 +182,23 @@ export const woo = {
     return extractPointsFromCustomer(customer);
   },
 
-  async listCedulas({ perPage = 100, pages = 2, limit = 50 } = {}) {
+  async listCedulas({
+    perPage = 100,
+    pages = 2,
+    limit = 50,
+    orderBy = 'id',
+    order = 'asc',
+  } = {}) {
     ensureWooConfig();
     const results = [];
 
     for (let page = 1; page <= pages; page += 1) {
-      const customers = await fetchCustomersPage({ page, perPage });
+      const customers = await fetchCustomersPage({
+        page,
+        perPage,
+        orderBy,
+        order,
+      });
       if (!Array.isArray(customers) || customers.length === 0) {
         break;
       }
