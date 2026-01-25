@@ -86,6 +86,20 @@ const formatNumber = (value) => {
   );
 };
 
+const LEVELS = [
+  { name: 'Plata', min: 1, max: 5_000_000 },
+  { name: 'Oro', min: 5_000_001, max: 20_000_000 },
+  { name: 'Platino', min: 20_000_001, max: 50_000_000 },
+  { name: 'Diamante', min: 50_000_001, max: Infinity },
+];
+
+const getLevelForTotal = (total) => {
+  const value = Number(total || 0);
+  if (value <= 0) return 'Sin nivel';
+  const match = LEVELS.find((level) => value >= level.min && value <= level.max);
+  return match ? match.name : 'Sin nivel';
+};
+
 const renderRewardsPortal = ({
   cedula = '',
   points = null,
@@ -128,6 +142,7 @@ const renderRewardsPortal = ({
     points === null ? '—' : formatNumber(points);
   const totalValue =
     total === null ? '—' : `$${formatNumber(total)}`;
+  const levelValue = total === null ? '—' : getLevelForTotal(total);
 
   return `<!doctype html>
 <html lang="es">
@@ -440,9 +455,9 @@ const renderRewardsPortal = ({
           </div>
 
           <div class="card">
-            <div class="pill"><span class="dot"></span>Nivel Oro</div>
+            <div class="pill"><span class="dot"></span>Nivel ${levelValue}</div>
             <div class="value">${pointsValue}</div>
-            <div class="muted">Próximo nivel en 1.550 pts</div>
+            <div class="muted">Nivel según compras mensuales</div>
           </div>
 
           <div id="premios" class="card">
@@ -1096,10 +1111,12 @@ app.post('/api/cxc/points', async (req, res) => {
     const total = sumTotalsForKey(payload, keyToUse);
     const divisorValue = Number(divisor || CXC_POINTS_DIVISOR || 10000);
     const points = divisorValue > 0 ? Math.floor(total / divisorValue) : 0;
+    const level = getLevelForTotal(total);
 
     return res.json({
       total,
       points,
+      level,
       divisor: divisorValue,
       totalKey: keyToUse,
     });
