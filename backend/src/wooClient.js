@@ -1,11 +1,23 @@
 import axios from 'axios';
 
-const { WOO_URL, WOO_KEY, WOO_SECRET, WOO_POINTS_META_KEYS } = process.env;
+const {
+  WOO_URL,
+  WOO_KEY,
+  WOO_SECRET,
+  WOO_POINTS_META_KEYS,
+  WOO_CEDULA_META_KEYS,
+} = process.env;
 
 const normalizeCedula = (value) =>
   String(value || '')
     .replace(/\s+/g, '')
     .replace(/[^\d]/g, '');
+
+const matchesCedula = (candidate, target) => {
+  if (!candidate || !target) return false;
+  if (candidate === target) return true;
+  return candidate.startsWith(target) || target.startsWith(candidate);
+};
 
 const getPointsMetaKeys = () => {
   if (!WOO_POINTS_META_KEYS) {
@@ -19,6 +31,22 @@ const getPointsMetaKeys = () => {
     ];
   }
   return WOO_POINTS_META_KEYS.split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const getCedulaMetaKeys = () => {
+  if (!WOO_CEDULA_META_KEYS) {
+    return [
+      'billing_cedula',
+      'billing_nit',
+      'cedula',
+      'nit',
+      'identificacion',
+      'documento',
+    ];
+  }
+  return WOO_CEDULA_META_KEYS.split(',')
     .map((item) => item.trim())
     .filter(Boolean);
 };
@@ -51,14 +79,7 @@ const fetchCustomersPage = async ({ page, perPage }) => {
 
 const extractCedulaFromCustomer = (customer) => {
   const meta = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
-  const metaCandidates = [
-    'billing_cedula',
-    'billing_nit',
-    'cedula',
-    'nit',
-    'identificacion',
-    'documento',
-  ];
+  const metaCandidates = getCedulaMetaKeys();
 
   for (const key of metaCandidates) {
     const entry = meta.find((item) => item?.key === key);
@@ -106,7 +127,7 @@ export const woo = {
 
       const match = customers.find((customer) => {
         const value = extractCedulaFromCustomer(customer);
-        return value && value === target;
+        return matchesCedula(value, target);
       });
 
       if (match) {
