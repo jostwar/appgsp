@@ -83,6 +83,42 @@ const normalizeField = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
+const CLIENT_ID_KEYS = [
+  'cedula',
+  'nit',
+  'documento',
+  'identificacion',
+  'identificación',
+  'strcli_cedula',
+  'strcli_nit',
+  'strcli_documento',
+  'strpar_cedula',
+  'strpar_nit',
+  'strpar_documento',
+  'cliente_nit',
+  'cliente_cedula',
+];
+const CLIENT_NAME_KEYS = [
+  'nombre',
+  'nombrecliente',
+  'nombre_cliente',
+  'nombre_completo',
+  'razonsocial',
+  'razon_social',
+  'cliente',
+  'strcli_nombre',
+  'strpar_nombre',
+  'strcli_razon',
+  'strpar_razonsocial',
+];
+const CLIENT_EMAIL_KEYS = ['correo', 'email', 'correo_electronico', 'mail'];
+const CLIENT_PHONE_KEYS = ['telefono', 'tel', 'celular', 'movil', 'whatsapp'];
+const CLIENT_CITY_KEYS = ['ciudad', 'municipio', 'poblacion'];
+const CLIENT_ADDRESS_KEYS = ['direccion', 'dirección', 'address'];
+const CLIENT_SELLER_KEYS = ['vendedor', 'asesor', 'strpar_vended', 'strcli_vendedor'];
+const CLIENT_CUPO_KEYS = ['cupo', 'credito', 'creditolimit', 'cupo_credito'];
+const CLIENT_PLAZO_KEYS = ['plazo', 'dias_credito', 'dias', 'plazodias'];
+
 const findValueByKeys = (data, keys = []) => {
   if (!data) return '';
   const targets = new Set(keys.map(normalizeField));
@@ -114,6 +150,52 @@ const findValueByKeys = (data, keys = []) => {
 
   walk(data);
   return found;
+};
+
+const findClientByCedula = (data, cedula) => {
+  const target = normalizeId(cedula);
+  if (!target) return null;
+  let match = null;
+
+  const walk = (node) => {
+    if (!node || match) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object') return;
+
+    const idValue = findValueByKeys(node, CLIENT_ID_KEYS);
+    if (idValue && normalizeId(idValue) === target) {
+      match = node;
+      return;
+    }
+
+    Object.values(node).forEach((value) => {
+      if (typeof value === 'object') {
+        walk(value);
+      }
+    });
+  };
+
+  walk(data);
+  return match;
+};
+
+const buildClientInfo = (data, cedula) => {
+  const match = findClientByCedula(data, cedula);
+  if (!match) return null;
+  return {
+    cedula: normalizeId(findValueByKeys(match, CLIENT_ID_KEYS) || cedula),
+    name: findValueByKeys(match, CLIENT_NAME_KEYS),
+    email: findValueByKeys(match, CLIENT_EMAIL_KEYS),
+    phone: findValueByKeys(match, CLIENT_PHONE_KEYS),
+    city: findValueByKeys(match, CLIENT_CITY_KEYS),
+    address: findValueByKeys(match, CLIENT_ADDRESS_KEYS),
+    seller: findValueByKeys(match, CLIENT_SELLER_KEYS),
+    cupo: findValueByKeys(match, CLIENT_CUPO_KEYS),
+    plazo: findValueByKeys(match, CLIENT_PLAZO_KEYS),
+  };
 };
 
 const escapeHtml = (value) =>
@@ -185,6 +267,7 @@ const getRebateForTotal = (total) => {
 const renderRewardsPortal = ({
   cedula = '',
   clientName = '',
+  clientInfo = null,
   points = null,
   total = null,
   error = null,
@@ -248,6 +331,7 @@ const renderRewardsPortal = ({
   const showCare = normalizedSection === 'gsp-care';
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
+  const displayName = clientInfo?.name || clientName;
 
   return `<!doctype html>
 <html lang="es">
@@ -597,11 +681,60 @@ const renderRewardsPortal = ({
                 : ''
             }
             ${
-              clientName
+              displayName
                 ? `<div class="label">Nombre: <strong>${escapeHtml(
-                    clientName
+                    displayName
                   )}</strong></div>`
                 : `<div class="label">Nombre: <strong>—</strong></div>`
+            }
+            ${
+              clientInfo?.seller
+                ? `<div class="label">Vendedor: <strong>${escapeHtml(
+                    clientInfo.seller
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.email
+                ? `<div class="label">Correo: <strong>${escapeHtml(
+                    clientInfo.email
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.phone
+                ? `<div class="label">Teléfono: <strong>${escapeHtml(
+                    clientInfo.phone
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.city
+                ? `<div class="label">Ciudad: <strong>${escapeHtml(
+                    clientInfo.city
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.address
+                ? `<div class="label">Dirección: <strong>${escapeHtml(
+                    clientInfo.address
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.cupo
+                ? `<div class="label">Cupo: <strong>${formatNumber(
+                    clientInfo.cupo
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.plazo
+                ? `<div class="label">Plazo: <strong>${escapeHtml(
+                    clientInfo.plazo
+                  )}</strong></div>`
+                : ''
             }
             ${
               cedula
@@ -990,9 +1123,21 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   }
 
   try {
-    const data = await cxc.detalleFacturasPedido(
-      buildCxcDetalleParams({ cedula })
-    );
+    const [facturasData, clientesData] = await Promise.all([
+      cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
+      cxc
+        .listadoClientes({ filas: 500, pagina: 1 })
+        .catch(() => null),
+    ]);
+    const clientesPayload = clientesData
+      ? parseMaybeJson(
+          clientesData.result ?? clientesData.response ?? clientesData.parsed ?? {}
+        )
+      : null;
+    const clientInfo = clientesPayload
+      ? buildClientInfo(clientesPayload, cedula)
+      : null;
+    const data = facturasData;
     if (isCxcFunctionInactive(data?.xml)) {
       return res.send(
         renderRewardsPortal({
@@ -1003,6 +1148,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           editReward,
           gspCareList,
           gspCareActive,
+          clientInfo,
           section,
         })
       );
@@ -1010,25 +1156,14 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const payload = parseMaybeJson(
       data.result ?? data.response ?? data.parsed ?? {}
     );
-    const name = findValueByKeys(payload, [
-      'nombre',
-      'nombrecliente',
-      'nombre_cliente',
-      'nombre_completo',
-      'razonsocial',
-      'razon_social',
-      'cliente',
-      'strcli_nombre',
-      'strpar_nombre',
-      'strcli_razon',
-      'strpar_razonsocial',
-    ]);
+    const name = findValueByKeys(payload, CLIENT_NAME_KEYS);
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
       renderRewardsPortal({
         cedula,
         clientName: name,
+        clientInfo,
         total,
         points,
         rewards,
