@@ -47,6 +47,21 @@ const parseMaybeJson = (value) => {
   }
 };
 
+const extractJsonPrefix = (xml) => {
+  if (typeof xml !== 'string') return null;
+  const markerIndex = xml.indexOf('<?xml');
+  const prefix = markerIndex >= 0 ? xml.slice(0, markerIndex) : xml;
+  const trimmed = prefix.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    return null;
+  }
+};
+
 const sumTotalsForKey = (data, totalKey) => {
   const targetKey = normalizeKey(totalKey);
   let sum = 0;
@@ -1185,7 +1200,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const [facturasData, clientesData] = await Promise.all([
       cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
       cxc
-        .listadoClientes({ filas: 500, pagina: 1 })
+        .listadoClientes({
+          filas: 500,
+          pagina: 1,
+          fecha: formatDateTime(new Date()),
+        })
         .catch(() => null),
     ]);
     const clientesPayload = clientesData
@@ -1193,8 +1212,13 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           clientesData.result ?? clientesData.response ?? clientesData.parsed ?? {}
         )
       : null;
-    const clientInfo = clientesPayload
-      ? buildClientInfo(clientesPayload, cedula)
+    const clientesJson = extractJsonPrefix(clientesData?.xml);
+    const clientesDataSource =
+      clientesPayload && Object.keys(clientesPayload || {}).length > 0
+        ? clientesPayload
+        : clientesJson;
+    const clientInfo = clientesDataSource
+      ? buildClientInfo(clientesDataSource, cedula)
       : null;
     const data = facturasData;
     if (isCxcFunctionInactive(data?.xml)) {
