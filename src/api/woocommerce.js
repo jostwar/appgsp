@@ -96,49 +96,86 @@ export async function fetchBrandOptions() {
   if (!hasWooCredentials()) {
     return [];
   }
-  const attrsUrl = new URL('/wp-json/wc/v3/products/attributes', baseUrl);
-  attrsUrl.searchParams.set('consumer_key', key);
-  attrsUrl.searchParams.set('consumer_secret', secret);
-  attrsUrl.searchParams.set('per_page', '100');
-  const attrsResponse = await fetch(attrsUrl.toString());
-  if (!attrsResponse.ok) {
-    throw new Error('No se pudieron cargar atributos.');
-  }
-  const attributes = await attrsResponse.json();
   const normalize = (value) => String(value || '').toLowerCase().trim();
-  const brandAttr = attributes.find((attr) => {
-    const name = normalize(attr?.name);
-    const slug = normalize(attr?.slug);
-    return (
-      slug === 'pa_brand' ||
-      slug === 'pa_marca' ||
-      slug === 'pa_marcas' ||
-      slug === 'product_brand' ||
-      slug === 'brand' ||
-      slug.includes('marca') ||
-      slug.includes('brand') ||
-      name === 'marca' ||
-      name === 'marcas' ||
-      name === 'brand' ||
-      name === 'brands'
-    );
+  const extractNames = (items) =>
+    Array.isArray(items)
+      ? items.map((term) => term?.name).filter(Boolean)
+      : [];
+
+  const buildUrl = (path, { auth = true, params = {} } = {}) => {
+    const url = new URL(path, baseUrl);
+    if (auth) {
+      url.searchParams.set('consumer_key', key);
+      url.searchParams.set('consumer_secret', secret);
+    }
+    Object.entries(params).forEach(([param, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(param, String(value));
+      }
+    });
+    return url;
+  };
+
+  const attrsUrl = buildUrl('/wp-json/wc/v3/products/attributes', {
+    params: { per_page: '100' },
   });
-  if (!brandAttr?.id) {
-    return [];
+  const attrsResponse = await fetch(attrsUrl.toString());
+  if (attrsResponse.ok) {
+    const attributes = await attrsResponse.json();
+    const brandAttr = attributes.find((attr) => {
+      const name = normalize(attr?.name);
+      const slug = normalize(attr?.slug);
+      return (
+        slug === 'pa_brand' ||
+        slug === 'pa_marca' ||
+        slug === 'pa_marcas' ||
+        slug === 'product_brand' ||
+        slug === 'brand' ||
+        slug.includes('marca') ||
+        slug.includes('brand') ||
+        name === 'marca' ||
+        name === 'marcas' ||
+        name === 'brand' ||
+        name === 'brands'
+      );
+    });
+    if (brandAttr?.id) {
+      const termsUrl = buildUrl(
+        `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
+        { params: { per_page: '100' } }
+      );
+      const termsResponse = await fetch(termsUrl.toString());
+      if (termsResponse.ok) {
+        const terms = await termsResponse.json();
+        const names = extractNames(terms);
+        if (names.length > 0) {
+          return names;
+        }
+      }
+    }
   }
-  const termsUrl = new URL(
-    `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
-    baseUrl
-  );
-  termsUrl.searchParams.set('consumer_key', key);
-  termsUrl.searchParams.set('consumer_secret', secret);
-  termsUrl.searchParams.set('per_page', '100');
-  const termsResponse = await fetch(termsUrl.toString());
-  if (!termsResponse.ok) {
-    throw new Error('No se pudieron cargar marcas.');
+
+  const fallbackEndpoints = [
+    buildUrl('/wp-json/wp/v2/product_brand', {
+      auth: false,
+      params: { per_page: '100', hide_empty: 'true' },
+    }),
+    buildUrl('/wp-json/wc/v3/products/brands', {
+      params: { per_page: '100', hide_empty: 'true' },
+    }),
+  ];
+
+  for (const url of fallbackEndpoints) {
+    const response = await fetch(url.toString());
+    if (!response.ok) continue;
+    const data = await response.json();
+    const names = extractNames(data);
+    if (names.length > 0) {
+      return names;
+    }
   }
-  const terms = await termsResponse.json();
-  return terms.map((term) => term?.name).filter(Boolean);
+
+  return [];
 }
 
 export async function searchProducts(query, { perPage = 12 } = {}) {

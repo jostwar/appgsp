@@ -81,17 +81,41 @@ const extractResult = (xml) => {
   return { parsed, response, result };
 };
 
-const baseParams = (params = {}) => ({
-  strPar_BaseDatos: CXC_EMPRESA,
-  strPar_Token: CXC_TOKEN,
-  ...params,
-});
+const resolveServiceUrl = (method) => {
+  if (!CXC_API_URL) return CXC_API_URL;
+  if (CXC_API_URL.includes('{{method}}')) {
+    return CXC_API_URL.replace('{{method}}', method);
+  }
+  if (CXC_API_URL.includes('{method}')) {
+    return CXC_API_URL.replace('{method}', method);
+  }
+  if (CXC_API_URL.includes(':method')) {
+    return CXC_API_URL.replace(':method', method);
+  }
+  return CXC_API_URL;
+};
+
+const baseParams = (params = {}) => {
+  const database =
+    params.strPar_Basedatos ?? params.strPar_BaseDatos ?? CXC_EMPRESA;
+  const token = params.strPar_Token ?? CXC_TOKEN;
+  const cleaned = { ...params };
+  delete cleaned.strPar_Basedatos;
+  delete cleaned.strPar_BaseDatos;
+  delete cleaned.strPar_Token;
+
+  return {
+    strPar_Basedatos: database,
+    strPar_Token: token,
+    ...cleaned,
+  };
+};
 
 export const cxc = {
   async call(method, params = {}) {
     ensureConfig();
     const payload = buildEnvelope(method, baseParams(params));
-    const response = await axios.post(CXC_API_URL, payload, {
+    const response = await axios.post(resolveServiceUrl(method), payload, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
         SOAPAction: getSoapAction(method),
