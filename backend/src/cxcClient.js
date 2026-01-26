@@ -30,6 +30,17 @@ const escapeXml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
+const parseJsonish = (value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    return value;
+  }
+};
+
 const getSoapAction = (method) => {
   const base = SOAP_NS.endsWith('/') ? SOAP_NS : `${SOAP_NS}/`;
   return `${base}${method}`;
@@ -95,6 +106,20 @@ const resolveServiceUrl = (method) => {
   return CXC_API_URL;
 };
 
+const resolveGetUrl = (method) => {
+  if (!CXC_API_URL) return CXC_API_URL;
+  if (CXC_API_URL.includes('{{method}}')) {
+    return CXC_API_URL.replace('{{method}}', method);
+  }
+  if (CXC_API_URL.includes('{method}')) {
+    return CXC_API_URL.replace('{method}', method);
+  }
+  if (CXC_API_URL.includes(':method')) {
+    return CXC_API_URL.replace(':method', method);
+  }
+  return `${CXC_API_URL.replace(/\/$/, '')}/${method}`;
+};
+
 const baseParams = (params = {}) => {
   const database =
     params.strPar_Basedatos ?? params.strPar_BaseDatos ?? CXC_EMPRESA;
@@ -128,20 +153,43 @@ export const cxc = {
     return { xml, parsed, response: soapResponse, result };
   },
 
+  async callGet(method, params = {}) {
+    ensureConfig();
+    const response = await axios.get(resolveGetUrl(method), {
+      params: baseParams(params),
+      timeout: 20000,
+    });
+    const raw = response.data;
+    const result = parseJsonish(raw);
+    return { xml: raw, parsed: null, response: null, result };
+  },
+
   estadoCartera({ fecha, cedula, vendedor } = {}) {
-    return this.call('EstadoCuentasCartera', {
+    return this.callGet('EstadoDeCuentaCartera', {
       datPar_Fecha: fecha,
       strPar_Cedula: cedula,
       strPar_Vended: vendedor,
-    });
+    }).catch(() =>
+      this.call('EstadoCuentasCartera', {
+        datPar_Fecha: fecha,
+        strPar_Cedula: cedula,
+        strPar_Vended: vendedor,
+      })
+    );
   },
 
   listadoClientes({ vendedor, filas = 50, pagina = 1 } = {}) {
-    return this.call('ListadoClientes', {
+    return this.callGet('ListadoClientes', {
       strPar_Vended: vendedor,
       intPar_Filas: filas,
       intPar_Pagina: pagina,
-    });
+    }).catch(() =>
+      this.call('ListadoClientes', {
+        strPar_Vended: vendedor,
+        intPar_Filas: filas,
+        intPar_Pagina: pagina,
+      })
+    );
   },
 
   detalleFacturasPedido(params = {}) {
