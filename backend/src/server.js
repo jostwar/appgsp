@@ -205,6 +205,16 @@ const CLIENT_CUPO_KEYS = [
 ];
 const CLIENT_PLAZO_KEYS = ['plazo', 'dias_credito', 'dias', 'plazodias'];
 const CLIENT_BIRTH_KEYS = ['cli_fecnac', 'fecha_nacimiento', 'fecnac'];
+const CARTERA_SELLER_KEYS = [
+  'vendedor',
+  'strpar_vended',
+  'strpar_vendedor',
+  'strcli_vendedor',
+  'cli_vended',
+  'cli_nomven',
+  'vendedor_asignado',
+  'asesor',
+];
 
 const findValueByKeys = (data, keys = []) => {
   if (!data) return '';
@@ -369,6 +379,18 @@ const findClientInfo = async ({ cedula, vendedor }) => {
     }
   }
   return { info: null, meta: baseMeta, pagesScanned, vendedor: '' };
+};
+
+const findSellerFromCartera = async ({ cedula }) => {
+  if (!cedula) return '';
+  const data = await cxc
+    .estadoCartera({ fecha: formatDateTime(new Date()), cedula })
+    .catch(() => null);
+  const payload = data
+    ? parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {})
+    : null;
+  const seller = findValueByKeys(payload, CARTERA_SELLER_KEYS);
+  return String(seller || '').trim();
 };
 
 const escapeHtml = (value) =>
@@ -1340,13 +1362,19 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     );
   }
 
+  const autoSeller = allowFallback ? await findSellerFromCartera({ cedula }) : '';
   const initialSearch = await findClientInfo({ cedula, vendedor });
+  const autoSearch = autoSeller
+    ? await findClientInfo({ cedula, vendedor: autoSeller })
+    : null;
   const fallbackSearch = allowFallback
     ? await findClientInfo({ cedula, vendedor: '' })
     : null;
   const activeSearch = initialSearch?.info
     ? initialSearch
-    : fallbackSearch || initialSearch;
+    : autoSearch?.info
+      ? autoSearch
+      : fallbackSearch || initialSearch;
   const clientInfo = activeSearch?.info || null;
 
   try {
