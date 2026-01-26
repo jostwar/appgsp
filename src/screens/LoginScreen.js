@@ -7,7 +7,9 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
@@ -17,11 +19,16 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const appVersion =
+    Constants?.expoConfig?.version ||
+    Constants?.manifest?.version ||
+    '1.0.0';
 
   const handleSubmit = async () => {
     setError('');
-    const result = await signIn({ email, password });
+    const result = await signIn({ email, password, remember: rememberMe });
     if (!result.ok) {
       setError(result.error || 'No se pudo iniciar sesión');
     }
@@ -85,6 +92,21 @@ export default function LoginScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
+          style={({ pressed }) => [
+            styles.rememberRow,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => setRememberMe((prev) => !prev)}
+        >
+          <Ionicons
+            name={rememberMe ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={rememberMe ? colors.primary : colors.textMuted}
+          />
+          <Text style={styles.rememberText}>Recordarme</Text>
+        </Pressable>
+
+        <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           onPress={handleSubmit}
           disabled={loading}
@@ -95,6 +117,27 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Iniciar sesión</Text>
           )}
         </Pressable>
+
+        <View style={styles.linksRow}>
+          <Pressable
+            onPress={() => Linking.openURL('https://gsp.com.co/my-account/')}
+          >
+            <Text style={styles.linkText}>Registrarse</Text>
+          </Pressable>
+          <Text style={styles.linkDivider}>·</Text>
+          <Pressable
+            onPress={() =>
+              Linking.openURL('https://gsp.com.co/my-account/lost-password/')
+            }
+          >
+            <Text style={styles.linkText}>Olvidé mi contraseña</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Versión {appVersion} · ipeakagency.com
+        </Text>
       </View>
     </View>
   );
@@ -155,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     color: colors.textMain,
     borderWidth: 1,
     borderColor: colors.border,
@@ -163,16 +206,19 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     position: 'absolute',
-    right: 10,
-    top: '50%',
-    transform: [{ translateY: -10 }],
-    padding: 6,
+    right: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   button: {
     backgroundColor: colors.buttonBg,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
+    alignSelf: 'stretch',
   },
   buttonText: {
     color: colors.buttonText,
@@ -185,5 +231,37 @@ const styles = StyleSheet.create({
   error: {
     color: colors.warning,
     fontSize: 13,
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  rememberText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  linksRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  linkText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  linkDivider: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  footer: {
+    marginTop: spacing.lg,
+  },
+  footerText: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
 });

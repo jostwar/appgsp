@@ -14,6 +14,23 @@ import { getRewardsCatalog } from '../api/backend';
 export default function RewardsScreen() {
   const [rewards, setRewards] = useState([]);
   const [rewardsError, setRewardsError] = useState('');
+  const cashbackBalance = 2_500_000;
+  const nextLevelPoints = 1550;
+  const customerLevel = 'Purple Partner';
+  const rebatePercent = 1;
+  const baseLevelGoal = 5_000_000;
+  const baseLevelRebate = 1;
+  const levelThresholds = [
+    { name: 'Blue Partner', min: 5_000_000 },
+    { name: 'Purple Partner', min: 15_000_000 },
+    { name: 'Red Partner', min: 30_000_000 },
+  ];
+  const levelColors = {
+    'Blue Partner': '#3B82F6',
+    'Purple Partner': '#8B5CF6',
+    'Red Partner': '#EF4444',
+  };
+  const levelColor = levelColors[customerLevel] || colors.accent;
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -47,12 +64,12 @@ export default function RewardsScreen() {
       {
         id: '1',
         title: 'Acumula',
-        description: 'Compra productos y gana puntos por cada pedido.',
+        description: 'Compra productos y acumula cashback por cada pedido.',
       },
       {
         id: '2',
         title: 'Elige',
-        description: 'Selecciona dinero, gift cards o productos.',
+        description: 'Selecciona el beneficio que deseas redimir.',
       },
       {
         id: '3',
@@ -63,14 +80,18 @@ export default function RewardsScreen() {
     []
   );
 
-  const rates = useMemo(
-    () => [
-      { id: 'a', label: '1.000 pts', value: '$10.000' },
-      { id: 'b', label: '2.000 pts', value: '$20.000' },
-      { id: 'c', label: '5.000 pts', value: '$60.000' },
-    ],
-    []
+  const formatCop = (value) =>
+    new Intl.NumberFormat('es-CO').format(Number(value || 0));
+
+  const estimatedMonthlyPurchases = 2_500_000;
+  const nextThreshold = levelThresholds.find(
+    (level) => estimatedMonthlyPurchases < level.min
   );
+  const remainingForRebate = Math.max(0, baseLevelGoal - estimatedMonthlyPurchases);
+  const progressValue = Math.min(1, estimatedMonthlyPurchases / baseLevelGoal);
+  const progressPercent = Math.round(progressValue * 100);
+  const nextLevelGoal = baseLevelGoal;
+  const baseLevelCashback = baseLevelGoal * (baseLevelRebate / 100);
 
   useEffect(() => {
     let isMounted = true;
@@ -100,18 +121,53 @@ export default function RewardsScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>Saldo de puntos</Text>
-          <Text style={styles.pointsValue}>8.450</Text>
-          <Text style={styles.pointsHint}>
-            Próximo nivel en 1.550 pts
+          <View style={styles.pointsHeader}>
+            <Image
+              source={{
+                uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reward-Square.png',
+              }}
+              style={styles.pointsLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.pointsLabel}>Saldo de cashback</Text>
+          </View>
+          <Text style={styles.pointsValue}>
+            ${formatCop(cashbackBalance)}
           </Text>
+          <Text style={styles.pointsHint}>Rebate nivel 1 · Compras mensuales antes de IVA</Text>
+          <Text style={styles.pointsHint}>
+            Cashback acumulado ${formatCop(cashbackBalance)} · Falta $
+            {formatCop(remainingForRebate)} para recibir cashback
+          </Text>
+          <Text style={styles.pointsHint}>
+            Al cumplir nivel 1 ganarías ${formatCop(baseLevelCashback)} de cashback
+          </Text>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressText}>{progressPercent}%</Text>
+            <Text style={styles.progressText}>
+              {nextLevelGoal ? `Meta $${formatCop(nextLevelGoal)}` : 'Meta alcanzada'}
+            </Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[styles.progressFill, { width: `${progressValue * 100}%` }]}
+            />
+            <View style={styles.progressCap} />
+          </View>
           <View style={styles.levelRow}>
-            <View style={styles.levelDot} />
-            <Text style={styles.levelText}>Nivel Oro</Text>
+            <View style={[styles.levelDot, { backgroundColor: levelColor }]} />
+            <Text style={styles.levelText}>{customerLevel}</Text>
           </View>
         </View>
 
         <View style={styles.section}>
+          <Image
+            source={{
+              uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reward-Square.png',
+            }}
+            style={styles.rewardsLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.sectionTitle}>Programa GSPRewards</Text>
           <Text style={styles.sectionSubtitle}>
             Gana puntos por cada compra y canjéalos por dinero o productos.
@@ -130,7 +186,7 @@ export default function RewardsScreen() {
                 ) : null}
                 <Text style={styles.rewardTitle}>{reward.title}</Text>
                 <Text style={styles.rewardPoints}>
-                  {reward.points} pts
+                  Cashback requerido ${formatCop(Number(reward.points || 0) * 10)}
                 </Text>
                 <Text style={styles.rewardValue}>{reward.value}</Text>
                 <Pressable style={pressableStyle(styles.secondaryButton)}>
@@ -142,20 +198,26 @@ export default function RewardsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Conversión rápida</Text>
-          <View style={styles.conversionCard}>
-            {rates.map((rate) => (
-              <View key={rate.id} style={styles.conversionRow}>
-                <Text style={styles.conversionLabel}>{rate.label}</Text>
-                <Text style={styles.conversionValue}>{rate.value}</Text>
-              </View>
-            ))}
-            <Pressable
-              style={pressableStyle(styles.primaryButton)}
-              onPress={() => Linking.openURL('https://wa.me/573103611116')}
-            >
-              <Text style={styles.primaryButtonText}>Solicitar canje</Text>
-            </Pressable>
+          <Text style={styles.sectionTitle}>Niveles Rewards</Text>
+          <View style={styles.levelsCard}>
+            <View style={styles.levelRow}>
+              <Text style={styles.levelLabel}>Blue Partner</Text>
+              <Text style={styles.levelValue}>
+                Rebate 1% · Compras mensuales &gt; $5.000.000 antes de IVA
+              </Text>
+            </View>
+            <View style={styles.levelRow}>
+              <Text style={styles.levelLabel}>Purple Partner</Text>
+              <Text style={styles.levelValue}>
+                Rebate 1.5% · Compras mensuales &gt; $15.000.000 antes de IVA
+              </Text>
+            </View>
+            <View style={styles.levelRow}>
+              <Text style={styles.levelLabel}>Red Partner</Text>
+              <Text style={styles.levelValue}>
+                Rebate 2% · Compras mensuales &gt; $30.000.000 antes de IVA
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -169,24 +231,41 @@ export default function RewardsScreen() {
               </View>
             ))}
           </View>
+          <View style={styles.notesCard}>
+            <Text style={styles.noteText}>
+              El cashback se redime para compras futuras de productos disponibles.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actividad reciente</Text>
           <View style={styles.activityCard}>
             <View style={styles.activityRow}>
-              <Text style={styles.activityTitle}>Compra supermercado</Text>
-              <Text style={styles.activityPoints}>+450 pts</Text>
+              <Text style={styles.activityTitle}>Canje $500.000 cashback</Text>
+              <Text style={styles.activityRedeem}>-$500.000</Text>
             </View>
             <Text style={styles.activityDate}>21 ene 2026</Text>
           </View>
           <View style={styles.activityCard}>
             <View style={styles.activityRow}>
-              <Text style={styles.activityTitle}>Canje tarjeta regalo</Text>
-              <Text style={styles.activityRedeem}>-5.000 pts</Text>
+              <Text style={styles.activityTitle}>Canje bono gasolina</Text>
+              <Text style={styles.activityRedeem}>-$80.000</Text>
             </View>
             <Text style={styles.activityDate}>10 ene 2026</Text>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>T&C</Text>
+          <Text style={styles.termsText}>
+            Rewards GSP: Acumula cashback en cada compra y redímelo para tus próximas
+            compras en GSP. El cashback no es dinero en efectivo, no es transferible
+            y no aplica para pagos de cartera ni abonos a cuenta. El cashback es válido
+            únicamente para compras futuras de productos disponibles y bajo las
+            condiciones y vigencia informadas. Al participar en Rewards GSP aceptas
+            estos términos.
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -213,6 +292,15 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
   },
+  pointsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pointsLogo: {
+    width: 28,
+    height: 28,
+  },
   pointsValue: {
     color: colors.textMain,
     fontSize: 34,
@@ -221,6 +309,34 @@ const styles = StyleSheet.create({
   pointsHint: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+  },
+  progressCap: {
+    position: 'absolute',
+    right: 0,
+    top: -3,
+    width: 2,
+    height: 12,
+    backgroundColor: colors.textMuted,
+    borderRadius: 2,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressText: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   levelRow: {
     flexDirection: 'row',
@@ -250,6 +366,10 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  rewardsLogo: {
+    width: 64,
+    height: 64,
   },
   rewardsGrid: {
     gap: spacing.md,
@@ -290,25 +410,6 @@ const styles = StyleSheet.create({
     color: colors.buttonText,
     fontWeight: '600',
     fontSize: 13,
-  },
-  conversionCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  conversionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  conversionLabel: {
-    color: colors.textSoft,
-    fontSize: 14,
-  },
-  conversionValue: {
-    color: colors.textMain,
-    fontWeight: '600',
-    fontSize: 14,
   },
   primaryButton: {
     backgroundColor: colors.buttonBg,
@@ -376,5 +477,38 @@ const styles = StyleSheet.create({
   activityDate: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  termsText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'justify',
+  },
+  notesCard: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  noteText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  levelsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  levelLabel: {
+    color: colors.textSoft,
+    fontSize: 14,
+  },
+  levelValue: {
+    color: colors.textMain,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

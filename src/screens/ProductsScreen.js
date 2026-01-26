@@ -13,12 +13,11 @@ import {
 } from 'react-native';
 import { colors, spacing } from '../theme';
 import {
-  fetchAllProducts,
   fetchCategories,
+  fetchProducts,
   hasWooCredentials,
 } from '../api/woocommerce';
 import { useCart } from '../store/cart';
-import { runSearch } from '../api/aiSearch';
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function ProductsScreen({ route }) {
@@ -33,9 +32,14 @@ export default function ProductsScreen({ route }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [selectedCategoryName, setSelectedCategoryName] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchStatus, setSearchStatus] = useState('idle');
-  const searchDebounceRef = useRef(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [sortOption, setSortOption] = useState('recomendado');
+  const [selectedBrand, setSelectedBrand] = useState('Todas');
+  const [selectedPortfolio, setSelectedPortfolio] = useState('Todo');
+  const [showBrandMenu, setShowBrandMenu] = useState(false);
+  const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const { addItem } = useCart();
   const initialCategoryName = route?.params?.categoryName;
   const initialBrandName = route?.params?.brandName;
@@ -44,6 +48,22 @@ export default function ProductsScreen({ route }) {
   const [addedId, setAddedId] = useState(null);
   const [pendingCategoryName, setPendingCategoryName] = useState(null);
 
+  const brandOptions = useMemo(
+    () => ['Todas', 'Samsung', 'Hikvision', 'ZKTeco', 'Forza', 'Seagate', 'EZVIZ'],
+    []
+  );
+  const portfolioOptions = useMemo(
+    () => [
+      'Todo',
+      'Alarmas',
+      'Cámaras',
+      'Control de acceso',
+      'Redes',
+      'UPS',
+      'Video Wall',
+    ],
+    []
+  );
 
   const formatCop = (value) => {
     if (!value) return 'Consultar';
@@ -75,23 +95,6 @@ export default function ProductsScreen({ route }) {
     );
   }, [products, selectedCategoryId, selectedCategoryName]);
 
-  const extractResults = (payload) => {
-    if (!payload) return [];
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload.results)) return payload.results;
-    if (Array.isArray(payload.items)) return payload.items;
-    if (Array.isArray(payload.products)) return payload.products;
-    if (typeof payload.products === 'string') {
-      try {
-        const parsedProducts = JSON.parse(payload.products);
-        return Array.isArray(parsedProducts) ? parsedProducts : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    return [];
-  };
-
   const searchedProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return filteredProducts;
@@ -100,48 +103,20 @@ export default function ProductsScreen({ route }) {
     );
   }, [filteredProducts, searchQuery]);
 
-  useEffect(() => {
-    const query = searchQuery.trim();
-    if (query.length < 2) {
-      setSearchResults([]);
-      setSearchStatus('idle');
-      return;
+  const displayedProducts = useMemo(() => {
+    let list = searchedProducts;
+    const sorted = [...list];
+    if (sortOption === 'price-asc') {
+      sorted.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
     }
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
+    if (sortOption === 'price-desc') {
+      sorted.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
     }
-    searchDebounceRef.current = setTimeout(async () => {
-      setSearchStatus('loading');
-      try {
-        const data = await runSearch(query);
-        const parsedResponse = data?.parsed ?? data;
-        const bodyPayload = parsedResponse?.body ?? parsedResponse?.data ?? null;
-        const parsedBody =
-          typeof bodyPayload === 'string'
-            ? (() => {
-                try {
-                  return JSON.parse(bodyPayload);
-                } catch (error) {
-                  return bodyPayload;
-                }
-              })()
-            : bodyPayload;
-        const parsed =
-          parsedBody ||
-          parsedResponse?.results ||
-          parsedResponse?.items ||
-          parsedResponse?.data ||
-          (data?.raw ? JSON.parse(data.raw) : data);
-        const list = extractResults(parsed);
-        setSearchResults(list);
-        setSearchStatus('ready');
-      } catch (error) {
-        setSearchResults([]);
-        setSearchStatus('error');
-      }
-    }, 450);
-    return () => clearTimeout(searchDebounceRef.current);
-  }, [searchQuery]);
+    if (sortOption === 'name-asc') {
+      sorted.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    }
+    return sorted;
+  }, [searchedProducts, sortOption]);
 
   useEffect(() => {
     if (!initialCategoryName) {
@@ -249,15 +224,33 @@ export default function ProductsScreen({ route }) {
       }
       const [cats, data] = await Promise.all([
         fetchCategories(),
-        fetchAllProducts({ perPage: 50, maxPages: 10 }),
+        fetchProducts({ page: 1, perPage: 30 }),
       ]);
       setCategories(cats);
       setProducts(data);
+      setPage(1);
+      setHasMore(data.length === 30);
       setStatus('ready');
     } catch (error) {
       setStatus('error');
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (status !== 'ready' || isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await fetchProducts({ page: nextPage, perPage: 30 });
+      setProducts((prev) => [...prev, ...data]);
+      setPage(nextPage);
+      setHasMore(data.length === 30);
+    } catch (_error) {
+      // ignore for now
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [status, isLoadingMore, hasMore, page]);
 
   useEffect(() => {
     load();
@@ -328,7 +321,7 @@ export default function ProductsScreen({ route }) {
     <View style={styles.screen}>
       <FlatList
         contentContainerStyle={styles.list}
-        data={searchQuery.trim().length >= 2 ? searchResults : searchedProducts}
+        data={displayedProducts}
         numColumns={2}
         columnWrapperStyle={styles.productRow}
         refreshing={isRefreshing}
@@ -337,6 +330,8 @@ export default function ProductsScreen({ route }) {
           await load();
           setIsRefreshing(false);
         }}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         ListHeaderComponent={
           <View style={styles.categoriesSection}>
             <Text style={styles.sectionTitle}>Categorías</Text>
@@ -398,6 +393,132 @@ export default function ProductsScreen({ route }) {
                 </Pressable>
               ))}
             </ScrollView>
+            <View style={styles.filtersSection}>
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterLabel}>Ordenar por</Text>
+                <View style={styles.filterChips}>
+                  {[
+                    { id: 'recomendado', label: 'Recomendado' },
+                    { id: 'price-asc', label: 'Precio ↑' },
+                    { id: 'price-desc', label: 'Precio ↓' },
+                    { id: 'name-asc', label: 'A-Z' },
+                  ].map((option) => (
+                    <Pressable
+                      key={option.id}
+                      style={({ pressed }) => [
+                        styles.filterChip,
+                        sortOption === option.id && styles.filterChipActive,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => setSortOption(option.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          sortOption === option.id && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterLabel}>Filtrar por</Text>
+                <View style={styles.dropdownGroup}>
+                  <View style={styles.dropdownField}>
+                    <Text style={styles.dropdownLabel}>Marca</Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.dropdownButton,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => {
+                        setShowBrandMenu((prev) => !prev);
+                        setShowPortfolioMenu(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownText}>{selectedBrand}</Text>
+                      <Ionicons
+                        name={showBrandMenu ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={colors.textMuted}
+                      />
+                    </Pressable>
+                    {showBrandMenu ? (
+                      <View style={styles.dropdownMenu}>
+                        {brandOptions.map((option) => (
+                          <Pressable
+                            key={option}
+                            style={({ pressed }) => [
+                              styles.dropdownItem,
+                              pressed && styles.pressed,
+                            ]}
+                            onPress={() => {
+                              setSelectedBrand(option);
+                              setShowBrandMenu(false);
+                              setSelectedCategoryId('all');
+                              setSelectedCategoryName(null);
+                              setSearchQuery(option === 'Todas' ? '' : option);
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{option}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.dropdownField}>
+                    <Text style={styles.dropdownLabel}>Portafolio</Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.dropdownButton,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => {
+                        setShowPortfolioMenu((prev) => !prev);
+                        setShowBrandMenu(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownText}>{selectedPortfolio}</Text>
+                      <Ionicons
+                        name={showPortfolioMenu ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={colors.textMuted}
+                      />
+                    </Pressable>
+                    {showPortfolioMenu ? (
+                      <View style={styles.dropdownMenu}>
+                        {portfolioOptions.map((option) => (
+                          <Pressable
+                            key={option}
+                            style={({ pressed }) => [
+                              styles.dropdownItem,
+                              pressed && styles.pressed,
+                            ]}
+                            onPress={() => {
+                              setSelectedPortfolio(option);
+                              setShowPortfolioMenu(false);
+                              setSearchQuery('');
+                              if (option === 'Todo') {
+                                setSelectedCategoryId('all');
+                                setSelectedCategoryName(null);
+                              } else {
+                                setSelectedCategoryId('all');
+                                setSelectedCategoryName(option);
+                              }
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{option}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            </View>
             <Text style={styles.sectionTitle}>Productos</Text>
           </View>
         }
@@ -469,6 +590,14 @@ export default function ProductsScreen({ route }) {
             </View>
           );
         }}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.listFooter}>
+              <ActivityIndicator color={colors.buttonBg} />
+              <Text style={styles.footerText}>Cargando más productos...</Text>
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -482,6 +611,15 @@ const styles = StyleSheet.create({
   list: {
     padding: spacing.xl,
     gap: spacing.lg,
+  },
+  listFooter: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  footerText: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   productRow: {
     justifyContent: 'space-between',
@@ -515,6 +653,64 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  filtersSection: {
+    gap: spacing.sm,
+  },
+  filterGroup: {
+    gap: spacing.xs,
+  },
+  dropdownGroup: {
+    gap: spacing.md,
+  },
+  dropdownField: {
+    gap: spacing.xs,
+  },
+  dropdownLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dropdownButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownText: {
+    color: colors.textMain,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dropdownMenu: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 6,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dropdownItemText: {
+    color: colors.textMain,
+    fontSize: 13,
+  },
+  filterLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   filterChip: {

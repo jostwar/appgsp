@@ -9,6 +9,13 @@ export default function CartScreen({ navigation }) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const formatCop = (value) =>
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(value || 0));
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -37,7 +44,7 @@ export default function CartScreen({ navigation }) {
             <View style={styles.itemInfo}>
               <Text style={styles.itemTitle}>{item.name}</Text>
               <Text style={styles.itemMeta}>
-                {item.quantity} x ${item.price || '0'}
+                {item.quantity} x {formatCop(item.price)}
               </Text>
             </View>
             <Pressable
@@ -53,7 +60,7 @@ export default function CartScreen({ navigation }) {
       <View style={styles.footer}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal</Text>
-          <Text style={styles.totalValue}>${subtotal.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>
         </View>
         <Text style={styles.taxNote}>IVA incluido</Text>
         <View style={styles.pointsRow}>

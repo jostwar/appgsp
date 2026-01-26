@@ -14,8 +14,10 @@ const port = process.env.PORT || 4000;
 const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
+const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
 
 const normalizeKey = (value) => String(value || '').toLowerCase();
+const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
 
 const toNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -87,17 +89,25 @@ const formatNumber = (value) => {
 };
 
 const LEVELS = [
-  { name: 'Plata', min: 1, max: 5_000_000 },
-  { name: 'Oro', min: 5_000_001, max: 20_000_000 },
-  { name: 'Platino', min: 20_000_001, max: 50_000_000 },
-  { name: 'Diamante', min: 50_000_001, max: Infinity },
+  { name: 'Blue Partner', min: 5_000_000, max: 14_999_999, rebate: 1 },
+  { name: 'Purple Partner', min: 15_000_000, max: 29_999_999, rebate: 1.5 },
+  { name: 'Red Partner', min: 30_000_000, max: Infinity, rebate: 2 },
 ];
+const BASE_LEVEL_GOAL = 5_000_000;
+const BASE_LEVEL_REBATE = 1;
 
 const getLevelForTotal = (total) => {
   const value = Number(total || 0);
   if (value <= 0) return 'Sin nivel';
   const match = LEVELS.find((level) => value >= level.min && value <= level.max);
   return match ? match.name : 'Sin nivel';
+};
+
+const getRebateForTotal = (total) => {
+  const value = Number(total || 0);
+  if (value <= 0) return 0;
+  const match = LEVELS.find((level) => value >= level.min && value <= level.max);
+  return match ? match.rebate : 0;
 };
 
 const renderRewardsPortal = ({
@@ -107,6 +117,8 @@ const renderRewardsPortal = ({
   error = null,
   rewards = [],
   editReward = null,
+  gspCareActive = false,
+  gspCareList = [],
 } = {}) => {
   const rewardsList = rewards;
   const activeReward = editReward || {
@@ -117,32 +129,46 @@ const renderRewardsPortal = ({
     value: '',
     image: '',
   };
-  const rates = [
-    { label: '1.000 pts', value: '$10.000' },
-    { label: '2.000 pts', value: '$20.000' },
-    { label: '5.000 pts', value: '$60.000' },
-  ];
   const steps = [
     {
       title: 'Acumula',
-      description: 'Compra productos y gana puntos por cada pedido.',
+      description: 'Compra productos y acumula cashback por cada pedido.',
     },
     {
       title: 'Elige',
-      description: 'Selecciona dinero, gift cards o productos.',
+      description: 'Selecciona el beneficio que deseas redimir.',
     },
     { title: 'Canjea', description: 'Solicita el canje y recibe confirmación.' },
   ];
   const activity = [
-    { title: 'Compra supermercado', points: '+450 pts', date: '21 ene 2026' },
-    { title: 'Canje tarjeta regalo', points: '-5.000 pts', date: '10 ene 2026' },
+    { title: 'Canje $500.000 cashback', points: '-$500.000', date: '21 ene 2026' },
+    { title: 'Canje bono gasolina', points: '-$80.000', date: '10 ene 2026' },
   ];
+  const termsText =
+    'Rewards GSP: Acumula cashback en cada compra y redímelo para tus próximas ' +
+    'compras en GSP. El cashback no es dinero en efectivo, no es transferible ' +
+    'y no aplica para pagos de cartera ni abonos a cuenta. El cashback es válido ' +
+    'únicamente para compras futuras de productos disponibles y bajo las ' +
+    'condiciones y vigencia informadas. Al participar en Rewards GSP aceptas ' +
+    'estos términos.';
 
   const pointsValue =
     points === null ? '—' : formatNumber(points);
   const totalValue =
     total === null ? '—' : `$${formatNumber(total)}`;
   const levelValue = total === null ? '—' : getLevelForTotal(total);
+  const rebateValue = total === null ? '—' : getRebateForTotal(total);
+  const cashbackValue =
+    total === null ? '—' : `$${formatNumber((total * rebateValue) / 100)}`;
+  const progressValue =
+    total === null ? 0 : Math.min(1, Number(total) / BASE_LEVEL_GOAL);
+  const progressPercent = Math.round(progressValue * 100);
+  const remainingForRebate =
+    total === null ? '—' : `$${formatNumber(Math.max(0, BASE_LEVEL_GOAL - total))}`;
+  const baseLevelCashback = `$${formatNumber(
+    Math.round(BASE_LEVEL_GOAL * (BASE_LEVEL_REBATE / 100))
+  )}`;
+  const careStatus = gspCareActive ? 'Activo' : 'No activo';
 
   return `<!doctype html>
 <html lang="es">
@@ -402,6 +428,7 @@ const renderRewardsPortal = ({
           <a href="#inicio">Inicio</a>
           <a href="#clientes">Buscar cliente</a>
           <a href="#premios">Premios</a>
+          <a href="#gsp-care">GSP Care</a>
         </nav>
       </div>
     </header>
@@ -412,6 +439,7 @@ const renderRewardsPortal = ({
           <a href="#inicio">Dashboard</a>
           <a href="#clientes">Buscar cliente</a>
           <a href="#premios">Premios</a>
+          <a href="#gsp-care">GSP Care</a>
         </aside>
 
         <main style="display:flex; flex-direction:column; gap:20px;">
@@ -422,16 +450,20 @@ const renderRewardsPortal = ({
             </p>
             <div class="totals">
               <div class="item">
-                <span>Saldo de puntos</span>
-                <strong>${pointsValue}</strong>
+                <span>Cashback acumulado</span>
+                <strong>${cashbackValue}</strong>
               </div>
               <div class="item">
-                <span>Total compras (CxC)</span>
+                <span>Compras mensuales (CxC)</span>
                 <strong>${totalValue}</strong>
               </div>
               <div class="item">
-                <span>Regla de puntos</span>
-                <strong>1 punto / $10.000</strong>
+                <span>Puntos (referencia)</span>
+                <strong>${pointsValue}</strong>
+              </div>
+              <div class="item">
+                <span>GSP Care</span>
+                <strong>${careStatus}</strong>
               </div>
             </div>
           </div>
@@ -456,8 +488,13 @@ const renderRewardsPortal = ({
 
           <div class="card">
             <div class="pill"><span class="dot"></span>Nivel ${levelValue}</div>
-            <div class="value">${pointsValue}</div>
-            <div class="muted">Nivel según compras mensuales</div>
+            <div class="value">${cashbackValue}</div>
+            <div class="muted">Rebate ${rebateValue}% · Compras mensuales antes de IVA</div>
+            <div class="muted">Falta ${remainingForRebate} para recibir cashback</div>
+            <div class="muted">Al cumplir nivel 1 ganarías ${baseLevelCashback} de cashback</div>
+            <div class="muted">Avance nivel 1: ${progressPercent}% · Meta $${formatNumber(
+              BASE_LEVEL_GOAL
+            )}</div>
           </div>
 
           <div id="premios" class="card">
@@ -515,23 +552,6 @@ const renderRewardsPortal = ({
           </div>
 
       <div class="card">
-        <h2>Conversión rápida</h2>
-        <div class="subcard">
-          ${rates
-            .map(
-              (rate) => `<div class="conversion">
-                <span class="muted">${rate.label}</span>
-                <strong>${rate.value}</strong>
-              </div>`
-            )
-            .join('')}
-          <button type="button" onclick="window.open('https://wa.me/573103611116')">
-            Solicitar canje
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
         <h2>¿Cómo funciona GSPRewards?</h2>
         <div class="grid">
           ${steps
@@ -558,6 +578,41 @@ const renderRewardsPortal = ({
             </div>`
           )
           .join('')}
+      </div>
+
+      <div class="card">
+        <h2>T&C</h2>
+        <div class="muted">${termsText}</div>
+      </div>
+
+      <div id="gsp-care" class="card">
+        <h2 class="section-title">GSP Care</h2>
+        <p class="section-subtitle">
+          Activa o desactiva la membresía para NITs que compren GSP Care.
+        </p>
+        <form class="form" method="post" action="/admin/gspcare/save">
+          <input type="text" name="cedula" placeholder="NIT o cédula" required />
+          <input type="text" name="fecha" placeholder="Fecha activación (YYYY-MM-DD)" />
+          <button type="submit">Activar</button>
+        </form>
+        <div class="grid" style="margin-top:16px;">
+          ${gspCareList
+            .map(
+              (item) => `<div class="subcard">
+                <h3>${escapeHtml(item.cedula)}</h3>
+                <div class="label">Activado: ${escapeHtml(item.activatedAt || '—')}</div>
+                <div class="reward-actions">
+                  <form method="post" action="/admin/gspcare/delete">
+                    <input type="hidden" name="cedula" value="${escapeHtml(
+                      item.cedula
+                    )}" />
+                    <button type="submit" class="btn-secondary">Desactivar</button>
+                  </form>
+                </div>
+              </div>`
+            )
+            .join('')}
+        </div>
       </div>
         </main>
       </div>
@@ -638,6 +693,43 @@ const saveRewards = (rewards) => {
   }
 };
 
+const loadGspCare = () => {
+  try {
+    const raw = fs.readFileSync(gspCarePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { cedula: normalizeId(item), activatedAt: null };
+          }
+          if (item && typeof item === 'object') {
+            return {
+              cedula: normalizeId(item.cedula || item.id || ''),
+              activatedAt: String(item.activatedAt || '').trim() || null,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer gspcare.json:', error?.message || error);
+  }
+  return [];
+};
+
+const saveGspCare = (items) => {
+  try {
+    fs.mkdirSync(path.dirname(gspCarePath), { recursive: true });
+    fs.writeFileSync(gspCarePath, JSON.stringify(items, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar gspcare.json:', error?.message || error);
+  }
+};
+
 const parseBasicAuth = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
   const encoded = header.replace('Basic ', '').trim();
@@ -705,11 +797,17 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
   const rewards = loadRewards();
+  const gspCareList = loadGspCare();
+  const gspCareActive = cedula
+    ? gspCareList.some((item) => item.cedula === normalizeId(cedula))
+    : false;
   const editReward = editId
     ? rewards.find((reward) => String(reward.id) === editId) || null
     : null;
   if (!cedula) {
-    return res.send(renderRewardsPortal({ rewards, editReward }));
+    return res.send(
+      renderRewardsPortal({ rewards, editReward, gspCareList, gspCareActive })
+    );
   }
 
   try {
@@ -722,7 +820,15 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
-      renderRewardsPortal({ cedula, total, points, rewards, editReward })
+      renderRewardsPortal({
+        cedula,
+        total,
+        points,
+        rewards,
+        editReward,
+        gspCareList,
+        gspCareActive,
+      })
     );
   } catch (error) {
     return res.send(
@@ -731,6 +837,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         error: error?.response?.data || error?.message || 'No se pudo calcular',
         rewards,
         editReward,
+        gspCareList,
+        gspCareActive,
       })
     );
   }
@@ -772,6 +880,37 @@ app.post('/admin/rewards/delete', adminAuth, (req, res) => {
   const filtered = rewards.filter((reward) => reward.id !== id);
   saveRewards(filtered);
   return res.redirect('/admin/rewards#premios');
+});
+
+app.post('/admin/gspcare/save', adminAuth, (req, res) => {
+  const { cedula, fecha } = req.body || {};
+  const normalized = normalizeId(cedula);
+  if (!normalized) {
+    return res.redirect('/admin/rewards#gsp-care');
+  }
+  const current = loadGspCare();
+  const existing = current.find((item) => item.cedula === normalized);
+  if (!existing) {
+    const today = new Date().toISOString().slice(0, 10);
+    current.unshift({
+      cedula: normalized,
+      activatedAt: String(fecha || '').trim() || today,
+    });
+    saveGspCare(current);
+  }
+  return res.redirect('/admin/rewards#gsp-care');
+});
+
+app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
+  const { cedula } = req.body || {};
+  const normalized = normalizeId(cedula);
+  if (!normalized) {
+    return res.redirect('/admin/rewards#gsp-care');
+  }
+  const current = loadGspCare();
+  const filtered = current.filter((item) => item.cedula !== normalized);
+  saveGspCare(filtered);
+  return res.redirect('/admin/rewards#gsp-care');
 });
 
 app.get('/api/rewards', (_req, res) => {
@@ -1117,11 +1256,17 @@ app.post('/api/cxc/points', async (req, res) => {
     const divisorValue = Number(divisor || CXC_POINTS_DIVISOR || 10000);
     const points = divisorValue > 0 ? Math.floor(total / divisorValue) : 0;
     const level = getLevelForTotal(total);
+    const rebate = getRebateForTotal(total);
+    const gspCareActive = cedula
+      ? loadGspCare().some((item) => item.cedula === normalizeId(cedula))
+      : false;
 
     return res.json({
       total,
       points,
       level,
+      rebate,
+      gspCare: gspCareActive,
       divisor: divisorValue,
       totalKey: keyToUse,
     });

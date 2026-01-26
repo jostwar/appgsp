@@ -13,7 +13,7 @@ import ProductsScreen from './src/screens/ProductsScreen';
 import CartScreen from './src/screens/CartScreen';
 import { CartProvider } from './src/store/cart';
 import CheckoutScreen from './src/screens/CheckoutScreen';
-import SearchScreen from './src/screens/SearchScreen';
+import MembershipScreen from './src/screens/MembershipScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import { AuthProvider, useAuth } from './src/store/auth';
 
@@ -66,7 +66,7 @@ function MainTabs() {
             Portafolio: 'grid',
             Productos: 'pricetags',
             Carrito: 'cart',
-            Buscar: 'search',
+            Membresia: 'shield',
             Checkout: 'card',
             Perfil: 'person',
           };
@@ -97,9 +97,9 @@ function MainTabs() {
         options={{ tabBarLabel: 'Carrito' }}
       />
       <Tab.Screen
-        name="Buscar"
-        component={SearchScreen}
-        options={{ tabBarLabel: 'Buscar' }}
+        name="Membresia"
+        component={MembershipScreen}
+        options={{ tabBarLabel: 'GSP Care' }}
       />
       <Tab.Screen
         name="Checkout"
