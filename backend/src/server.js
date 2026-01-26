@@ -452,11 +452,16 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const from = formatDateTime(fecha || startOfMonth);
   const to = formatDateTime(fecha || now, { endOfDay: true });
+  const objPar_Objeto = JSON.stringify({
+    strPar_Nit: cedula,
+    strPar_Cedula: cedula,
+  });
   return {
     strPar_Cedula: cedula,
     strPar_Nit: cedula,
     datPar_FecIni: from,
     datPar_FecFin: to,
+    objPar_Objeto,
     intPar_TipPed: 1,
     strPar_NumPed: '',
     strPar_Vended: '',
@@ -1952,7 +1957,10 @@ app.post('/api/cxc/call', async (req, res) => {
     if (!method) {
       return res.status(400).json({ error: 'method es requerido' });
     }
-    const data = await cxc.call(method, params);
+    const data =
+      method === 'GenerarInfoVentas'
+        ? await cxc.generarInfoVentas(params)
+        : await cxc.call(method, params);
     if (debug) {
       return res.json(data);
     }

@@ -1,8 +1,15 @@
 import axios from 'axios';
 import { XMLParser } from 'fast-xml-parser';
 
-const { CXC_API_URL, CXC_VENTAS_URL, CXC_TOKEN, CXC_EMPRESA, CXC_SOAP_NS } =
-  process.env;
+const {
+  CXC_API_URL,
+  CXC_VENTAS_URL,
+  CXC_TOKEN,
+  CXC_EMPRESA,
+  CXC_SOAP_NS,
+  CXC_VENTAS_SOAP_NS,
+  CXC_VENTAS_SOAP_ACTION,
+} = process.env;
 
 const SOAP_NS = CXC_SOAP_NS || 'http://tempuri.org/';
 
@@ -55,12 +62,14 @@ const parseJsonish = (value) => {
   }
 };
 
-const getSoapAction = (method) => {
-  const base = SOAP_NS.endsWith('/') ? SOAP_NS : `${SOAP_NS}/`;
+const getSoapAction = (method, soapNs = SOAP_NS, override = '') => {
+  if (override) return override;
+  if (!soapNs) return method;
+  const base = soapNs.endsWith('/') ? soapNs : `${soapNs}/`;
   return `${base}${method}`;
 };
 
-const buildEnvelope = (method, params) => {
+const buildEnvelope = (method, params, soapNs = SOAP_NS) => {
   const entries = Object.entries(params || {});
   const bodyParams = entries
     .map(([key, value]) => `<${key}>${escapeXml(value)}</${key}>`)
@@ -72,7 +81,7 @@ const buildEnvelope = (method, params) => {
     'xmlns:xsd="http://www.w3.org/2001/XMLSchema" ',
     'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">',
     '<soap:Body>',
-    `<${method} xmlns="${SOAP_NS}">`,
+    `<${method} xmlns="${soapNs}">`,
     bodyParams,
     `</${method}>`,
     '</soap:Body>',
@@ -150,14 +159,28 @@ const baseParams = (params = {}) => {
   };
 };
 
+const baseVentasParams = (params = {}) => {
+  const empresa = params.strPar_Empresa ?? CXC_EMPRESA;
+  const cleaned = { ...params };
+  delete cleaned.strPar_Empresa;
+  delete cleaned.strPar_Basedatos;
+  delete cleaned.strPar_BaseDatos;
+  delete cleaned.strPar_Token;
+
+  return {
+    strPar_Empresa: empresa,
+    ...cleaned,
+  };
+};
+
 export const cxc = {
   async call(method, params = {}) {
     ensureConfig();
-    const payload = buildEnvelope(method, baseParams(params));
+    const payload = buildEnvelope(method, baseParams(params), SOAP_NS);
     const response = await axios.post(resolveServiceUrl(method), payload, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        SOAPAction: getSoapAction(method),
+        SOAPAction: getSoapAction(method, SOAP_NS),
       },
       timeout: 20000,
     });
@@ -170,11 +193,12 @@ export const cxc = {
   async callWithUrl(method, params = {}, baseUrl = '') {
     ensureVentasConfig();
     const targetUrl = baseUrl || CXC_VENTAS_URL || CXC_API_URL;
-    const payload = buildEnvelope(method, baseParams(params));
+    const ventasNs = CXC_VENTAS_SOAP_NS || SOAP_NS;
+    const payload = buildEnvelope(method, baseVentasParams(params), ventasNs);
     const response = await axios.post(resolveServiceUrl(method, targetUrl), payload, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        SOAPAction: getSoapAction(method),
+        SOAPAction: getSoapAction(method, ventasNs, CXC_VENTAS_SOAP_ACTION),
       },
       timeout: 20000,
     });
