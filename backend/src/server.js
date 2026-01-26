@@ -447,6 +447,16 @@ const formatDateTime = (value, { endOfDay = false } = {}) => {
   return parsed.toISOString();
 };
 
+const formatDateOnly = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -473,12 +483,9 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
 const buildVentasParams = ({ cedula, fecha } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const from = formatDateTime(fecha || startOfMonth);
-  const to = formatDateTime(fecha || now, { endOfDay: true });
-  const objPar_Objeto = JSON.stringify({
-    strPar_Nit: cedula,
-    strPar_Cedula: cedula,
-  });
+  const from = formatDateOnly(fecha || startOfMonth);
+  const to = formatDateOnly(fecha || now);
+  const objPar_Objeto = CXC_TOKEN;
   return {
     strPar_Empresa: CXC_EMPRESA,
     datPar_FecIni: from,

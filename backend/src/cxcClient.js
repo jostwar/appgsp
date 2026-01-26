@@ -129,18 +129,18 @@ const resolveServiceUrl = (method, baseUrl = CXC_API_URL) => {
   return baseUrl;
 };
 
-const resolveGetUrl = (method) => {
-  if (!CXC_API_URL) return CXC_API_URL;
-  if (CXC_API_URL.includes('{{method}}')) {
-    return CXC_API_URL.replace('{{method}}', method);
+const resolveGetUrl = (method, baseUrl = CXC_API_URL) => {
+  if (!baseUrl) return baseUrl;
+  if (baseUrl.includes('{{method}}')) {
+    return baseUrl.replace('{{method}}', method);
   }
-  if (CXC_API_URL.includes('{method}')) {
-    return CXC_API_URL.replace('{method}', method);
+  if (baseUrl.includes('{method}')) {
+    return baseUrl.replace('{method}', method);
   }
-  if (CXC_API_URL.includes(':method')) {
-    return CXC_API_URL.replace(':method', method);
+  if (baseUrl.includes(':method')) {
+    return baseUrl.replace(':method', method);
   }
-  return `${CXC_API_URL.replace(/\/$/, '')}/${method}`;
+  return `${baseUrl.replace(/\/$/, '')}/${method}`;
 };
 
 const baseParams = (params = {}) => {
@@ -219,6 +219,18 @@ export const cxc = {
     return { xml: raw, parsed: null, response: null, result };
   },
 
+  async callGetWithUrl(method, params = {}, baseUrl = '') {
+    ensureVentasConfig();
+    const targetUrl = baseUrl || CXC_VENTAS_URL || CXC_API_URL;
+    const response = await axios.get(resolveGetUrl(method, targetUrl), {
+      params,
+      timeout: 20000,
+    });
+    const raw = response.data;
+    const result = parseJsonish(raw);
+    return { xml: raw, parsed: null, response: null, result };
+  },
+
   estadoCartera({ fecha, cedula, vendedor } = {}) {
     return this.callGet('EstadoDeCuentaCartera', {
       datPar_Fecha: fecha,
@@ -252,7 +264,7 @@ export const cxc = {
   },
 
   generarInfoVentas(params = {}) {
-    return this.callWithUrl('GenerarInfoVentas', params, CXC_VENTAS_URL);
+    return this.callGetWithUrl('GenerarInfoVentas', params, CXC_VENTAS_URL);
   },
 
   trazabilidadPedidos(params = {}) {
