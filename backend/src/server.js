@@ -1279,6 +1279,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
   const vendedorInput = String(req.query.vendedor || '').trim();
   const vendedor = vendedorInput || DEFAULT_CXC_VENDEDOR;
+  const allowFallback =
+    !vendedorInput || (DEFAULT_CXC_VENDEDOR && vendedorInput === DEFAULT_CXC_VENDEDOR);
   const rewards = loadRewards();
   const gspCareList = loadGspCare();
   const gspCareActive = cedula
@@ -1303,10 +1305,9 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   }
 
   const initialSearch = await findClientInfo({ cedula, vendedor });
-  const fallbackSearch =
-    DEFAULT_CXC_VENDEDOR && !vendedorInput
-      ? await findClientInfo({ cedula, vendedor: '' })
-      : null;
+  const fallbackSearch = allowFallback
+    ? await findClientInfo({ cedula, vendedor: '' })
+    : null;
   const activeSearch = initialSearch?.info
     ? initialSearch
     : fallbackSearch || initialSearch;
