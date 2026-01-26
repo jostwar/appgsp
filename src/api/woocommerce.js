@@ -92,6 +92,55 @@ export async function fetchCategories() {
   return response.json();
 }
 
+export async function fetchBrandOptions() {
+  if (!hasWooCredentials()) {
+    return [];
+  }
+  const attrsUrl = new URL('/wp-json/wc/v3/products/attributes', baseUrl);
+  attrsUrl.searchParams.set('consumer_key', key);
+  attrsUrl.searchParams.set('consumer_secret', secret);
+  attrsUrl.searchParams.set('per_page', '100');
+  const attrsResponse = await fetch(attrsUrl.toString());
+  if (!attrsResponse.ok) {
+    throw new Error('No se pudieron cargar atributos.');
+  }
+  const attributes = await attrsResponse.json();
+  const normalize = (value) => String(value || '').toLowerCase().trim();
+  const brandAttr = attributes.find((attr) => {
+    const name = normalize(attr?.name);
+    const slug = normalize(attr?.slug);
+    return (
+      slug === 'pa_brand' ||
+      slug === 'pa_marca' ||
+      slug === 'pa_marcas' ||
+      slug === 'product_brand' ||
+      slug === 'brand' ||
+      slug.includes('marca') ||
+      slug.includes('brand') ||
+      name === 'marca' ||
+      name === 'marcas' ||
+      name === 'brand' ||
+      name === 'brands'
+    );
+  });
+  if (!brandAttr?.id) {
+    return [];
+  }
+  const termsUrl = new URL(
+    `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
+    baseUrl
+  );
+  termsUrl.searchParams.set('consumer_key', key);
+  termsUrl.searchParams.set('consumer_secret', secret);
+  termsUrl.searchParams.set('per_page', '100');
+  const termsResponse = await fetch(termsUrl.toString());
+  if (!termsResponse.ok) {
+    throw new Error('No se pudieron cargar marcas.');
+  }
+  const terms = await termsResponse.json();
+  return terms.map((term) => term?.name).filter(Boolean);
+}
+
 export async function searchProducts(query, { perPage = 12 } = {}) {
   if (!hasWooCredentials()) {
     return [];

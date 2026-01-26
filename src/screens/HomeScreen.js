@@ -132,24 +132,59 @@ export default function HomeScreen() {
   const partnerLogos = useMemo(
     () => [
       {
-        id: 'samsung',
-        name: 'Samsung',
-        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-SAMSUNG.png',
+        id: 'came',
+        name: 'CAME',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-CAME.png',
       },
       {
-        id: 'hikvision',
-        name: 'Hikvision',
-        uri: 'https://gsp.com.co/wp-content/uploads/2024/09/LOGOS_MARCAS_WEB_blanco_HIKVISION.png',
+        id: 'dsc',
+        name: 'DSC',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-DSC.png',
       },
       {
-        id: 'zkteco',
-        name: 'ZKTeco',
-        uri: 'https://gsp.com.co/wp-content/uploads/2024/09/LOGOS_MARCAS_WEB_blanco_ZKTECO.png',
+        id: 'dsc-iq',
+        name: 'DSC IQ',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-IQ.png',
+      },
+      {
+        id: 'ezviz',
+        name: 'Ezviz',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-EZVIZ.png',
       },
       {
         id: 'forza',
         name: 'Forza',
-        uri: 'https://gsp.com.co/wp-content/uploads/2024/09/LOGOS_MARCAS_WEB_blanco_FORZA.png',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-FORZA.png',
+      },
+      {
+        id: 'hilook',
+        name: 'Hilook',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-HILOOK.png',
+      },
+      {
+        id: 'hikvision',
+        name: 'Hikvision',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-HIKVISION.png',
+      },
+      {
+        id: 'horus',
+        name: 'Horus',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-HORUS.png',
+      },
+      {
+        id: 'nexxt',
+        name: 'Nexxt',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-NEXXT.png',
+      },
+      {
+        id: 'sandisk',
+        name: 'Sandisk',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-SANDISK-scaled.png',
+      },
+      {
+        id: 'samsung',
+        name: 'Samsung',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-SAMSUNG.png',
       },
       {
         id: 'seagate',
@@ -157,9 +192,34 @@ export default function HomeScreen() {
         uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-SEAGATE.png',
       },
       {
-        id: 'ezviz',
-        name: 'EZVIZ',
-        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-EZVIZ.png',
+        id: 'seco-larm',
+        name: 'Seco-Larm',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-SECO-LARM-.png',
+      },
+      {
+        id: 'tp-link',
+        name: 'TP-Link',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-PTLINK.png',
+      },
+      {
+        id: 'uhf-zkteco',
+        name: 'UHF by ZKTeco',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-UHF.png',
+      },
+      {
+        id: 'visonic',
+        name: 'Visonic',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-VISONIC.png',
+      },
+      {
+        id: 'western-digital',
+        name: 'Western Digital',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-WESTERN-DIGITAL-scaled.png',
+      },
+      {
+        id: 'zkteco',
+        name: 'ZKTeco',
+        uri: 'https://gsp.com.co/wp-content/uploads/2026/01/LOGO-ZKTECO.png',
       },
     ],
     []

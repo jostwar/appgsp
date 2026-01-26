@@ -14,6 +14,7 @@ import {
 import { colors, spacing } from '../theme';
 import {
   fetchCategories,
+  fetchBrandOptions,
   fetchProducts,
   hasWooCredentials,
 } from '../api/woocommerce';
@@ -72,6 +73,15 @@ export default function ProductsScreen({ route, navigation }) {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showBrandMenu, setShowBrandMenu] = useState(false);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
+  const [brandOptions, setBrandOptions] = useState([
+    'Todas',
+    'Samsung',
+    'Hikvision',
+    'ZKTeco',
+    'Forza',
+    'Seagate',
+    'EZVIZ',
+  ]);
   const { addItem } = useCart();
   const initialCategoryName = route?.params?.categoryName;
   const initialBrandName = route?.params?.brandName;
@@ -89,36 +99,12 @@ export default function ProductsScreen({ route, navigation }) {
     []
   );
 
-  const brandOptions = useMemo(() => {
-    if (!categories || categories.length === 0) {
-      return ['Todas', 'Samsung', 'Hikvision', 'ZKTeco', 'Forza', 'Seagate', 'EZVIZ'];
-    }
-    const normalize = (value) => String(value || '').toLowerCase().trim();
-    const brandParents = categories.filter((category) => {
-      const name = normalize(category?.name);
-      const slug = normalize(category?.slug);
-      return (
-        name.includes('marca') ||
-        name.includes('brand') ||
-        slug.includes('marca') ||
-        slug.includes('brand')
-      );
-    });
-    const brandParentIds = brandParents.map((category) => category.id);
-    const brands = categories
-      .filter((category) => brandParentIds.includes(category?.parent))
-      .map((category) => category.name)
-      .filter(Boolean);
-
-    if (brands.length === 0) {
-      return ['Todas', 'Samsung', 'Hikvision', 'ZKTeco', 'Forza', 'Seagate', 'EZVIZ'];
-    }
-
-    const unique = Array.from(new Set(brands)).sort((a, b) =>
+  const normalizeBrandOptions = useCallback((options) => {
+    const unique = Array.from(new Set(options)).sort((a, b) =>
       String(a).localeCompare(String(b))
     );
     return ['Todas', ...unique];
-  }, [categories]);
+  }, []);
   const portfolioOptions = useMemo(
     () => [
       'Todo',
@@ -292,12 +278,16 @@ export default function ProductsScreen({ route, navigation }) {
         setStatus('missing');
         return;
       }
-      const [cats, data] = await Promise.all([
+      const [cats, data, brands] = await Promise.all([
         fetchCategories(),
         fetchProducts({ page: 1, perPage: 30 }),
+        fetchBrandOptions().catch(() => []),
       ]);
       setCategories(cats);
       setProducts(data.map(normalizeProduct));
+      if (brands.length > 0) {
+        setBrandOptions(normalizeBrandOptions(brands));
+      }
       setPage(1);
       setHasMore(data.length === 30);
       setStatus('ready');
