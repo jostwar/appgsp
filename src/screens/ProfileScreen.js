@@ -70,7 +70,7 @@ export default function ProfileScreen({ navigation }) {
   }, [loadPrefs]);
 
   const fetchOrders = useCallback(async () => {
-    if (!user?.cedula && !user?.customerId) {
+    if (!user?.cedula && !user?.customerId && !user?.email) {
       setOrders([]);
       setOrdersStatus('missing');
       return;
@@ -90,7 +90,7 @@ export default function ProfileScreen({ navigation }) {
       setOrders([]);
       setOrdersStatus('error');
     }
-  }, [user?.cedula, user?.customerId]);
+  }, [user?.cedula, user?.customerId, user?.email]);
 
   useEffect(() => {
     fetchOrders();
