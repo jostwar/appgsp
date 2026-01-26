@@ -89,6 +89,7 @@ const CLIENT_ID_KEYS = [
   'documento',
   'identificacion',
   'identificación',
+  'cli_cedula',
   'strcli_cedula',
   'strcli_nit',
   'strcli_documento',
@@ -106,18 +107,52 @@ const CLIENT_NAME_KEYS = [
   'razonsocial',
   'razon_social',
   'cliente',
+  'cli_nombre',
   'strcli_nombre',
   'strpar_nombre',
   'strcli_razon',
   'strpar_razonsocial',
 ];
-const CLIENT_EMAIL_KEYS = ['correo', 'email', 'correo_electronico', 'mail'];
-const CLIENT_PHONE_KEYS = ['telefono', 'tel', 'celular', 'movil', 'whatsapp'];
-const CLIENT_CITY_KEYS = ['ciudad', 'municipio', 'poblacion'];
-const CLIENT_ADDRESS_KEYS = ['direccion', 'dirección', 'address'];
-const CLIENT_SELLER_KEYS = ['vendedor', 'asesor', 'strpar_vended', 'strcli_vendedor'];
-const CLIENT_CUPO_KEYS = ['cupo', 'credito', 'creditolimit', 'cupo_credito'];
+const CLIENT_EMAIL_KEYS = [
+  'correo',
+  'email',
+  'correo_electronico',
+  'mail',
+  'cli_email',
+];
+const CLIENT_PHONE_KEYS = [
+  'telefono',
+  'tel',
+  'celular',
+  'movil',
+  'whatsapp',
+  'cli_telefo',
+  'cli_telcel',
+];
+const CLIENT_CITY_KEYS = ['ciudad', 'municipio', 'poblacion', 'cli_ciudad'];
+const CLIENT_ADDRESS_KEYS = [
+  'direccion',
+  'dirección',
+  'address',
+  'cli_direcc',
+];
+const CLIENT_SELLER_KEYS = [
+  'vendedor',
+  'asesor',
+  'strpar_vended',
+  'strcli_vendedor',
+  'cli_vended',
+];
+const CLIENT_CUPO_KEYS = [
+  'cupo',
+  'credito',
+  'creditolimit',
+  'cupo_credito',
+  'cli_cupcre',
+  'cli_cupcred',
+];
 const CLIENT_PLAZO_KEYS = ['plazo', 'dias_credito', 'dias', 'plazodias'];
+const CLIENT_BIRTH_KEYS = ['cli_fecnac', 'fecha_nacimiento', 'fecnac'];
 
 const findValueByKeys = (data, keys = []) => {
   if (!data) return '';
@@ -206,6 +241,7 @@ const buildClientInfo = (data, cedula) => {
     seller: findValueByKeys(match, CLIENT_SELLER_KEYS),
     cupo: findValueByKeys(match, CLIENT_CUPO_KEYS),
     plazo: findValueByKeys(match, CLIENT_PLAZO_KEYS),
+    birthDate: findValueByKeys(match, CLIENT_BIRTH_KEYS),
   };
 };
 
@@ -749,6 +785,13 @@ const renderRewardsPortal = ({
               clientInfo?.plazo
                 ? `<div class="label">Plazo: <strong>${escapeHtml(
                     clientInfo.plazo
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientInfo?.birthDate
+                ? `<div class="label">Nacimiento: <strong>${escapeHtml(
+                    clientInfo.birthDate
                   )}</strong></div>`
                 : ''
             }
