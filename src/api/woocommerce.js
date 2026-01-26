@@ -66,6 +66,53 @@ const matchTermByName = (terms, brandName) => {
   });
 };
 
+const matchesBrandName = (value, brandName) => {
+  if (!value || !brandName) return false;
+  return normalize(value) === normalize(brandName);
+};
+
+const filterProductsByBrand = (products, brandName) => {
+  if (!brandName) return products;
+  return products.filter((product) => {
+    const brands = Array.isArray(product?.brands) ? product.brands : [];
+    const tags = Array.isArray(product?.tags) ? product.tags : [];
+    const attributes = Array.isArray(product?.attributes) ? product.attributes : [];
+
+    if (
+      brands.some(
+        (brand) =>
+          matchesBrandName(brand?.name, brandName) ||
+          matchesBrandName(brand?.slug, brandName)
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      tags.some(
+        (tag) =>
+          matchesBrandName(tag?.name, brandName) ||
+          matchesBrandName(tag?.slug, brandName)
+      )
+    ) {
+      return true;
+    }
+
+    return attributes.some((attr) => {
+      if (!attr) return false;
+      const attrName = normalize(attr?.name);
+      const attrSlug = normalize(attr?.slug);
+      if (!attrName.includes('marca') && !attrName.includes('brand')) {
+        if (!attrSlug.includes('marca') && !attrSlug.includes('brand')) {
+          return false;
+        }
+      }
+      const options = Array.isArray(attr?.options) ? attr.options : [];
+      return options.some((option) => matchesBrandName(option, brandName));
+    });
+  });
+};
+
 const resolveBrandParams = async (brandName) => {
   if (!brandName) return [];
   const paramsList = [];
@@ -91,6 +138,9 @@ const resolveBrandParams = async (brandName) => {
         paramsList.push({ product_brand: match.slug });
       }
       paramsList.push({ brand: match.id });
+      if (match.slug) {
+        paramsList.push({ brand: match.slug });
+      }
       break;
     }
   }
@@ -180,13 +230,21 @@ export async function fetchProducts({
   if (brandParamsList.length > 0) {
     for (const params of brandParamsList) {
       const data = await runRequest(params);
-      if (data.length > 0) {
-        return data;
+      const filtered = filterProductsByBrand(data, brandName);
+      if (filtered.length > 0) {
+        return filtered;
       }
+    }
+
+    const searchData = await runRequest({ search: brandName });
+    const filteredSearch = filterProductsByBrand(searchData, brandName);
+    if (filteredSearch.length > 0) {
+      return filteredSearch;
     }
   }
 
-  return runRequest();
+  const fallbackData = await runRequest();
+  return filterProductsByBrand(fallbackData, brandName);
 }
 
 export async function fetchAllProducts({ perPage = 50, maxPages = 10 } = {}) {
