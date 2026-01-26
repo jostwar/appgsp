@@ -73,6 +73,44 @@ const sumTotalsForKey = (data, totalKey) => {
   return sum;
 };
 
+const normalizeField = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+const findValueByKeys = (data, keys = []) => {
+  if (!data) return '';
+  const targets = new Set(keys.map(normalizeField));
+  let found = '';
+
+  const walk = (node) => {
+    if (!node || found) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object') return;
+
+    Object.entries(node).forEach(([key, value]) => {
+      if (found) return;
+      const normalized = normalizeField(key);
+      if (targets.has(normalized) && value !== null && value !== undefined) {
+        const text = String(value).trim();
+        if (text) {
+          found = text;
+          return;
+        }
+      }
+      if (typeof value === 'object') {
+        walk(value);
+      }
+    });
+  };
+
+  walk(data);
+  return found;
+};
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -112,6 +150,7 @@ const getRebateForTotal = (total) => {
 
 const renderRewardsPortal = ({
   cedula = '',
+  clientName = '',
   points = null,
   total = null,
   error = null,
@@ -482,6 +521,20 @@ const renderRewardsPortal = ({
               <button type="submit">Consultar</button>
             </form>
             ${
+              cedula
+                ? `<div class="label" style="margin-top:12px;">NIT/Cédula: <strong>${escapeHtml(
+                    cedula
+                  )}</strong></div>`
+                : ''
+            }
+            ${
+              clientName
+                ? `<div class="label">Nombre: <strong>${escapeHtml(
+                    clientName
+                  )}</strong></div>`
+                : ''
+            }
+            ${
               error
                 ? `<div class="alert">Error: ${escapeHtml(error)}</div>`
                 : ''
@@ -824,11 +877,22 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const payload = parseMaybeJson(
       data.result ?? data.response ?? data.parsed ?? {}
     );
+    const name = findValueByKeys(payload, [
+      'nombre',
+      'nombrecliente',
+      'nombre_completo',
+      'razonsocial',
+      'razon_social',
+      'cliente',
+      'strcli_nombre',
+      'strpar_nombre',
+    ]);
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
       renderRewardsPortal({
         cedula,
+        clientName: name,
         total,
         points,
         rewards,
@@ -1284,6 +1348,24 @@ app.post('/api/cxc/points', async (req, res) => {
     const payload = parseMaybeJson(
       data.result ?? data.response ?? data.parsed ?? {}
     );
+    const name = findValueByKeys(payload, [
+      'nombre',
+      'nombrecliente',
+      'nombre_completo',
+      'razonsocial',
+      'razon_social',
+      'cliente',
+      'strcli_nombre',
+      'strpar_nombre',
+    ]);
+    const idValue = findValueByKeys(payload, [
+      'cedula',
+      'nit',
+      'documento',
+      'identificacion',
+      'strpar_cedula',
+      'strpar_nit',
+    ]);
     const keyToUse = totalKey || 'total';
     const total = sumTotalsForKey(payload, keyToUse);
     const divisorValue = Number(divisor || CXC_POINTS_DIVISOR || 10000);
@@ -1295,6 +1377,8 @@ app.post('/api/cxc/points', async (req, res) => {
       : false;
 
     return res.json({
+      nit: normalizeId(cedula || idValue),
+      name,
       total,
       points,
       level,
