@@ -328,6 +328,7 @@ const getRebateForTotal = (total) => {
 
 const renderRewardsPortal = ({
   cedula = '',
+  vendedor = '',
   clientName = '',
   clientInfo = null,
   points = null,
@@ -732,6 +733,9 @@ const renderRewardsPortal = ({
               <input type="hidden" name="section" value="clientes" />
               <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
                 cedula
+              )}" />
+              <input type="text" name="vendedor" placeholder="Vendedor (opcional)" value="${escapeHtml(
+                vendedor
               )}" />
               <button type="submit">Consultar</button>
             </form>
@@ -1176,6 +1180,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
+  const vendedor = String(req.query.vendedor || '').trim();
   const rewards = loadRewards();
   const gspCareList = loadGspCare();
   const gspCareActive = cedula
@@ -1191,6 +1196,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        vendedor,
         section,
       })
     );
@@ -1201,9 +1207,10 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
       cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
       cxc
         .listadoClientes({
-          filas: 500,
+          filas: 2000,
           pagina: 1,
           fecha: formatDateTime(new Date()),
+          vendedor,
         })
         .catch(() => null),
     ]);
@@ -1213,10 +1220,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         )
       : null;
     const clientesJson = extractJsonPrefix(clientesData?.xml);
+    const clientesText = parseMaybeJson(clientesData?.parsed?.['#text']);
     const clientesDataSource =
       clientesPayload && Object.keys(clientesPayload || {}).length > 0
         ? clientesPayload
-        : clientesJson;
+        : clientesJson || clientesText;
     const clientInfo = clientesDataSource
       ? buildClientInfo(clientesDataSource, cedula)
       : null;
@@ -1232,6 +1240,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           gspCareList,
           gspCareActive,
           clientInfo,
+          vendedor,
           section,
         })
       );
@@ -1253,6 +1262,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        vendedor,
         section,
       })
     );
@@ -1265,6 +1275,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        vendedor,
         section,
       })
     );
