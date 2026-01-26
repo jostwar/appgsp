@@ -191,8 +191,6 @@ const renderRewardsPortal = ({
     'condiciones y vigencia informadas. Al participar en Rewards GSP aceptas ' +
     'estos términos.';
 
-  const pointsValue =
-    points === null ? '—' : formatNumber(points);
   const totalValue =
     total === null ? '—' : `$${formatNumber(total)}`;
   const levelValue = total === null ? '—' : getLevelForTotal(total);
@@ -491,7 +489,7 @@ const renderRewardsPortal = ({
             </p>
             <div class="totals">
               <div class="item">
-                <span>Cashback acumulado</span>
+                <span>Cashback estimado</span>
                 <strong>${cashbackValue}</strong>
               </div>
               <div class="item">
@@ -499,8 +497,12 @@ const renderRewardsPortal = ({
                 <strong>${totalValue}</strong>
               </div>
               <div class="item">
-                <span>Puntos (referencia)</span>
-                <strong>${pointsValue}</strong>
+                <span>Nivel</span>
+                <strong>${levelValue}</strong>
+              </div>
+              <div class="item">
+                <span>Rebate</span>
+                <strong>${rebateValue === '—' ? '—' : `${rebateValue}%`}</strong>
               </div>
               <div class="item">
                 <span>GSP Care</span>
@@ -1385,6 +1387,7 @@ app.post('/api/cxc/points', async (req, res) => {
     const points = divisorValue > 0 ? Math.floor(total / divisorValue) : 0;
     const level = getLevelForTotal(total);
     const rebate = getRebateForTotal(total);
+    const cashback = total ? Math.round((total * rebate) / 100) : 0;
     const gspCareActive = cedula
       ? loadGspCare().some((item) => item.cedula === normalizeId(cedula))
       : false;
@@ -1393,6 +1396,7 @@ app.post('/api/cxc/points', async (req, res) => {
       nit: normalizeId(cedula || idValue),
       name,
       total,
+      cashback,
       points,
       level,
       rebate,
