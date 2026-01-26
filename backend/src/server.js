@@ -470,6 +470,23 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   };
 };
 
+const buildVentasParams = ({ cedula, fecha } = {}) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const from = formatDateTime(fecha || startOfMonth);
+  const to = formatDateTime(fecha || now, { endOfDay: true });
+  const objPar_Objeto = JSON.stringify({
+    strPar_Nit: cedula,
+    strPar_Cedula: cedula,
+  });
+  return {
+    strPar_Empresa: CXC_EMPRESA,
+    datPar_FecIni: from,
+    datPar_FecFin: to,
+    objPar_Objeto,
+  };
+};
+
 const LEVELS = [
   { name: 'Blue Partner', min: 5_000_000, max: 14_999_999, rebate: 1 },
   { name: 'Purple Partner', min: 15_000_000, max: 29_999_999, rebate: 1.5 },
@@ -1459,7 +1476,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
 
   try {
     const facturasData = await cxc.generarInfoVentas(
-      buildCxcDetalleParams({ cedula })
+      buildVentasParams({ cedula })
     );
     if (isCxcFunctionInactive(facturasData?.xml)) {
       return res.send(
@@ -2053,7 +2070,7 @@ app.post('/api/cxc/points', async (req, res) => {
 
     const callParams = { ...(params || {}) };
     if (cedula) {
-      Object.assign(callParams, buildCxcDetalleParams({ cedula, fecha }), callParams);
+      Object.assign(callParams, buildVentasParams({ cedula, fecha }), callParams);
     }
 
     const data = await cxc.generarInfoVentas(callParams);
