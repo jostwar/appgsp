@@ -113,9 +113,16 @@ const filterProductsByBrand = (products, brandName) => {
   });
 };
 
-const resolveBrandParams = async (brandName) => {
-  if (!brandName) return [];
-  const paramsList = [];
+const BRAND_TERM_TTL_MS = 5 * 60 * 1000;
+const brandTermCache = new Map();
+
+const resolveBrandTerm = async (brandName) => {
+  if (!brandName) return null;
+  const key = normalize(brandName);
+  const cached = brandTermCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < BRAND_TERM_TTL_MS) {
+    return cached.value;
+  }
 
   const taxonomyEndpoints = [
     buildUrl('/wp-json/wp/v2/product_brand', {
@@ -132,50 +139,15 @@ const resolveBrandParams = async (brandName) => {
     if (!response.ok) continue;
     const terms = await response.json();
     const match = matchTermByName(terms, brandName);
-    if (match?.id) {
-      paramsList.push({ product_brand: match.id });
-      if (match.slug) {
-        paramsList.push({ product_brand: match.slug });
-      }
-      paramsList.push({ brand: match.id });
-      if (match.slug) {
-        paramsList.push({ brand: match.slug });
-      }
-      break;
+    if (match?.id || match?.slug) {
+      const value = { id: match?.id, slug: match?.slug };
+      brandTermCache.set(key, { value, fetchedAt: Date.now() });
+      return value;
     }
   }
 
-  const attrsUrl = buildUrl('/wp-json/wc/v3/products/attributes', {
-    params: { per_page: '100' },
-  });
-  const attrsResponse = await fetch(attrsUrl.toString());
-  if (attrsResponse.ok) {
-    const attributes = await attrsResponse.json();
-    const brandAttr = findBrandAttr(attributes);
-    if (brandAttr?.id) {
-      const termsUrl = buildUrl(
-        `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
-        { params: { per_page: '100', search: brandName } }
-      );
-      const termsResponse = await fetch(termsUrl.toString());
-      if (termsResponse.ok) {
-        const terms = await termsResponse.json();
-        const match = matchTermByName(terms, brandName);
-        if (match?.id) {
-          paramsList.push({
-            attribute: brandAttr.id,
-            attribute_term: match.id,
-          });
-        }
-      }
-    }
-  }
-
-  if (paramsList.length === 0) {
-    paramsList.push({ search: brandName });
-  }
-
-  return paramsList;
+  brandTermCache.set(key, { value: null, fetchedAt: Date.now() });
+  return null;
 };
 
 export async function fetchProducts({
@@ -226,20 +198,21 @@ export async function fetchProducts({
     return Array.from(unique.values());
   };
 
-  const brandParamsList = await resolveBrandParams(brandName);
-  if (brandParamsList.length > 0) {
-    for (const params of brandParamsList) {
-      const data = await runRequest(params);
-      const filtered = filterProductsByBrand(data, brandName);
-      if (filtered.length > 0) {
-        return filtered;
-      }
+  if (brandName) {
+    const brandTerm = await resolveBrandTerm(brandName);
+    const params = { search: brandName };
+    if (brandTerm?.id) {
+      params.brand = brandTerm.id;
+      params.product_brand = brandTerm.id;
     }
-
-    const searchData = await runRequest({ search: brandName });
-    const filteredSearch = filterProductsByBrand(searchData, brandName);
-    if (filteredSearch.length > 0) {
-      return filteredSearch;
+    if (brandTerm?.slug) {
+      params.brand = params.brand ?? brandTerm.slug;
+      params.product_brand = params.product_brand ?? brandTerm.slug;
+    }
+    const data = await runRequest(params);
+    const filtered = filterProductsByBrand(data, brandName);
+    if (filtered.length > 0) {
+      return filtered;
     }
   }
 
