@@ -893,6 +893,17 @@ const renderRewardsPortal = ({
                 : ''
             }
             ${
+              !cedula
+                ? `<div class="label" style="margin-top:12px;">NIT/Cédula: <strong>—</strong></div>
+                   <div class="label">Nombre: <strong>—</strong></div>
+                   <div class="label">Vendedor: <strong>—</strong></div>
+                   <div class="label">Correo: <strong>—</strong></div>
+                   <div class="label">Teléfono: <strong>—</strong></div>
+                   <div class="label">Dirección: <strong>—</strong></div>
+                   <div class="label">Cupo: <strong>—</strong></div>`
+                : ''
+            }
+            ${
               displayName
                 ? `<div class="label">Nombre: <strong>${escapeHtml(
                     displayName
