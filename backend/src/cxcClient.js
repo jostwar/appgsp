@@ -120,24 +120,8 @@ export const cxc = {
     });
   },
 
-  async detalleFacturasPedido(params = {}) {
-    try {
-      const primary = await this.call('DetalleFacturasPorPedido', params);
-      const xmlText = String(primary?.xml || '').toLowerCase();
-      if (
-        xmlText.includes('funcion no activa') ||
-        xmlText.includes('función no activa')
-      ) {
-        return this.call('DetalleFacturasPedido', params);
-      }
-      return primary;
-    } catch (error) {
-      const message = String(error?.response?.data || error?.message || '');
-      if (message.toLowerCase().includes('soapaction')) {
-        return this.call('DetalleFacturasPedido', params);
-      }
-      throw error;
-    }
+  detalleFacturasPedido(params = {}) {
+    return this.call('DetalleFacturasPorPedido', params);
   },
 
   trazabilidadPedidos(params = {}) {
