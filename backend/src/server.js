@@ -1818,6 +1818,7 @@ app.post('/api/woo/login', async (req, res) => {
     } catch (_error) {
       customer = null;
     }
+    const cedula = customer ? woo.getCustomerCedula(customer) : null;
     const billingFirst = customer?.billing?.first_name || '';
     const billingLast = customer?.billing?.last_name || '';
     const firstName = billingFirst || profile?.first_name || '';
@@ -1837,11 +1838,108 @@ app.post('/api/woo/login', async (req, res) => {
         lastName,
         fullName,
         nicename: data?.user_nicename,
+        customerId: customer?.id || null,
+        cedula: cedula || null,
       },
     });
   } catch (error) {
     return res.status(401).json({
       error: 'Credenciales inválidas',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/woo/orders', async (req, res) => {
+  try {
+    const { cedula, customerId, page, perPage, email } = req.query;
+    if (!cedula && !customerId && !email) {
+      return res.status(400).json({
+        error: 'cedula, customerId o email es requerido',
+      });
+    }
+    let resolvedCustomerId = customerId ? Number(customerId) : null;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedCedula = String(cedula || '').replace(/\D+/g, '');
+    const buildOrderKey = (order) => String(order?.id || '');
+    const toList = (payload) => (Array.isArray(payload) ? payload : []);
+    if (!resolvedCustomerId && cedula) {
+      const customer = await woo.findCustomerByCedula(cedula, {
+        perPage: 50,
+        maxPages: 10,
+      });
+      if (!customer) {
+        resolvedCustomerId = null;
+      } else {
+        resolvedCustomerId = customer.id;
+      }
+    }
+    const orderPage = page ? Number(page) : 1;
+    const orderPerPage = perPage ? Number(perPage) : 10;
+    let orders = [];
+    if (resolvedCustomerId) {
+      orders = toList(
+        await woo.listOrdersByCustomerId(resolvedCustomerId, {
+          page: orderPage,
+          perPage: orderPerPage,
+        })
+      );
+    }
+
+    const shouldSearchByEmail =
+      normalizedEmail && (!resolvedCustomerId || orders.length === 0);
+    if (shouldSearchByEmail) {
+      const emailMatches = toList(
+        await woo.listOrdersBySearch(normalizedEmail, {
+          page: orderPage,
+          perPage: orderPerPage,
+        })
+      ).filter(
+        (order) =>
+          String(order?.billing?.email || '').trim().toLowerCase() === normalizedEmail
+      );
+      const map = new Map();
+      orders.forEach((order) => map.set(buildOrderKey(order), order));
+      emailMatches.forEach((order) => map.set(buildOrderKey(order), order));
+      orders = Array.from(map.values());
+    }
+
+    const shouldSearchByCedula =
+      normalizedCedula && (!resolvedCustomerId || orders.length === 0);
+    if (shouldSearchByCedula) {
+      const cedulaMatches = toList(
+        await woo.listOrdersBySearch(normalizedCedula, {
+          page: orderPage,
+          perPage: orderPerPage,
+        })
+      ).filter((order) => {
+        const billingCedula = String(
+          order?.meta_data?.find((item) =>
+            String(item?.key || '').toLowerCase().includes('cedula')
+          )?.value || ''
+        ).replace(/\D+/g, '');
+        const billingNit = String(
+          order?.meta_data?.find((item) =>
+            String(item?.key || '').toLowerCase().includes('nit')
+          )?.value || ''
+        ).replace(/\D+/g, '');
+        return (
+          normalizedCedula &&
+          (billingCedula === normalizedCedula || billingNit === normalizedCedula)
+        );
+      });
+      const map = new Map();
+      orders.forEach((order) => map.set(buildOrderKey(order), order));
+      cedulaMatches.forEach((order) => map.set(buildOrderKey(order), order));
+      orders = Array.from(map.values());
+    }
+    return res.json({
+      customerId: resolvedCustomerId,
+      orders: orders,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron obtener pedidos',
       details: error?.response?.data || error?.message,
     });
   }

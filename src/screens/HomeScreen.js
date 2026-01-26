@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   Linking,
   TextInput,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -315,37 +316,31 @@ export default function HomeScreen() {
   const [searchStatus, setSearchStatus] = useState('idle');
   const searchDebounceRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadLocation = useCallback(async () => {
+    setLocationError('');
+    setLocationLabel('Detectando ubicación...');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationError('Permiso de ubicación no concedido');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({});
+      const [address] = await Location.reverseGeocodeAsync(position.coords);
+      if (address) {
+        const label = [address.street, address.city].filter(Boolean).join(', ');
+        setLocationLabel(label || 'Ubicación actual');
+      }
+    } catch (_error) {
+      setLocationError('No se pudo obtener la ubicación');
+    }
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadLocation = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (isMounted) {
-            setLocationError('Permiso de ubicación no concedido');
-          }
-          return;
-        }
-        const position = await Location.getCurrentPositionAsync({});
-        const [address] = await Location.reverseGeocodeAsync(position.coords);
-        if (isMounted && address) {
-          const label = [address.street, address.city]
-            .filter(Boolean)
-            .join(', ');
-          setLocationLabel(label || 'Ubicación actual');
-        }
-      } catch (error) {
-        if (isMounted) {
-          setLocationError('No se pudo obtener la ubicación');
-        }
-      }
-    };
     loadLocation();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [loadLocation]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -416,11 +411,36 @@ export default function HomeScreen() {
     return () => clearTimeout(searchDebounceRef.current);
   }, [searchQuery]);
 
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadLocation();
+    const query = searchQuery.trim();
+    if (query.length >= 2) {
+      setSearchStatus('loading');
+      try {
+        const list = await searchProducts(query, { perPage: 12 });
+        setSearchResults(Array.isArray(list) ? list : []);
+        setSearchStatus('ready');
+      } catch (_error) {
+        setSearchResults([]);
+        setSearchStatus('error');
+      }
+    }
+    setIsRefreshing(false);
+  }, [loadLocation, searchQuery]);
+
   return (
     <View style={styles.screen}>
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="always"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         <View style={styles.topBar}>
           <View style={styles.searchBox}>

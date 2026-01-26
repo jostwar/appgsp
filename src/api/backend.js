@@ -50,3 +50,9 @@ export function getRewardsPoints({ cedula }) {
 export function getRewardsCatalog() {
   return request('/api/rewards');
 }
+
+export function getWooOrders({ cedula, customerId, email, page, perPage } = {}) {
+  return request('/api/woo/orders', {
+    params: { cedula, customerId, email, page, perPage },
+  });
+}

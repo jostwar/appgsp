@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, Pressable, Switch, Linking } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  Pressable,
+  Switch,
+  Linking,
+  RefreshControl,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
+import { getWooOrders } from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
   const pressableStyle = (baseStyle) => ({ pressed }) => [
@@ -17,6 +27,9 @@ export default function ProfileScreen({ navigation }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [preferredChannel, setPreferredChannel] = useState('WhatsApp');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersStatus, setOrdersStatus] = useState('idle');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const customerLevel = 'Purple Partner';
   const levelColors = {
     'Blue Partner': '#3B82F6',
@@ -33,36 +46,105 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadPrefs = async () => {
-      try {
-        const raw = await AsyncStorage.getItem('profile_prefs');
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (!isMounted || !parsed) return;
-        if (typeof parsed.notificationsEnabled === 'boolean') {
-          setNotificationsEnabled(parsed.notificationsEnabled);
-        }
-        if (typeof parsed.preferredChannel === 'string') {
-          setPreferredChannel(parsed.preferredChannel);
-        }
-      } catch (_error) {
-        // ignore load errors
-      } finally {
-        if (isMounted) {
-          setPrefsLoaded(true);
-        }
+  const loadPrefs = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('profile_prefs');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed) return;
+      if (typeof parsed.notificationsEnabled === 'boolean') {
+        setNotificationsEnabled(parsed.notificationsEnabled);
       }
-    };
-    loadPrefs();
-    return () => {
-      isMounted = false;
-    };
+      if (typeof parsed.preferredChannel === 'string') {
+        setPreferredChannel(parsed.preferredChannel);
+      }
+    } catch (_error) {
+      // ignore load errors
+    } finally {
+      setPrefsLoaded(true);
+    }
   }, []);
+
+  useEffect(() => {
+    loadPrefs();
+  }, [loadPrefs]);
+
+  const fetchOrders = useCallback(async () => {
+    if (!user?.cedula && !user?.customerId) {
+      setOrders([]);
+      setOrdersStatus('missing');
+      return;
+    }
+    setOrdersStatus('loading');
+    try {
+      const data = await getWooOrders({
+        cedula: user?.cedula,
+        customerId: user?.customerId,
+          email: user?.email,
+        perPage: 10,
+        page: 1,
+      });
+      setOrders(Array.isArray(data?.orders) ? data.orders : []);
+      setOrdersStatus('ready');
+    } catch (_error) {
+      setOrders([]);
+      setOrdersStatus('error');
+    }
+  }, [user?.cedula, user?.customerId]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await Promise.all([loadPrefs(), fetchOrders()]);
+    setIsRefreshing(false);
+  }, [loadPrefs, fetchOrders]);
+
+  const orderItems = useMemo(
+    () =>
+      orders.map((order) => ({
+        id: order?.id,
+        status: order?.status || '',
+        total: order?.total || '0',
+        date: order?.date_created || order?.date_created_gmt || '',
+        items: Array.isArray(order?.line_items) ? order.line_items.length : 0,
+      })),
+    [orders]
+  );
+
+  const formatOrderDate = (value) => {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return new Intl.DateTimeFormat('es-CO', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+    }).format(parsed);
+  };
+
+  const formatCop = (value) => {
+    const numeric = Number(value || 0);
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(Number.isNaN(numeric) ? 0 : numeric);
+  };
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
         <View style={styles.profileCard}>
           <View>
             <Text style={styles.profileName}>
@@ -136,6 +218,30 @@ export default function ProfileScreen({ navigation }) {
               ))}
             </View>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Mis pedidos</Text>
+          {ordersStatus === 'loading' ? (
+            <Text style={styles.sectionHint}>Cargando pedidos...</Text>
+          ) : ordersStatus === 'error' ? (
+            <Text style={styles.sectionHint}>No se pudieron cargar pedidos.</Text>
+          ) : orderItems.length === 0 ? (
+            <Text style={styles.sectionHint}>No hay pedidos registrados.</Text>
+          ) : (
+            orderItems.map((order) => (
+              <View key={order.id} style={styles.orderCard}>
+                <View>
+                  <Text style={styles.orderTitle}>Pedido #{order.id}</Text>
+                  <Text style={styles.orderMeta}>
+                    {formatOrderDate(order.date)} · {order.items} items ·{' '}
+                    {order.status}
+                  </Text>
+                </View>
+                <Text style={styles.orderTotal}>{formatCop(order.total)}</Text>
+              </View>
+            ))
+          )}
         </View>
 
         <View style={styles.section}>
@@ -230,6 +336,36 @@ const styles = StyleSheet.create({
   preferenceValue: {
     color: colors.textMain,
     fontWeight: '600',
+    fontSize: 14,
+  },
+  sectionHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  orderCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  orderTitle: {
+    color: colors.textMain,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  orderMeta: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  orderTotal: {
+    color: colors.textMain,
+    fontWeight: '700',
     fontSize: 14,
   },
   channelRow: {

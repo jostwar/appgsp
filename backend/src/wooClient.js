@@ -249,6 +249,55 @@ export const woo = {
     return extractPointsFromCustomer(customer);
   },
 
+  getCustomerCedula(customer) {
+    return extractCedulaFromCustomer(customer);
+  },
+
+  async listOrdersByCustomerId(
+    customerId,
+    { perPage = 10, page = 1, orderBy = 'date', order = 'desc' } = {}
+  ) {
+    ensureWooConfig();
+    if (!customerId) {
+      throw new Error('customerId es requerido');
+    }
+    const response = await client.get('/wp-json/wc/v3/orders', {
+      params: {
+        consumer_key: WOO_KEY,
+        consumer_secret: WOO_SECRET,
+        customer: customerId,
+        per_page: perPage,
+        page,
+        orderby: orderBy,
+        order,
+      },
+    });
+    return response.data;
+  },
+
+  async listOrdersBySearch(
+    search,
+    { perPage = 10, page = 1, orderBy = 'date', order = 'desc', status = 'any' } = {}
+  ) {
+    ensureWooConfig();
+    if (!search) {
+      throw new Error('search es requerido');
+    }
+    const response = await client.get('/wp-json/wc/v3/orders', {
+      params: {
+        consumer_key: WOO_KEY,
+        consumer_secret: WOO_SECRET,
+        search,
+        per_page: perPage,
+        page,
+        orderby: orderBy,
+        order,
+        status,
+      },
+    });
+    return response.data;
+  },
+
   async listCedulas({
     perPage = 100,
     pages = 2,
