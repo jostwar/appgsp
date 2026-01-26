@@ -260,6 +260,65 @@ const buildClientInfo = (data, cedula) => {
   };
 };
 
+const extractPagination = (data) => {
+  if (!data) return { total: 0, pages: 1 };
+  const candidate = Array.isArray(data) ? data[0] : data;
+  const total = Number(candidate?.REGISTROS || candidate?.registros || 0);
+  const pages = Number(candidate?.PAGINAS || candidate?.paginas || 1);
+  return {
+    total: Number.isFinite(total) ? total : 0,
+    pages: Number.isFinite(pages) && pages > 0 ? pages : 1,
+  };
+};
+
+const fetchListadoClientes = async ({ pagina, vendedor }) => {
+  const clientesData = await cxc
+    .listadoClientes({
+      filas: 2000,
+      pagina,
+      fecha: formatDateTime(new Date()),
+      vendedor,
+    })
+    .catch(() => null);
+  const clientesPayload = clientesData
+    ? parseMaybeJson(
+        clientesData.result ?? clientesData.response ?? clientesData.parsed ?? {}
+      )
+    : null;
+  const clientesJson = extractJsonPrefix(clientesData?.xml);
+  const clientesText = parseMaybeJson(clientesData?.parsed?.['#text']);
+  return (
+    (clientesPayload && Object.keys(clientesPayload || {}).length > 0
+      ? clientesPayload
+      : null) ||
+    clientesJson ||
+    clientesText
+  );
+};
+
+const findClientInfo = async ({ cedula, vendedor }) => {
+  const firstPage = await fetchListadoClientes({ pagina: 1, vendedor });
+  let clientInfo = firstPage ? buildClientInfo(firstPage, cedula) : null;
+  if (clientInfo) {
+    return clientInfo;
+  }
+
+  if (vendedor) {
+    return null;
+  }
+
+  const { pages } = extractPagination(firstPage);
+  const maxPages = Math.min(pages, 5);
+  for (let page = 2; page <= maxPages; page += 1) {
+    const pageData = await fetchListadoClientes({ pagina: page, vendedor: '' });
+    clientInfo = pageData ? buildClientInfo(pageData, cedula) : null;
+    if (clientInfo) {
+      return clientInfo;
+    }
+  }
+  return null;
+};
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -739,6 +798,9 @@ const renderRewardsPortal = ({
               )}" />
               <button type="submit">Consultar</button>
             </form>
+            <div class="muted">
+              Si no conoces el vendedor, intentamos buscar en varias páginas.
+            </div>
             ${
               cedula
                 ? `<div class="label" style="margin-top:12px;">NIT/Cédula: <strong>${escapeHtml(
@@ -1203,31 +1265,10 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   }
 
   try {
-    const [facturasData, clientesData] = await Promise.all([
+    const [facturasData, clientInfo] = await Promise.all([
       cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
-      cxc
-        .listadoClientes({
-          filas: 2000,
-          pagina: 1,
-          fecha: formatDateTime(new Date()),
-          vendedor,
-        })
-        .catch(() => null),
+      findClientInfo({ cedula, vendedor }),
     ]);
-    const clientesPayload = clientesData
-      ? parseMaybeJson(
-          clientesData.result ?? clientesData.response ?? clientesData.parsed ?? {}
-        )
-      : null;
-    const clientesJson = extractJsonPrefix(clientesData?.xml);
-    const clientesText = parseMaybeJson(clientesData?.parsed?.['#text']);
-    const clientesDataSource =
-      clientesPayload && Object.keys(clientesPayload || {}).length > 0
-        ? clientesPayload
-        : clientesJson || clientesText;
-    const clientInfo = clientesDataSource
-      ? buildClientInfo(clientesDataSource, cedula)
-      : null;
     const data = facturasData;
     if (isCxcFunctionInactive(data?.xml)) {
       return res.send(
