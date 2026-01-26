@@ -12,6 +12,7 @@ import { woo } from './wooClient.js';
 const app = express();
 const port = process.env.PORT || 4000;
 const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
+const DEFAULT_CXC_VENDEDOR = String(process.env.CXC_DEFAULT_VENDEDOR || '').trim();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
@@ -296,19 +297,19 @@ const fetchListadoClientes = async ({ pagina, vendedor }) => {
   );
 };
 
-const findClientInfo = async ({ cedula, vendedor }) => {
+const findClientInfo = async ({ cedula, vendedor, allowFallback = false }) => {
   const firstPage = await fetchListadoClientes({ pagina: 1, vendedor });
   let clientInfo = firstPage ? buildClientInfo(firstPage, cedula) : null;
   if (clientInfo) {
     return clientInfo;
   }
 
-  if (vendedor) {
+  if (vendedor && !allowFallback) {
     return null;
   }
 
   const { pages } = extractPagination(firstPage);
-  const maxPages = Math.min(pages, 5);
+  const maxPages = Math.min(pages, 20);
   for (let page = 2; page <= maxPages; page += 1) {
     const pageData = await fetchListadoClientes({ pagina: page, vendedor: '' });
     clientInfo = pageData ? buildClientInfo(pageData, cedula) : null;
@@ -388,6 +389,8 @@ const getRebateForTotal = (total) => {
 const renderRewardsPortal = ({
   cedula = '',
   vendedor = '',
+  vendedorInput = '',
+  defaultVendedor = '',
   clientName = '',
   clientInfo = null,
   points = null,
@@ -794,10 +797,17 @@ const renderRewardsPortal = ({
                 cedula
               )}" />
               <input type="text" name="vendedor" placeholder="Vendedor (opcional)" value="${escapeHtml(
-                vendedor
+                vendedorInput || defaultVendedor || vendedor
               )}" />
               <button type="submit">Consultar</button>
             </form>
+            ${
+              !vendedorInput && defaultVendedor
+                ? `<div class="muted">Usando vendedor por defecto: ${escapeHtml(
+                    defaultVendedor
+                  )}</div>`
+                : ''
+            }
             <div class="muted">
               Si no conoces el vendedor, intentamos buscar en varias páginas.
             </div>
@@ -1242,7 +1252,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
-  const vendedor = String(req.query.vendedor || '').trim();
+  const vendedorInput = String(req.query.vendedor || '').trim();
+  const vendedor = vendedorInput || DEFAULT_CXC_VENDEDOR;
   const rewards = loadRewards();
   const gspCareList = loadGspCare();
   const gspCareActive = cedula
@@ -1259,16 +1270,23 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         gspCareList,
         gspCareActive,
         vendedor,
+        vendedorInput,
+        defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
       })
     );
   }
 
   try {
-    const [facturasData, clientInfo] = await Promise.all([
+    const [facturasData, initialClientInfo] = await Promise.all([
       cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
-      findClientInfo({ cedula, vendedor }),
+      findClientInfo({ cedula, vendedor, allowFallback: Boolean(vendedorInput) }),
     ]);
+    const clientInfo =
+      initialClientInfo ||
+      (DEFAULT_CXC_VENDEDOR && !vendedorInput
+        ? await findClientInfo({ cedula, vendedor: '' })
+        : null);
     const data = facturasData;
     if (isCxcFunctionInactive(data?.xml)) {
       return res.send(
@@ -1282,6 +1300,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           gspCareActive,
           clientInfo,
           vendedor,
+          vendedorInput,
+          defaultVendedor: DEFAULT_CXC_VENDEDOR,
           section,
         })
       );
@@ -1304,6 +1324,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         gspCareList,
         gspCareActive,
         vendedor,
+        vendedorInput,
+        defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
       })
     );
@@ -1317,6 +1339,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         gspCareList,
         gspCareActive,
         vendedor,
+        vendedorInput,
+        defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
       })
     );
