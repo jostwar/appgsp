@@ -10,6 +10,10 @@ export default function ProfileScreen({ navigation }) {
     pressed && styles.pressed,
   ];
   const { user, signOut } = useAuth();
+  const displayName =
+    user?.firstName || user?.lastName
+      ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+      : user?.fullName || user?.name || 'Usuario GSP';
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [preferredChannel, setPreferredChannel] = useState('WhatsApp');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -62,7 +66,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.profileCard}>
           <View>
             <Text style={styles.profileName}>
-              {user?.name || 'Usuario GSP'}
+              {displayName}
             </Text>
             <Text style={styles.profileEmail}>
               {user?.email || 'correo@gsp.com.co'}

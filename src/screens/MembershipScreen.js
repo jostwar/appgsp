@@ -9,10 +9,10 @@ export default function MembershipScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const memberName =
-    user?.fullName
-      ? user.fullName.split(' ').slice(0, 2).join(' ')
-      : user?.firstName || user?.lastName
-        ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+    user?.firstName || user?.lastName
+      ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+      : user?.fullName
+        ? user.fullName.split(' ').slice(0, 2).join(' ')
         : user?.name
           ? user.name.split(' ').slice(0, 2).join(' ')
           : 'Cliente GSP';
