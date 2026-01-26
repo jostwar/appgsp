@@ -429,6 +429,7 @@ const renderRewardsPortal = ({
           <a href="#clientes">Buscar cliente</a>
           <a href="#premios">Premios</a>
           <a href="#gsp-care">GSP Care</a>
+          <a href="/admin/logout">Cerrar sesión</a>
         </nav>
       </div>
     </header>
@@ -440,6 +441,7 @@ const renderRewardsPortal = ({
           <a href="#clientes">Buscar cliente</a>
           <a href="#premios">Premios</a>
           <a href="#gsp-care">GSP Care</a>
+          <a href="/admin/logout">Cerrar sesión</a>
         </aside>
 
         <main style="display:flex; flex-direction:column; gap:20px;">
@@ -791,6 +793,11 @@ app.get('/health', (_req, res) => {
 
 app.get('/admin', adminAuth, (_req, res) => {
   res.redirect('/admin/rewards');
+});
+
+app.get('/admin/logout', (_req, res) => {
+  res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
+  return res.status(401).send('Sesión cerrada.');
 });
 
 app.get('/admin/rewards', adminAuth, async (req, res) => {
