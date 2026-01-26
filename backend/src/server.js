@@ -192,6 +192,7 @@ const renderRewardsPortal = ({
   editReward = null,
   gspCareActive = false,
   gspCareList = [],
+  section = 'inicio',
 } = {}) => {
   const rewardsList = rewards;
   const activeReward = editReward || {
@@ -240,6 +241,13 @@ const renderRewardsPortal = ({
     Math.round(BASE_LEVEL_GOAL * (BASE_LEVEL_REBATE / 100))
   )}`;
   const careStatus = gspCareActive ? 'Activo' : 'No activo';
+  const normalizedSection = String(section || 'inicio').trim() || 'inicio';
+  const showDashboard = normalizedSection === 'inicio';
+  const showClientes = normalizedSection === 'clientes';
+  const showPremios = normalizedSection === 'premios';
+  const showCare = normalizedSection === 'gsp-care';
+  const rewardsCount = rewardsList.length;
+  const careCount = gspCareList.length;
 
   return `<!doctype html>
 <html lang="es">
@@ -496,10 +504,10 @@ const renderRewardsPortal = ({
           <img src="https://gsp.com.co/wp-content/uploads/2026/01/Identificador-GSP_LOGO_3.png" alt="GSP" />
         </div>
         <nav class="nav">
-          <a href="#inicio">Inicio</a>
-          <a href="#clientes">Buscar cliente</a>
-          <a href="#premios">Premios</a>
-          <a href="#gsp-care">GSP Care</a>
+          <a href="/admin/rewards?section=inicio">Inicio</a>
+          <a href="/admin/rewards?section=clientes">Buscar cliente</a>
+          <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=gsp-care">GSP Care</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </nav>
       </div>
@@ -508,15 +516,17 @@ const renderRewardsPortal = ({
       <div class="layout">
         <aside class="sidebar">
           <strong>Menú</strong>
-          <a href="#inicio">Dashboard</a>
-          <a href="#clientes">Buscar cliente</a>
-          <a href="#premios">Premios</a>
-          <a href="#gsp-care">GSP Care</a>
+          <a href="/admin/rewards?section=inicio">Dashboard</a>
+          <a href="/admin/rewards?section=clientes">Buscar cliente</a>
+          <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=gsp-care">GSP Care</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </aside>
 
         <main style="display:flex; flex-direction:column; gap:20px;">
-          <div id="inicio" class="card">
+          ${
+            showDashboard
+              ? `<div id="inicio" class="card">
             <h1>Dashboard GSPRewards</h1>
             <p class="section-subtitle">
               Consulta puntos por cliente y administra premios disponibles.
@@ -544,13 +554,36 @@ const renderRewardsPortal = ({
               </div>
             </div>
           </div>
+          <div class="card">
+            <h2 class="section-title">Resumen rápido</h2>
+            <p class="section-subtitle">Estado general del portal.</p>
+            <div class="totals">
+              <div class="item">
+                <span>Premios activos</span>
+                <strong>${rewardsCount}</strong>
+              </div>
+              <div class="item">
+                <span>Membresías GSP Care</span>
+                <strong>${careCount}</strong>
+              </div>
+              <div class="item">
+                <span>Última búsqueda</span>
+                <strong>${cedula ? escapeHtml(cedula) : '—'}</strong>
+              </div>
+            </div>
+          </div>`
+              : ''
+          }
 
-          <div id="clientes" class="card">
+          ${
+            showClientes
+              ? `<div id="clientes" class="card">
             <h2 class="section-title">Buscar cliente</h2>
             <p class="section-subtitle">
               Ingresa NIT o cédula para consultar el saldo.
             </p>
             <form class="form" method="get" action="/admin/rewards">
+              <input type="hidden" name="section" value="clientes" />
               <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
                 cedula
               )}" />
@@ -582,9 +615,13 @@ const renderRewardsPortal = ({
                 ? `<div class="alert">Error: ${escapeHtml(error)}</div>`
                 : ''
             }
-          </div>
+          </div>`
+              : ''
+          }
 
-          <div class="card">
+          ${
+            showDashboard
+              ? `<div class="card">
             <div class="pill"><span class="dot"></span>Nivel ${levelValue}</div>
             <div class="value">${cashbackValue}</div>
             <div class="muted">Rebate ${rebateValue}% · Compras mensuales antes de IVA</div>
@@ -593,14 +630,19 @@ const renderRewardsPortal = ({
             <div class="muted">Avance nivel 1: ${progressPercent}% · Meta $${formatNumber(
               BASE_LEVEL_GOAL
             )}</div>
-          </div>
+          </div>`
+              : ''
+          }
 
-          <div id="premios" class="card">
+          ${
+            showPremios
+              ? `<div id="premios" class="card">
             <h2 class="section-title">Premios para redimir</h2>
             <p class="section-subtitle">
               Administra el catálogo de premios que los clientes pueden canjear.
             </p>
             <form class="form-grid" method="post" action="/admin/rewards/save">
+              <input type="hidden" name="section" value="premios" />
               <input type="hidden" name="id" value="${escapeHtml(activeReward.id)}" />
               <input type="text" name="title" placeholder="Nombre del premio" required value="${escapeHtml(
                 activeReward.title
@@ -637,8 +679,9 @@ const renderRewardsPortal = ({
                       reward.value || ''
                     }</div>
                     <div class="reward-actions">
-                      <a href="/admin/rewards?editId=${reward.id}#premios" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 12px;">Editar</a>
+                      <a href="/admin/rewards?section=premios&editId=${reward.id}" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 12px;">Editar</a>
                       <form method="post" action="/admin/rewards/delete">
+                        <input type="hidden" name="section" value="premios" />
                         <input type="hidden" name="id" value="${reward.id}" />
                         <button type="submit" class="btn-secondary">Eliminar</button>
                       </form>
@@ -647,9 +690,13 @@ const renderRewardsPortal = ({
                 )
                 .join('')}
             </div>
-          </div>
+          </div>`
+              : ''
+          }
 
-      <div class="card">
+      ${
+        showDashboard
+          ? `<div class="card">
         <h2>¿Cómo funciona GSPRewards?</h2>
         <div class="grid">
           ${steps
@@ -661,9 +708,13 @@ const renderRewardsPortal = ({
             )
             .join('')}
         </div>
-      </div>
+      </div>`
+          : ''
+      }
 
-      <div class="card">
+      ${
+        showDashboard
+          ? `<div class="card">
         <h2>Actividad reciente</h2>
         ${activity
           .map(
@@ -676,42 +727,60 @@ const renderRewardsPortal = ({
             </div>`
           )
           .join('')}
-      </div>
+      </div>`
+          : ''
+      }
 
-      <div class="card">
+      ${
+        showDashboard
+          ? `<div class="card">
         <h2>T&C</h2>
         <div class="muted">${termsText}</div>
-      </div>
+      </div>`
+          : ''
+      }
 
-      <div id="gsp-care" class="card">
+      ${
+        showCare
+          ? `<div id="gsp-care" class="card">
         <h2 class="section-title">GSP Care</h2>
         <p class="section-subtitle">
           Activa o desactiva la membresía para NITs que compren GSP Care.
         </p>
         <form class="form" method="post" action="/admin/gspcare/save">
+          <input type="hidden" name="section" value="gsp-care" />
           <input type="text" name="cedula" placeholder="NIT o cédula" required />
           <input type="text" name="fecha" placeholder="Fecha activación (YYYY-MM-DD)" />
           <button type="submit">Activar</button>
         </form>
         <div class="grid" style="margin-top:16px;">
-          ${gspCareList
-            .map(
-              (item) => `<div class="subcard">
-                <h3>${escapeHtml(item.cedula)}</h3>
-                <div class="label">Activado: ${escapeHtml(item.activatedAt || '—')}</div>
-                <div class="reward-actions">
-                  <form method="post" action="/admin/gspcare/delete">
-                    <input type="hidden" name="cedula" value="${escapeHtml(
-                      item.cedula
-                    )}" />
-                    <button type="submit" class="btn-secondary">Desactivar</button>
-                  </form>
-                </div>
-              </div>`
-            )
-            .join('')}
+          ${
+            gspCareList.length > 0
+              ? gspCareList
+                  .map(
+                    (item) => `<div class="subcard">
+                    <h3>${escapeHtml(item.cedula)}</h3>
+                    <div class="label">Activado: ${escapeHtml(
+                      item.activatedAt || '—'
+                    )}</div>
+                    <div class="reward-actions">
+                      <form method="post" action="/admin/gspcare/delete">
+                        <input type="hidden" name="section" value="gsp-care" />
+                        <input type="hidden" name="cedula" value="${escapeHtml(
+                          item.cedula
+                        )}" />
+                        <button type="submit" class="btn-secondary">Desactivar</button>
+                      </form>
+                    </div>
+                  </div>`
+                  )
+                  .join('')
+              : '<div class="alert">No hay membresías activas.</div>'
+          }
         </div>
-      </div>
+      </div>`
+          : ''
+      }
         </main>
       </div>
     </div>
@@ -899,6 +968,7 @@ app.get('/admin/logout', (_req, res) => {
 app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
+  const section = String(req.query.section || 'inicio').trim() || 'inicio';
   const rewards = loadRewards();
   const gspCareList = loadGspCare();
   const gspCareActive = cedula
@@ -909,7 +979,13 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     : null;
   if (!cedula) {
     return res.send(
-      renderRewardsPortal({ rewards, editReward, gspCareList, gspCareActive })
+      renderRewardsPortal({
+        rewards,
+        editReward,
+        gspCareList,
+        gspCareActive,
+        section,
+      })
     );
   }
 
@@ -927,6 +1003,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           editReward,
           gspCareList,
           gspCareActive,
+          section,
         })
       );
     }
@@ -958,6 +1035,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        section,
       })
     );
   } catch (error) {
@@ -969,15 +1047,17 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        section,
       })
     );
   }
 });
 
 app.post('/admin/rewards/save', adminAuth, (req, res) => {
-  const { id, title, description, points, value, image } = req.body || {};
+  const { id, title, description, points, value, image, section } =
+    req.body || {};
   if (!title || !points) {
-    return res.redirect('/admin/rewards#premios');
+    return res.redirect('/admin/rewards?section=premios');
   }
   const rewards = loadRewards();
   const rewardId = id || `${Date.now()}`;
@@ -998,25 +1078,27 @@ app.post('/admin/rewards/save', adminAuth, (req, res) => {
     rewards.unshift(payload);
   }
   saveRewards(rewards);
-  return res.redirect('/admin/rewards#premios');
+  const targetSection = section || 'premios';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
 
 app.post('/admin/rewards/delete', adminAuth, (req, res) => {
-  const { id } = req.body || {};
+  const { id, section } = req.body || {};
   if (!id) {
-    return res.redirect('/admin/rewards#premios');
+    return res.redirect('/admin/rewards?section=premios');
   }
   const rewards = loadRewards();
   const filtered = rewards.filter((reward) => reward.id !== id);
   saveRewards(filtered);
-  return res.redirect('/admin/rewards#premios');
+  const targetSection = section || 'premios';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
 
 app.post('/admin/gspcare/save', adminAuth, (req, res) => {
-  const { cedula, fecha } = req.body || {};
+  const { cedula, fecha, section } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
-    return res.redirect('/admin/rewards#gsp-care');
+    return res.redirect('/admin/rewards?section=gsp-care');
   }
   const current = loadGspCare();
   const existing = current.find((item) => item.cedula === normalized);
@@ -1028,19 +1110,21 @@ app.post('/admin/gspcare/save', adminAuth, (req, res) => {
     });
     saveGspCare(current);
   }
-  return res.redirect('/admin/rewards#gsp-care');
+  const targetSection = section || 'gsp-care';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
 
 app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
-  const { cedula } = req.body || {};
+  const { cedula, section } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
-    return res.redirect('/admin/rewards#gsp-care');
+    return res.redirect('/admin/rewards?section=gsp-care');
   }
   const current = loadGspCare();
   const filtered = current.filter((item) => item.cedula !== normalized);
   saveGspCare(filtered);
-  return res.redirect('/admin/rewards#gsp-care');
+  const targetSection = section || 'gsp-care';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
 
 app.get('/api/rewards', (_req, res) => {
