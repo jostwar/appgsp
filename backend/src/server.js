@@ -152,7 +152,9 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
     strPar_Cedula: cedula,
     datPar_FecIni: from,
     datPar_FecFin: to,
-    intPar_TipPed: 0,
+    intPar_TipPed: 1,
+    strPar_NumPed: '',
+    strPar_Vended: '',
     intPar_Filas: 200,
     intPar_Pagina: 1,
   };
