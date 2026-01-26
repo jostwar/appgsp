@@ -494,6 +494,37 @@ const buildVentasParams = ({ cedula, fecha } = {}) => {
   };
 };
 
+const filterVentasPayload = (payload, cedula) => {
+  const target = normalizeId(cedula);
+  if (!target || !payload) return payload;
+
+  const matchesItem = (item) => {
+    if (!item || typeof item !== 'object') return false;
+    const idValue = findValueByKeys(item, CLIENT_ID_KEYS);
+    if (matchesCedulaValue(idValue, target)) return true;
+    return Object.values(item).some((value) => matchesCedulaValue(value, target));
+  };
+
+  if (Array.isArray(payload)) {
+    return payload.filter(matchesItem);
+  }
+  if (typeof payload === 'object') {
+    return matchesItem(payload) ? payload : null;
+  }
+  return payload;
+};
+
+const getVentasTotal = (payload, totalKey) => {
+  const primaryKey = totalKey || 'VALTOT';
+  const primary = sumTotalsForKey(payload, primaryKey);
+  if (primary > 0) return primary;
+  if (primaryKey !== 'VALTOT') {
+    const fallback = sumTotalsForKey(payload, 'VALTOT');
+    if (fallback > 0) return fallback;
+  }
+  return sumTotalsForKey(payload, 'total');
+};
+
 const LEVELS = [
   { name: 'Blue Partner', min: 5_000_000, max: 14_999_999, rebate: 1 },
   { name: 'Purple Partner', min: 15_000_000, max: 29_999_999, rebate: 1.5 },
@@ -1508,8 +1539,9 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const payload = parseMaybeJson(
       facturasData.result ?? facturasData.response ?? facturasData.parsed ?? {}
     );
-    const name = findValueByKeys(payload, CLIENT_NAME_KEYS);
-    const total = sumTotalsForKey(payload, 'total');
+    const filteredPayload = filterVentasPayload(payload, cedula);
+    const name = findValueByKeys(filteredPayload || payload, CLIENT_NAME_KEYS);
+    const total = getVentasTotal(filteredPayload || payload);
     const points =
       CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
@@ -2094,7 +2126,8 @@ app.post('/api/cxc/points', async (req, res) => {
     const payload = parseMaybeJson(
       data.result ?? data.response ?? data.parsed ?? {}
     );
-    const name = findValueByKeys(payload, [
+    const filteredPayload = filterVentasPayload(payload, cedula);
+    const name = findValueByKeys(filteredPayload || payload, [
       'nombre',
       'nombrecliente',
       'nombre_cliente',
@@ -2107,7 +2140,7 @@ app.post('/api/cxc/points', async (req, res) => {
       'strcli_razon',
       'strpar_razonsocial',
     ]);
-    const idValue = findValueByKeys(payload, [
+    const idValue = findValueByKeys(filteredPayload || payload, [
       'cedula',
       'nit',
       'documento',
@@ -2115,8 +2148,8 @@ app.post('/api/cxc/points', async (req, res) => {
       'strpar_cedula',
       'strpar_nit',
     ]);
-    const keyToUse = totalKey || 'total';
-    const total = sumTotalsForKey(payload, keyToUse);
+    const keyToUse = totalKey || 'VALTOT';
+    const total = getVentasTotal(filteredPayload || payload, keyToUse);
     const divisorValue = Number(divisor || CXC_POINTS_DIVISOR || 10000);
     const points = divisorValue > 0 ? Math.floor(total / divisorValue) : 0;
     const level = getLevelForTotal(total);
