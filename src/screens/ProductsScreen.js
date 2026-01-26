@@ -69,6 +69,7 @@ export default function ProductsScreen({ route, navigation }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sortOption, setSortOption] = useState('recomendado');
   const [selectedBrand, setSelectedBrand] = useState('Todas');
+  const [activeBrandName, setActiveBrandName] = useState(null);
   const [selectedPortfolio, setSelectedPortfolio] = useState('Todo');
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showBrandMenu, setShowBrandMenu] = useState(false);
@@ -196,7 +197,9 @@ export default function ProductsScreen({ route, navigation }) {
     if (!initialBrandName) return;
     setSelectedCategoryId('all');
     setSelectedCategoryName(null);
-    updateSearch(initialBrandName, { immediate: true });
+    setSelectedBrand(initialBrandName);
+    setActiveBrandName(initialBrandName);
+    updateSearch('', { immediate: true });
   }, [initialBrandName, updateSearch]);
 
   useEffect(() => {
@@ -240,7 +243,9 @@ export default function ProductsScreen({ route, navigation }) {
       if (targetBrand) {
         setSelectedCategoryId('all');
         setSelectedCategoryName(null);
-        updateSearch(targetBrand, { immediate: true });
+        setSelectedBrand(targetBrand);
+        setActiveBrandName(targetBrand);
+        updateSearch('', { immediate: true });
         return;
       }
       if (!targetCategory) {
@@ -270,38 +275,46 @@ export default function ProductsScreen({ route, navigation }) {
     ])
   );
 
-  const load = useCallback(async () => {
-    try {
-      if (!hasWooCredentials()) {
-        setProducts([]);
-        setCategories([]);
-        setStatus('missing');
-        return;
+  const load = useCallback(
+    async (brandNameOverride = null) => {
+      const brandName = brandNameOverride ?? activeBrandName;
+      try {
+        if (!hasWooCredentials()) {
+          setProducts([]);
+          setCategories([]);
+          setStatus('missing');
+          return;
+        }
+        const [cats, data, brands] = await Promise.all([
+          fetchCategories(),
+          fetchProducts({ page: 1, perPage: 30, brandName }),
+          fetchBrandOptions().catch(() => []),
+        ]);
+        setCategories(cats);
+        setProducts(data.map(normalizeProduct));
+        if (brands.length > 0) {
+          setBrandOptions(normalizeBrandOptions(brands));
+        }
+        setPage(1);
+        setHasMore(data.length === 30);
+        setStatus('ready');
+      } catch (error) {
+        setStatus('error');
       }
-      const [cats, data, brands] = await Promise.all([
-        fetchCategories(),
-        fetchProducts({ page: 1, perPage: 30 }),
-        fetchBrandOptions().catch(() => []),
-      ]);
-      setCategories(cats);
-      setProducts(data.map(normalizeProduct));
-      if (brands.length > 0) {
-        setBrandOptions(normalizeBrandOptions(brands));
-      }
-      setPage(1);
-      setHasMore(data.length === 30);
-      setStatus('ready');
-    } catch (error) {
-      setStatus('error');
-    }
-  }, []);
+    },
+    [activeBrandName, normalizeBrandOptions, normalizeProduct]
+  );
 
   const loadMore = useCallback(async () => {
     if (status !== 'ready' || isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await fetchProducts({ page: nextPage, perPage: 30 });
+      const data = await fetchProducts({
+        page: nextPage,
+        perPage: 30,
+        brandName: activeBrandName,
+      });
       setProducts((prev) => [...prev, ...data.map(normalizeProduct)]);
       setPage(nextPage);
       setHasMore(data.length === 30);
@@ -310,11 +323,12 @@ export default function ProductsScreen({ route, navigation }) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [status, isLoadingMore, hasMore, page]);
+  }, [status, isLoadingMore, hasMore, page, activeBrandName, normalizeProduct]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setStatus('loading');
+    load(activeBrandName);
+  }, [load, activeBrandName]);
 
   if (status === 'loading') {
     return (
@@ -348,7 +362,7 @@ export default function ProductsScreen({ route, navigation }) {
           style={pressableStyle(styles.primaryButton)}
           onPress={() => {
             setStatus('loading');
-            load();
+            load(activeBrandName);
           }}
         >
           <Text style={styles.primaryButtonText}>Reintentar</Text>
@@ -368,7 +382,7 @@ export default function ProductsScreen({ route, navigation }) {
           style={pressableStyle(styles.primaryButton)}
           onPress={() => {
             setStatus('loading');
-            load();
+            load(activeBrandName);
           }}
         >
           <Text style={styles.primaryButtonText}>Actualizar</Text>
@@ -392,7 +406,7 @@ export default function ProductsScreen({ route, navigation }) {
         refreshing={isRefreshing}
         onRefresh={async () => {
           setIsRefreshing(true);
-          await load();
+          await load(activeBrandName);
           setIsRefreshing(false);
         }}
         onEndReached={loadMore}
@@ -512,9 +526,8 @@ export default function ProductsScreen({ route, navigation }) {
                               setShowBrandMenu(false);
                               setSelectedCategoryId('all');
                               setSelectedCategoryName(null);
-                              updateSearch(option === 'Todas' ? '' : option, {
-                                immediate: true,
-                              });
+                              setActiveBrandName(option === 'Todas' ? null : option);
+                              updateSearch('', { immediate: true });
                             }}
                           >
                             <Text style={styles.dropdownItemText}>{option}</Text>

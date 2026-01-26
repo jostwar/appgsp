@@ -2,6 +2,25 @@ const baseUrl = process.env.EXPO_PUBLIC_WC_URL || 'https://gsp.com.co';
 const key = process.env.EXPO_PUBLIC_WC_KEY;
 const secret = process.env.EXPO_PUBLIC_WC_SECRET;
 
+const normalize = (value) => String(value || '').toLowerCase().trim();
+
+const buildUrl = (path, { auth = true, params = {} } = {}) => {
+  const url = new URL(path, baseUrl);
+  if (auth) {
+    url.searchParams.set('consumer_key', key);
+    url.searchParams.set('consumer_secret', secret);
+  }
+  Object.entries(params).forEach(([param, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(param, String(value));
+    }
+  });
+  return url;
+};
+
+const extractNames = (items) =>
+  Array.isArray(items) ? items.map((term) => term?.name).filter(Boolean) : [];
+
 export function hasWooCredentials() {
   return Boolean(key && secret);
 }
@@ -19,7 +38,102 @@ export function getOrderPayUrl(orderId, orderKey) {
   return `${base}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${orderKey}`;
 }
 
-export async function fetchProducts({ page = 1, perPage = 50, categoryId } = {}) {
+const findBrandAttr = (attributes = []) =>
+  attributes.find((attr) => {
+    const name = normalize(attr?.name);
+    const slug = normalize(attr?.slug);
+    return (
+      slug === 'pa_brand' ||
+      slug === 'pa_marca' ||
+      slug === 'pa_marcas' ||
+      slug === 'product_brand' ||
+      slug === 'brand' ||
+      slug.includes('marca') ||
+      slug.includes('brand') ||
+      name === 'marca' ||
+      name === 'marcas' ||
+      name === 'brand' ||
+      name === 'brands'
+    );
+  });
+
+const matchTermByName = (terms, brandName) => {
+  const target = normalize(brandName);
+  return terms.find((term) => {
+    const name = normalize(term?.name);
+    const slug = normalize(term?.slug);
+    return name === target || slug === target;
+  });
+};
+
+const resolveBrandParams = async (brandName) => {
+  if (!brandName) return [];
+  const paramsList = [];
+
+  const taxonomyEndpoints = [
+    buildUrl('/wp-json/wp/v2/product_brand', {
+      auth: false,
+      params: { per_page: '100', search: brandName },
+    }),
+    buildUrl('/wp-json/wc/v3/products/brands', {
+      params: { per_page: '100', search: brandName },
+    }),
+  ];
+
+  for (const url of taxonomyEndpoints) {
+    const response = await fetch(url.toString());
+    if (!response.ok) continue;
+    const terms = await response.json();
+    const match = matchTermByName(terms, brandName);
+    if (match?.id) {
+      paramsList.push({ product_brand: match.id });
+      if (match.slug) {
+        paramsList.push({ product_brand: match.slug });
+      }
+      paramsList.push({ brand: match.id });
+      break;
+    }
+  }
+
+  const attrsUrl = buildUrl('/wp-json/wc/v3/products/attributes', {
+    params: { per_page: '100' },
+  });
+  const attrsResponse = await fetch(attrsUrl.toString());
+  if (attrsResponse.ok) {
+    const attributes = await attrsResponse.json();
+    const brandAttr = findBrandAttr(attributes);
+    if (brandAttr?.id) {
+      const termsUrl = buildUrl(
+        `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
+        { params: { per_page: '100', search: brandName } }
+      );
+      const termsResponse = await fetch(termsUrl.toString());
+      if (termsResponse.ok) {
+        const terms = await termsResponse.json();
+        const match = matchTermByName(terms, brandName);
+        if (match?.id) {
+          paramsList.push({
+            attribute: brandAttr.id,
+            attribute_term: match.id,
+          });
+        }
+      }
+    }
+  }
+
+  if (paramsList.length === 0) {
+    paramsList.push({ search: brandName });
+  }
+
+  return paramsList;
+};
+
+export async function fetchProducts({
+  page = 1,
+  perPage = 50,
+  categoryId,
+  brandName,
+} = {}) {
   if (!hasWooCredentials()) {
     return [];
   }
@@ -47,19 +161,32 @@ export async function fetchProducts({ page = 1, perPage = 50, categoryId } = {})
     return response.json();
   };
 
-  const [baseProducts, variableProducts] = await Promise.all([
-    request(),
-    request({ type: 'variable' }),
-  ]);
+  const runRequest = async (extraParams) => {
+    const [baseProducts, variableProducts] = await Promise.all([
+      request(extraParams),
+      request({ type: 'variable', ...extraParams }),
+    ]);
+    const merged = [...baseProducts, ...variableProducts];
+    const unique = new Map();
+    merged.forEach((product) => {
+      if (product?.id) {
+        unique.set(product.id, product);
+      }
+    });
+    return Array.from(unique.values());
+  };
 
-  const merged = [...baseProducts, ...variableProducts];
-  const unique = new Map();
-  merged.forEach((product) => {
-    if (product?.id) {
-      unique.set(product.id, product);
+  const brandParamsList = await resolveBrandParams(brandName);
+  if (brandParamsList.length > 0) {
+    for (const params of brandParamsList) {
+      const data = await runRequest(params);
+      if (data.length > 0) {
+        return data;
+      }
     }
-  });
-  return Array.from(unique.values());
+  }
+
+  return runRequest();
 }
 
 export async function fetchAllProducts({ perPage = 50, maxPages = 10 } = {}) {
@@ -96,25 +223,6 @@ export async function fetchBrandOptions() {
   if (!hasWooCredentials()) {
     return [];
   }
-  const normalize = (value) => String(value || '').toLowerCase().trim();
-  const extractNames = (items) =>
-    Array.isArray(items)
-      ? items.map((term) => term?.name).filter(Boolean)
-      : [];
-
-  const buildUrl = (path, { auth = true, params = {} } = {}) => {
-    const url = new URL(path, baseUrl);
-    if (auth) {
-      url.searchParams.set('consumer_key', key);
-      url.searchParams.set('consumer_secret', secret);
-    }
-    Object.entries(params).forEach(([param, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(param, String(value));
-      }
-    });
-    return url;
-  };
 
   const attrsUrl = buildUrl('/wp-json/wc/v3/products/attributes', {
     params: { per_page: '100' },
@@ -122,23 +230,7 @@ export async function fetchBrandOptions() {
   const attrsResponse = await fetch(attrsUrl.toString());
   if (attrsResponse.ok) {
     const attributes = await attrsResponse.json();
-    const brandAttr = attributes.find((attr) => {
-      const name = normalize(attr?.name);
-      const slug = normalize(attr?.slug);
-      return (
-        slug === 'pa_brand' ||
-        slug === 'pa_marca' ||
-        slug === 'pa_marcas' ||
-        slug === 'product_brand' ||
-        slug === 'brand' ||
-        slug.includes('marca') ||
-        slug.includes('brand') ||
-        name === 'marca' ||
-        name === 'marcas' ||
-        name === 'brand' ||
-        name === 'brands'
-      );
-    });
+    const brandAttr = findBrandAttr(attributes);
     if (brandAttr?.id) {
       const termsUrl = buildUrl(
         `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
