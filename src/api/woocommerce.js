@@ -31,6 +31,7 @@ export async function fetchProducts({ page = 1, perPage = 50, categoryId } = {})
     url.searchParams.set('per_page', String(perPage));
     url.searchParams.set('page', String(page));
     url.searchParams.set('status', 'publish');
+    url.searchParams.set('stock_status', 'instock');
     if (categoryId) {
       url.searchParams.set('category', String(categoryId));
     }
@@ -81,14 +82,56 @@ export async function fetchCategories() {
   const url = new URL('/wp-json/wc/v3/products/categories', baseUrl);
   url.searchParams.set('consumer_key', key);
   url.searchParams.set('consumer_secret', secret);
-  url.searchParams.set('per_page', '20');
-  url.searchParams.set('hide_empty', 'true');
+  url.searchParams.set('per_page', '100');
+  url.searchParams.set('hide_empty', 'false');
 
   const response = await fetch(url.toString());
   if (!response.ok) {
     throw new Error('No se pudieron cargar categorías.');
   }
   return response.json();
+}
+
+export async function searchProducts(query, { perPage = 12 } = {}) {
+  if (!hasWooCredentials()) {
+    return [];
+  }
+  const trimmed = String(query || '').trim();
+  if (!trimmed) {
+    return [];
+  }
+  const request = async (extraParams = {}) => {
+    const url = new URL('/wp-json/wc/v3/products', baseUrl);
+    url.searchParams.set('consumer_key', key);
+    url.searchParams.set('consumer_secret', secret);
+    url.searchParams.set('per_page', String(perPage));
+    url.searchParams.set('page', '1');
+    url.searchParams.set('status', 'publish');
+    url.searchParams.set('stock_status', 'instock');
+    Object.entries(extraParams).forEach(([param, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(param, String(value));
+      }
+    });
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar productos.');
+    }
+    return response.json();
+  };
+
+  const [bySearch, bySku] = await Promise.all([
+    request({ search: trimmed }),
+    request({ sku: trimmed }),
+  ]);
+  const merged = [...bySearch, ...bySku];
+  const unique = new Map();
+  merged.forEach((product) => {
+    if (product?.id) {
+      unique.set(product.id, product);
+    }
+  });
+  return Array.from(unique.values());
 }
 
 export async function createOrder(lineItems) {

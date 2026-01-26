@@ -15,7 +15,7 @@ import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { runSearch } from '../api/aiSearch';
+import { searchProducts } from '../api/woocommerce';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -345,33 +345,14 @@ export default function HomeScreen() {
     searchDebounceRef.current = setTimeout(async () => {
       setSearchStatus('loading');
       try {
-        const data = await runSearch(query);
-        const parsedResponse = data?.parsed ?? data;
-        const bodyPayload = parsedResponse?.body ?? parsedResponse?.data ?? null;
-        const parsedBody =
-          typeof bodyPayload === 'string'
-            ? (() => {
-                try {
-                  return JSON.parse(bodyPayload);
-                } catch (error) {
-                  return bodyPayload;
-                }
-              })()
-            : bodyPayload;
-        const parsed =
-          parsedBody ||
-          parsedResponse?.results ||
-          parsedResponse?.items ||
-          parsedResponse?.data ||
-          (data?.raw ? JSON.parse(data.raw) : data);
-        const list = extractResults(parsed);
-        setSearchResults(list);
+        const list = await searchProducts(query, { perPage: 12 });
+        setSearchResults(Array.isArray(list) ? list : []);
         setSearchStatus('ready');
       } catch (error) {
         setSearchResults([]);
         setSearchStatus('error');
       }
-    }, 450);
+    }, 250);
     return () => clearTimeout(searchDebounceRef.current);
   }, [searchQuery]);
 
@@ -432,6 +413,9 @@ export default function HomeScreen() {
                   <Text style={styles.searchTitle}>
                     {item?.name || item?.title || 'Resultado'}
                   </Text>
+                  {item?.sku ? (
+                    <Text style={styles.searchSku}>{item.sku}</Text>
+                  ) : null}
                   {item?.price ? (
                     <Text style={styles.searchPrice}>{formatCop(item.price)}</Text>
                   ) : null}
@@ -838,6 +822,10 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontWeight: '600',
     fontSize: 13,
+  },
+  searchSku: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   searchPrice: {
     color: colors.textSoft,

@@ -119,12 +119,12 @@ function MainTabs() {
       <Tab.Screen
         name="Portafolio"
         component={PortfolioScreen}
-        options={{ tabBarLabel: 'Portaf.' }}
+        options={{ tabBarLabel: 'Portafolio' }}
       />
       <Tab.Screen
         name="Productos"
         component={ProductsScreen}
-        options={{ tabBarLabel: 'Prod.' }}
+        options={{ tabBarLabel: 'Productos' }}
       />
       <Tab.Screen
         name="Carrito"
