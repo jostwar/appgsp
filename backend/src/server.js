@@ -73,6 +73,11 @@ const sumTotalsForKey = (data, totalKey) => {
   return sum;
 };
 
+const isCxcFunctionInactive = (xml) => {
+  const text = String(xml || '').toLowerCase();
+  return text.includes('funcion no activa') || text.includes('función no activa');
+};
+
 const normalizeField = (value) =>
   String(value || '')
     .toLowerCase()
@@ -124,6 +129,33 @@ const formatNumber = (value) => {
   return new Intl.NumberFormat('es-CO').format(
     Number.isNaN(number) ? 0 : number
   );
+};
+
+const formatDateTime = (value, { endOfDay = false } = {}) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (endOfDay) {
+    parsed.setHours(23, 59, 59, 999);
+  } else {
+    parsed.setHours(0, 0, 0, 0);
+  }
+  return parsed.toISOString();
+};
+
+const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const from = formatDateTime(fecha || startOfMonth);
+  const to = formatDateTime(fecha || now, { endOfDay: true });
+  return {
+    strPar_Cedula: cedula,
+    datPar_FecIni: from,
+    datPar_FecFin: to,
+    intPar_TipPed: 0,
+    intPar_Filas: 200,
+    intPar_Pagina: 1,
+  };
 };
 
 const LEVELS = [
@@ -880,9 +912,22 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   }
 
   try {
-    const data = await cxc.detalleFacturasPedido({
-      strPar_Cedula: cedula,
-    });
+    const data = await cxc.detalleFacturasPedido(
+      buildCxcDetalleParams({ cedula })
+    );
+    if (isCxcFunctionInactive(data?.xml)) {
+      return res.send(
+        renderRewardsPortal({
+          cedula,
+          error:
+            'CxC respondió "Función no activa" para DetalleFacturasPedido. Solicita al proveedor habilitar el método.',
+          rewards,
+          editReward,
+          gspCareList,
+          gspCareActive,
+        })
+      );
+    }
     const payload = parseMaybeJson(
       data.result ?? data.response ?? data.parsed ?? {}
     );
@@ -1345,16 +1390,19 @@ app.post('/api/cxc/points', async (req, res) => {
     }
 
     const callParams = { ...(params || {}) };
-    if (cedula && !callParams.strPar_Cedula) {
-      callParams.strPar_Cedula = cedula;
-    }
-    if (fecha && !callParams.datPar_Fecha) {
-      callParams.datPar_Fecha = fecha;
+    if (cedula) {
+      Object.assign(callParams, buildCxcDetalleParams({ cedula, fecha }), callParams);
     }
 
     const data = await cxc.detalleFacturasPedido(callParams);
     if (debug) {
       return res.json(data);
+    }
+    if (isCxcFunctionInactive(data?.xml)) {
+      return res.status(502).json({
+        error:
+          'CxC respondió "Función no activa" para DetalleFacturasPedido. Solicita al proveedor habilitar el método.',
+      });
     }
 
     const payload = parseMaybeJson(
