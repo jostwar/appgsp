@@ -121,7 +121,7 @@ export const cxc = {
   },
 
   detalleFacturasPedido(params = {}) {
-    return this.call('DetalleFacturasPedido', params);
+    return this.call('DetalleFacturasPorPedido', params);
   },
 
   trazabilidadPedidos(params = {}) {
