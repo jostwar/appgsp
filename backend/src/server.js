@@ -152,6 +152,11 @@ const findValueByKeys = (data, keys = []) => {
   return found;
 };
 
+const matchesCedulaValue = (value, target) => {
+  if (!value || !target) return false;
+  return normalizeId(value) === target;
+};
+
 const findClientByCedula = (data, cedula) => {
   const target = normalizeId(cedula);
   if (!target) return null;
@@ -166,12 +171,18 @@ const findClientByCedula = (data, cedula) => {
     if (typeof node !== 'object') return;
 
     const idValue = findValueByKeys(node, CLIENT_ID_KEYS);
-    if (idValue && normalizeId(idValue) === target) {
+    if (idValue && matchesCedulaValue(idValue, target)) {
       match = node;
       return;
     }
 
-    Object.values(node).forEach((value) => {
+    const values = Object.values(node);
+    if (values.some((value) => matchesCedulaValue(value, target))) {
+      match = node;
+      return;
+    }
+
+    values.forEach((value) => {
       if (typeof value === 'object') {
         walk(value);
       }
@@ -686,6 +697,11 @@ const renderRewardsPortal = ({
                     displayName
                   )}</strong></div>`
                 : `<div class="label">Nombre: <strong>—</strong></div>`
+            }
+            ${
+              cedula && !clientInfo
+                ? '<div class="label">Cliente no encontrado en ListadoClientes.</div>'
+                : ''
             }
             ${
               clientInfo?.seller
