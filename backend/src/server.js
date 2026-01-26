@@ -48,6 +48,46 @@ const parseMaybeJson = (value) => {
   }
 };
 
+const parseJsonish = (value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const tryParse = (text) => {
+    try {
+      return JSON.parse(text);
+    } catch (_error) {
+      return null;
+    }
+  };
+  let parsed = tryParse(trimmed);
+  if (parsed && typeof parsed === 'string') {
+    const nested = tryParse(parsed);
+    if (nested !== null) return nested;
+  }
+  if (parsed !== null) return parsed;
+  const firstBracket = trimmed.indexOf('[');
+  const firstBrace = trimmed.indexOf('{');
+  const start =
+    firstBracket === -1
+      ? firstBrace
+      : firstBrace === -1
+        ? firstBracket
+        : Math.min(firstBracket, firstBrace);
+  const lastBracket = trimmed.lastIndexOf(']');
+  const lastBrace = trimmed.lastIndexOf('}');
+  const end = Math.max(lastBracket, lastBrace);
+  if (start >= 0 && end > start) {
+    const fragment = trimmed.slice(start, end + 1);
+    parsed = tryParse(fragment);
+    if (parsed && typeof parsed === 'string') {
+      const nested = tryParse(parsed);
+      if (nested !== null) return nested;
+    }
+    if (parsed !== null) return parsed;
+  }
+  return value;
+};
+
 const extractJsonPrefix = (xml) => {
   if (typeof xml !== 'string') return null;
   const markerIndex = xml.indexOf('<?xml');
@@ -56,11 +96,7 @@ const extractJsonPrefix = (xml) => {
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
     return null;
   }
-  try {
-    return JSON.parse(trimmed);
-  } catch (_error) {
-    return null;
-  }
+  return parseJsonish(trimmed);
 };
 
 const sumTotalsForKey = (data, totalKey) => {
@@ -292,7 +328,7 @@ const fetchListadoClientes = async ({ pagina, vendedor }) => {
       )
     : null;
   const clientesJson = extractJsonPrefix(clientesData?.xml);
-  const clientesText = parseMaybeJson(clientesData?.parsed?.['#text']);
+  const clientesText = parseJsonish(clientesData?.parsed?.['#text']);
   const data =
     (clientesPayload && Object.keys(clientesPayload || {}).length > 0
       ? clientesPayload
