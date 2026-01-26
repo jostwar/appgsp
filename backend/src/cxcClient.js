@@ -120,8 +120,16 @@ export const cxc = {
     });
   },
 
-  detalleFacturasPedido(params = {}) {
-    return this.call('DetalleFacturasPorPedido', params);
+  async detalleFacturasPedido(params = {}) {
+    try {
+      return await this.call('DetalleFacturasPedido', params);
+    } catch (error) {
+      const message = String(error?.response?.data || error?.message || '');
+      if (message.toLowerCase().includes('soapaction')) {
+        return this.call('DetalleFacturasPorPedido', params);
+      }
+      throw error;
+    }
   },
 
   trazabilidadPedidos(params = {}) {
