@@ -122,7 +122,15 @@ export const cxc = {
 
   async detalleFacturasPedido(params = {}) {
     try {
-      return await this.call('DetalleFacturasPedido', params);
+      const primary = await this.call('DetalleFacturasPedido', params);
+      const xmlText = String(primary?.xml || '').toLowerCase();
+      if (
+        xmlText.includes('funcion no activa') ||
+        xmlText.includes('función no activa')
+      ) {
+        return this.call('DetalleFacturasPorPedido', params);
+      }
+      return primary;
     } catch (error) {
       const message = String(error?.response?.data || error?.message || '');
       if (message.toLowerCase().includes('soapaction')) {
