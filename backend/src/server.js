@@ -393,6 +393,33 @@ const findSellerFromCartera = async ({ cedula }) => {
   return String(seller || '').trim();
 };
 
+const getWooCustomerSummary = async (cedula) => {
+  if (!cedula) return null;
+  try {
+    const customer = await woo.findCustomerByCedula(cedula, {
+      perPage: 50,
+      maxPages: 5,
+    });
+    if (!customer) {
+      return { status: 'No registrado', customer: null };
+    }
+    const email = customer?.email || '';
+    const billingFirst = customer?.billing?.first_name || '';
+    const billingLast = customer?.billing?.last_name || '';
+    const fullName = `${billingFirst} ${billingLast}`.trim() || customer?.name || '';
+    return {
+      status: 'Registrado',
+      customer: {
+        id: customer?.id,
+        email,
+        name: fullName,
+      },
+    };
+  } catch (_error) {
+    return { status: 'No disponible', customer: null };
+  }
+};
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -467,6 +494,7 @@ const renderRewardsPortal = ({
   clientName = '',
   clientInfo = null,
   clientSearch = null,
+  wooSummary = null,
   points = null,
   total = null,
   error = null,
@@ -900,7 +928,8 @@ const renderRewardsPortal = ({
                    <div class="label">Correo: <strong>—</strong></div>
                    <div class="label">Teléfono: <strong>—</strong></div>
                    <div class="label">Dirección: <strong>—</strong></div>
-                   <div class="label">Cupo: <strong>—</strong></div>`
+                   <div class="label">Cupo: <strong>—</strong></div>
+                   <div class="label">Usuario e-commerce GSP: <strong>—</strong></div>`
                 : ''
             }
             ${
@@ -967,6 +996,17 @@ const renderRewardsPortal = ({
                 : ''
             }
             ${
+              cedula
+                ? `<div class="label">Usuario e-commerce GSP: <strong>${
+                    wooSummary?.status || '—'
+                  }${
+                    wooSummary?.customer?.email
+                      ? ` · ${escapeHtml(wooSummary.customer.email)}`
+                      : ''
+                  }</strong></div>`
+                : ''
+            }
+            ${
               clientInfo?.plazo
                 ? `<div class="label">Plazo: <strong>${escapeHtml(
                     clientInfo.plazo
@@ -985,6 +1025,26 @@ const renderRewardsPortal = ({
                 ? `<div class="label">Valor compras: <strong>${formatNumber(
                     total ?? 0
                   )}</strong></div>`
+                : ''
+            }
+            ${
+              cedula
+                ? `<div class="label">Nivel: <strong>${levelValue}</strong></div>`
+                : ''
+            }
+            ${
+              cedula
+                ? `<div class="label">Rebate: <strong>${rebateValue}%</strong></div>`
+                : ''
+            }
+            ${
+              cedula
+                ? `<div class="label">Cashback estimado: <strong>${cashbackValue}</strong></div>`
+                : ''
+            }
+            ${
+              cedula
+                ? `<div class="label">GSP Care: <strong>${careStatus}</strong></div>`
                 : ''
             }
             ${
@@ -1373,8 +1433,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     );
   }
 
-  const autoSeller = allowFallback ? await findSellerFromCartera({ cedula }) : '';
-  const initialSearch = await findClientInfo({ cedula, vendedor });
+  const [autoSeller, initialSearch, wooSummary] = await Promise.all([
+    allowFallback ? findSellerFromCartera({ cedula }) : Promise.resolve(''),
+    findClientInfo({ cedula, vendedor }),
+    getWooCustomerSummary(cedula),
+  ]);
   const autoSearch = autoSeller
     ? await findClientInfo({ cedula, vendedor: autoSeller })
     : null;
@@ -1404,6 +1467,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           gspCareActive,
           clientInfo,
           clientSearch: activeSearch,
+          wooSummary,
           vendedor,
           vendedorInput,
           defaultVendedor: DEFAULT_CXC_VENDEDOR,
@@ -1424,6 +1488,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         clientName: name,
         clientInfo,
         clientSearch: activeSearch,
+        wooSummary,
         total,
         points,
         rewards,
@@ -1447,6 +1512,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         gspCareActive,
         clientInfo,
         clientSearch: activeSearch,
+        wooSummary,
         vendedor,
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
