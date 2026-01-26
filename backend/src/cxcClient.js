@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { XMLParser } from 'fast-xml-parser';
 
-const { CXC_API_URL, CXC_TOKEN, CXC_EMPRESA, CXC_SOAP_NS } = process.env;
+const { CXC_API_URL, CXC_VENTAS_URL, CXC_TOKEN, CXC_EMPRESA, CXC_SOAP_NS } =
+  process.env;
 
 const SOAP_NS = CXC_SOAP_NS || 'http://tempuri.org/';
 
@@ -13,6 +14,19 @@ const parser = new XMLParser({
 const ensureConfig = () => {
   if (!CXC_API_URL) {
     throw new Error('CXC_API_URL es requerido');
+  }
+  if (!CXC_TOKEN) {
+    throw new Error('CXC_TOKEN es requerido');
+  }
+  if (!CXC_EMPRESA) {
+    throw new Error('CXC_EMPRESA es requerido');
+  }
+};
+
+const ensureVentasConfig = () => {
+  const baseUrl = CXC_VENTAS_URL || CXC_API_URL;
+  if (!baseUrl) {
+    throw new Error('CXC_VENTAS_URL o CXC_API_URL es requerido');
   }
   if (!CXC_TOKEN) {
     throw new Error('CXC_TOKEN es requerido');
@@ -92,18 +106,18 @@ const extractResult = (xml) => {
   return { parsed, response, result };
 };
 
-const resolveServiceUrl = (method) => {
-  if (!CXC_API_URL) return CXC_API_URL;
-  if (CXC_API_URL.includes('{{method}}')) {
-    return CXC_API_URL.replace('{{method}}', method);
+const resolveServiceUrl = (method, baseUrl = CXC_API_URL) => {
+  if (!baseUrl) return baseUrl;
+  if (baseUrl.includes('{{method}}')) {
+    return baseUrl.replace('{{method}}', method);
   }
-  if (CXC_API_URL.includes('{method}')) {
-    return CXC_API_URL.replace('{method}', method);
+  if (baseUrl.includes('{method}')) {
+    return baseUrl.replace('{method}', method);
   }
-  if (CXC_API_URL.includes(':method')) {
-    return CXC_API_URL.replace(':method', method);
+  if (baseUrl.includes(':method')) {
+    return baseUrl.replace(':method', method);
   }
-  return CXC_API_URL;
+  return baseUrl;
 };
 
 const resolveGetUrl = (method) => {
@@ -141,6 +155,23 @@ export const cxc = {
     ensureConfig();
     const payload = buildEnvelope(method, baseParams(params));
     const response = await axios.post(resolveServiceUrl(method), payload, {
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        SOAPAction: getSoapAction(method),
+      },
+      timeout: 20000,
+    });
+
+    const xml = response.data;
+    const { parsed, response: soapResponse, result } = extractResult(xml);
+    return { xml, parsed, response: soapResponse, result };
+  },
+
+  async callWithUrl(method, params = {}, baseUrl = '') {
+    ensureVentasConfig();
+    const targetUrl = baseUrl || CXC_VENTAS_URL || CXC_API_URL;
+    const payload = buildEnvelope(method, baseParams(params));
+    const response = await axios.post(resolveServiceUrl(method, targetUrl), payload, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
         SOAPAction: getSoapAction(method),
@@ -194,6 +225,10 @@ export const cxc = {
 
   detalleFacturasPedido(params = {}) {
     return this.call('DetalleFacturasPorPedido', params);
+  },
+
+  generarInfoVentas(params = {}) {
+    return this.callWithUrl('GenerarInfoVentas', params, CXC_VENTAS_URL);
   },
 
   trazabilidadPedidos(params = {}) {

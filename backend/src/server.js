@@ -454,6 +454,7 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const to = formatDateTime(fecha || now, { endOfDay: true });
   return {
     strPar_Cedula: cedula,
+    strPar_Nit: cedula,
     datPar_FecIni: from,
     datPar_FecFin: to,
     intPar_TipPed: 1,
@@ -1452,7 +1453,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const clientInfo = activeSearch?.info || null;
 
   try {
-    const facturasData = await cxc.detalleFacturasPedido(
+    const facturasData = await cxc.generarInfoVentas(
       buildCxcDetalleParams({ cedula })
     );
     if (isCxcFunctionInactive(facturasData?.xml)) {
@@ -1460,7 +1461,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         renderRewardsPortal({
           cedula,
           error:
-            'CxC respondió "Función no activa" para DetalleFacturasPedido. Solicita al proveedor habilitar el método.',
+            'CxC respondió "Función no activa" para GenerarInfoVentas. Solicita al proveedor habilitar el método.',
           rewards,
           editReward,
           gspCareList,
@@ -2006,7 +2007,7 @@ app.get('/api/cxc/clientes', async (req, res) => {
 app.post('/api/cxc/detalle-facturas', async (req, res) => {
   try {
     const { params, debug } = req.body || {};
-    const data = await cxc.detalleFacturasPedido(params || {});
+    const data = await cxc.generarInfoVentas(params || {});
     if (debug) {
       return res.json(data);
     }
@@ -2047,14 +2048,14 @@ app.post('/api/cxc/points', async (req, res) => {
       Object.assign(callParams, buildCxcDetalleParams({ cedula, fecha }), callParams);
     }
 
-    const data = await cxc.detalleFacturasPedido(callParams);
+    const data = await cxc.generarInfoVentas(callParams);
     if (debug) {
       return res.json(data);
     }
     if (isCxcFunctionInactive(data?.xml)) {
       return res.status(502).json({
         error:
-          'CxC respondió "Función no activa" para DetalleFacturasPedido. Solicita al proveedor habilitar el método.',
+          'CxC respondió "Función no activa" para GenerarInfoVentas. Solicita al proveedor habilitar el método.',
       });
     }
 
