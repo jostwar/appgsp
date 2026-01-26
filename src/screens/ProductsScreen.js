@@ -19,8 +19,9 @@ import {
 } from '../api/woocommerce';
 import { useCart } from '../store/cart';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function ProductsScreen({ route }) {
+export default function ProductsScreen({ route, navigation }) {
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -530,17 +531,37 @@ export default function ProductsScreen({ route }) {
               : item.image && item.image !== 'null'
                 ? item.image
                 : null;
+          const productUrl = item.permalink || item.link;
+          const isVariable = item.type === 'variable';
+          const isExternal = item.type === 'external';
+          const openProduct = () => {
+            if (productUrl) {
+              navigation.navigate('Checkout', { url: productUrl, forceLogin: true });
+            }
+          };
           return (
             <View style={styles.card}>
-              {image ? (
-                <Image source={{ uri: image }} style={styles.image} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.imageText}>Sin imagen</Text>
-                </View>
-              )}
+              <Pressable
+                style={({ pressed }) => [pressed && styles.pressed]}
+                onPress={openProduct}
+                disabled={!productUrl}
+              >
+                {image ? (
+                  <Image source={{ uri: image }} style={styles.image} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imageText}>Sin imagen</Text>
+                  </View>
+                )}
+              </Pressable>
               <View style={styles.cardBody}>
-                <Text style={styles.title}>{item.name}</Text>
+                <Pressable
+                  style={({ pressed }) => [pressed && styles.pressed]}
+                  onPress={openProduct}
+                  disabled={!productUrl}
+                >
+                  <Text style={styles.title}>{item.name}</Text>
+                </Pressable>
                 <Text style={styles.price}>{formatCop(item.price)}</Text>
                 {item.sku ? <Text style={styles.sku}>SKU: {item.sku}</Text> : null}
                 <Text style={styles.stock}>
@@ -555,16 +576,29 @@ export default function ProductsScreen({ route }) {
                     ? ` (${item.stock_quantity})`
                     : ''}
                 </Text>
-                {item?.link ? (
+                {isVariable && productUrl ? (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() =>
+                      navigation.navigate('Checkout', {
+                        url: productUrl,
+                        forceLogin: true,
+                      })
+                    }
+                  >
+                    <Text style={styles.secondaryButtonText}>Ver opciones</Text>
+                  </Pressable>
+                ) : isExternal && productUrl ? (
                   <Pressable
                     style={({ pressed }) => [
                       styles.secondaryButton,
                       pressed && styles.pressed,
                     ]}
                     onPress={() => {
-                      if (item.link) {
-                        Linking.openURL(item.link);
-                      }
+                      Linking.openURL(productUrl);
                     }}
                   >
                     <Text style={styles.secondaryButtonText}>Ver en web</Text>

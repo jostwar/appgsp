@@ -1,10 +1,21 @@
 import { useMemo } from 'react';
-import { StyleSheet, Text, View, ScrollView, Pressable, Linking, Image } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { colors, spacing } from '../theme';
+import { useAuth } from '../store/auth';
 
 export default function MembershipScreen() {
-  const memberName = 'Cliente GSP';
+  const { user } = useAuth();
+  const navigation = useNavigation();
+  const memberName =
+    user?.fullName
+      ? user.fullName.split(' ').slice(0, 2).join(' ')
+      : user?.firstName || user?.lastName
+        ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
+        : user?.name
+          ? user.name.split(' ').slice(0, 2).join(' ')
+          : 'Cliente GSP';
   const validUntil = '31 dic 2026';
   const plans = useMemo(
     () => [
@@ -41,20 +52,18 @@ export default function MembershipScreen() {
         <View style={styles.headerCard}>
           <Image
             source={{
-              uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Care-Square.png',
+              uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Care-Rect@3x-scaled.png',
             }}
             style={styles.headerLogo}
             resizeMode="contain"
           />
           <Text style={styles.title}>Membresía GSP Care</Text>
-          <Text style={styles.subtitle}>Costos IVA incluido</Text>
         </View>
 
         <View style={styles.memberCard}>
           <View style={styles.memberCardHighlight} />
           <View style={styles.memberCardHeader}>
-            <Text style={styles.memberCardTitle}>GSP</Text>
-            <Text style={styles.memberCardCare}>CARE</Text>
+            <Text style={styles.memberCardTitle}>Membresía</Text>
           </View>
           <View style={styles.memberRow}>
             <View>
@@ -65,7 +74,7 @@ export default function MembershipScreen() {
             <View style={styles.memberLogoWrap}>
               <Image
                 source={{
-                  uri: 'https://gsp.com.co/wp-content/uploads/2026/01/Icon-Care.png',
+                  uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Care-Rect@3x-scaled.png',
                 }}
                 style={styles.memberLogo}
                 resizeMode="contain"
@@ -81,6 +90,7 @@ export default function MembershipScreen() {
               <Text style={styles.value}>{plan.value}</Text>
             </View>
           ))}
+          <Text style={styles.subtitle}>Costos IVA incluido</Text>
         </View>
 
         <View style={styles.card}>
@@ -97,7 +107,12 @@ export default function MembershipScreen() {
 
         <Pressable
           style={pressableStyle(styles.primaryButton)}
-          onPress={() => Linking.openURL('https://wa.me/573103611116')}
+          onPress={() =>
+            navigation.navigate('Checkout', {
+              url: 'https://gsp.com.co/product/membresia-gsp-care/',
+              forceLogin: true,
+            })
+          }
         >
           <Text style={styles.primaryButtonText}>Quiero GSP Care</Text>
         </Pressable>
@@ -121,10 +136,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: spacing.lg,
     gap: spacing.xs,
+    alignItems: 'center',
   },
   headerLogo: {
-    width: 56,
-    height: 56,
+    width: 160,
+    height: 48,
   },
   memberCard: {
     backgroundColor: '#0B0B0B',
@@ -182,19 +198,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginTop: 4,
+    textAlign: 'center',
   },
   memberMeta: {
     color: '#A7ADB5',
     fontSize: 12,
     marginTop: 4,
+    textAlign: 'center',
   },
   memberLogoWrap: {
     alignItems: 'center',
     gap: 4,
   },
   memberLogo: {
-    width: 46,
-    height: 46,
+    width: 150,
+    height: 40,
   },
   title: {
     color: colors.textMain,

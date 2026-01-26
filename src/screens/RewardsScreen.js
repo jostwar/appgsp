@@ -67,11 +67,6 @@ export default function RewardsScreen() {
         description: 'Compra productos y acumula cashback por cada pedido.',
       },
       {
-        id: '2',
-        title: 'Elige',
-        description: 'Selecciona el beneficio que deseas redimir.',
-      },
-      {
         id: '3',
         title: 'Canjea',
         description: 'Solicita el canje y recibe confirmación.',
@@ -124,7 +119,7 @@ export default function RewardsScreen() {
           <View style={styles.pointsHeader}>
             <Image
               source={{
-                uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reward-Square.png',
+                uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reware-Rectangular.png',
               }}
               style={styles.pointsLogo}
               resizeMode="contain"
@@ -152,7 +147,7 @@ export default function RewardsScreen() {
             <View
               style={[styles.progressFill, { width: `${progressValue * 100}%` }]}
             />
-            <View style={styles.progressCap} />
+            <View style={styles.progressGoal} />
           </View>
           <View style={styles.levelRow}>
             <View style={[styles.levelDot, { backgroundColor: levelColor }]} />
@@ -163,14 +158,14 @@ export default function RewardsScreen() {
         <View style={styles.section}>
           <Image
             source={{
-              uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reward-Square.png',
+              uri: 'https://gsp.com.co/wp-content/uploads/2026/01/GSP-Reware-Rectangular.png',
             }}
             style={styles.rewardsLogo}
             resizeMode="contain"
           />
-          <Text style={styles.sectionTitle}>Programa GSPRewards</Text>
+          <Text style={styles.sectionTitle}>Rewards</Text>
           <Text style={styles.sectionSubtitle}>
-            Gana puntos por cada compra y canjéalos por dinero o productos.
+            Acumula cashback en cada compra y redímelo para tus próximas compras en GSP.
           </Text>
           {rewardsError ? (
             <Text style={styles.inlineError}>{rewardsError}</Text>
@@ -291,15 +286,16 @@ const styles = StyleSheet.create({
   pointsLabel: {
     color: colors.textMuted,
     fontSize: 13,
+    textAlign: 'center',
   },
   pointsHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     gap: spacing.sm,
   },
   pointsLogo: {
-    width: 28,
-    height: 28,
+    width: 110,
+    height: 32,
   },
   pointsValue: {
     color: colors.textMain,
@@ -311,23 +307,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   progressTrack: {
-    height: 6,
+    height: 10,
     borderRadius: 999,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.accent,
   },
-  progressCap: {
+  progressGoal: {
     position: 'absolute',
     right: 0,
     top: -3,
-    width: 2,
-    height: 12,
-    backgroundColor: colors.textMuted,
-    borderRadius: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.textMuted,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   },
   levelRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
@@ -368,8 +368,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   rewardsLogo: {
-    width: 64,
-    height: 64,
+    width: 180,
+    height: 52,
+    alignSelf: 'center',
   },
   rewardsGrid: {
     gap: spacing.md,
@@ -505,10 +506,13 @@ const styles = StyleSheet.create({
   levelLabel: {
     color: colors.textSoft,
     fontSize: 14,
+    minWidth: 110,
   },
   levelValue: {
     color: colors.textMain,
     fontWeight: '600',
     fontSize: 14,
+    flex: 1,
+    flexWrap: 'wrap',
   },
 });

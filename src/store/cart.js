@@ -20,6 +20,26 @@ export function CartProvider({ children }) {
     });
   };
 
+  const increaseItem = (productId) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === productId ? { ...item, quantity: item.quantity + 1 } : item
+      )
+    );
+  };
+
+  const decreaseItem = (productId) => {
+    setItems((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId
+            ? { ...item, quantity: Math.max(0, item.quantity - 1) }
+            : item
+        )
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
   const removeItem = (productId) => {
     setItems((prev) => prev.filter((item) => item.id !== productId));
   };
@@ -41,6 +61,8 @@ export function CartProvider({ children }) {
     () => ({
       items,
       addItem,
+      increaseItem,
+      decreaseItem,
       removeItem,
       clear,
       subtotal,

@@ -1128,18 +1128,44 @@ app.post('/api/woo/login', async (req, res) => {
       return res.status(400).json({ error: 'email y password son requeridos' });
     }
     const data = await woo.login({ email, password });
+    let profile = null;
+    let customer = null;
+    try {
+      if (data?.token) {
+        profile = await woo.getWpUserMe(data.token);
+      }
+    } catch (_error) {
+      profile = null;
+    }
+    try {
+      customer = await woo.findCustomerByEmail(email);
+    } catch (_error) {
+      customer = null;
+    }
+    const billingFirst = customer?.billing?.first_name || '';
+    const billingLast = customer?.billing?.last_name || '';
+    const firstName = billingFirst || profile?.first_name || '';
+    const lastName = billingLast || profile?.last_name || '';
+    const fullName =
+      `${firstName} ${lastName}`.trim() ||
+      profile?.name ||
+      data?.user_display_name ||
+      '';
     return res.json({
       token: data?.token,
       user: {
         id: data?.user_id,
         email: data?.user_email,
         name: data?.user_display_name,
+        firstName,
+        lastName,
+        fullName,
         nicename: data?.user_nicename,
       },
     });
   } catch (error) {
     return res.status(401).json({
-      error: 'Credenciales inválidas o JWT no configurado',
+      error: 'Credenciales inválidas',
       details: error?.response?.data || error?.message,
     });
   }

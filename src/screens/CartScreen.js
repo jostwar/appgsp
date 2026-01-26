@@ -5,7 +5,8 @@ import { useCart } from '../store/cart';
 import { createOrder, getOrderPayUrl } from '../api/woocommerce';
 
 export default function CartScreen({ navigation }) {
-  const { items, removeItem, clear, subtotal, pointsTotal } = useCart();
+  const { items, removeItem, clear, subtotal, pointsTotal, increaseItem, decreaseItem } =
+    useCart();
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -46,6 +47,21 @@ export default function CartScreen({ navigation }) {
               <Text style={styles.itemMeta}>
                 {item.quantity} x {formatCop(item.price)}
               </Text>
+              <View style={styles.quantityRow}>
+                <Pressable
+                  style={pressableStyle(styles.quantityButton)}
+                  onPress={() => decreaseItem(item.id)}
+                >
+                  <Text style={styles.quantityButtonText}>-</Text>
+                </Pressable>
+                <Text style={styles.quantityValue}>{item.quantity}</Text>
+                <Pressable
+                  style={pressableStyle(styles.quantityButton)}
+                  onPress={() => increaseItem(item.id)}
+                >
+                  <Text style={styles.quantityButtonText}>+</Text>
+                </Pressable>
+              </View>
             </View>
             <Pressable
               style={pressableStyle(styles.secondaryButton)}
@@ -149,6 +165,34 @@ const styles = StyleSheet.create({
   itemMeta: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityButtonText: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  quantityValue: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '600',
+    minWidth: 24,
+    textAlign: 'center',
   },
   footer: {
     padding: spacing.xl,

@@ -9,6 +9,8 @@ const REMEMBER_STORAGE_KEY = 'gsp_auth_remember';
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [sessionEmail, setSessionEmail] = useState(null);
+  const [sessionPassword, setSessionPassword] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -21,6 +23,7 @@ export function AuthProvider({ children }) {
         const parsed = JSON.parse(stored);
         setUser(parsed?.user || null);
         setToken(parsed?.token || null);
+        setSessionEmail(parsed?.user?.email || null);
       } catch (_error) {
         // ignore restore errors
       }
@@ -35,6 +38,8 @@ export function AuthProvider({ children }) {
       const data = await loginWoo({ email, password });
       setUser(data?.user || null);
       setToken(data?.token || null);
+      setSessionEmail(email || data?.user?.email || null);
+      setSessionPassword(password || null);
       if (remember) {
         await AsyncStorage.setItem(
           AUTH_STORAGE_KEY,
@@ -56,6 +61,8 @@ export function AuthProvider({ children }) {
   const signOut = async () => {
     setUser(null);
     setToken(null);
+    setSessionEmail(null);
+    setSessionPassword(null);
     try {
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
       await AsyncStorage.setItem(REMEMBER_STORAGE_KEY, 'false');
@@ -68,11 +75,13 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       token,
+      sessionEmail,
+      sessionPassword,
       loading,
       signIn,
       signOut,
     }),
-    [user, token, loading]
+    [user, token, sessionEmail, sessionPassword, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

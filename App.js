@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Image } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from './src/screens/HomeScreen';
 import RewardsScreen from './src/screens/RewardsScreen';
@@ -11,7 +11,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import { colors } from './src/theme';
 import ProductsScreen from './src/screens/ProductsScreen';
 import CartScreen from './src/screens/CartScreen';
-import { CartProvider } from './src/store/cart';
+import { CartProvider, useCart } from './src/store/cart';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import MembershipScreen from './src/screens/MembershipScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -21,6 +21,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function MainTabs() {
+  const { items } = useCart();
+  const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
   return (
     <Tab.Navigator
       initialRouteName="Inicio"
@@ -71,6 +73,39 @@ function MainTabs() {
             Perfil: 'person',
           };
           const iconName = icons[route.name] || 'ellipse';
+          if (route.name === 'Carrito') {
+            return (
+              <View style={{ width: size + 10, height: size + 10 }}>
+                <Ionicons name={iconName} size={size} color={color} />
+                {cartCount > 0 ? (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      right: -2,
+                      top: -4,
+                      minWidth: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: colors.primary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.buttonText,
+                        fontSize: 10,
+                        fontWeight: '700',
+                      }}
+                    >
+                      {cartCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
@@ -79,7 +114,7 @@ function MainTabs() {
       <Tab.Screen
         name="Recompensas"
         component={RewardsScreen}
-        options={{ tabBarLabel: 'GSPRewards' }}
+        options={{ tabBarLabel: 'Rewards' }}
       />
       <Tab.Screen
         name="Portafolio"

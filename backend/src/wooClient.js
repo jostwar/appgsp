@@ -97,6 +97,17 @@ const fetchCustomersPage = async ({
   return response.data;
 };
 
+const fetchCustomersByEmail = async (email) => {
+  const response = await client.get('/wp-json/wc/v3/customers', {
+    params: {
+      consumer_key: WOO_KEY,
+      consumer_secret: WOO_SECRET,
+      email,
+    },
+  });
+  return response.data;
+};
+
 const extractCedulaFromCustomer = (customer) => {
   const directCandidates = [
     customer?.gsp_nit,
@@ -220,6 +231,18 @@ export const woo = {
     }
 
     return null;
+  },
+
+  async findCustomerByEmail(email) {
+    ensureWooConfig();
+    if (!email) {
+      throw new Error('email es requerido');
+    }
+    const customers = await fetchCustomersByEmail(email);
+    if (!Array.isArray(customers) || customers.length === 0) {
+      return null;
+    }
+    return customers[0];
   },
 
   getCustomerPoints(customer) {

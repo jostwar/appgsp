@@ -24,21 +24,41 @@ export async function fetchProducts({ page = 1, perPage = 50, categoryId } = {})
     return [];
   }
 
-  const url = new URL('/wp-json/wc/v3/products', baseUrl);
-  url.searchParams.set('consumer_key', key);
-  url.searchParams.set('consumer_secret', secret);
-  url.searchParams.set('per_page', String(perPage));
-  url.searchParams.set('page', String(page));
-  url.searchParams.set('status', 'publish');
-  if (categoryId) {
-    url.searchParams.set('category', String(categoryId));
-  }
+  const request = async (extraParams = {}) => {
+    const url = new URL('/wp-json/wc/v3/products', baseUrl);
+    url.searchParams.set('consumer_key', key);
+    url.searchParams.set('consumer_secret', secret);
+    url.searchParams.set('per_page', String(perPage));
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('status', 'publish');
+    if (categoryId) {
+      url.searchParams.set('category', String(categoryId));
+    }
+    Object.entries(extraParams).forEach(([param, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(param, String(value));
+      }
+    });
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar productos.');
+    }
+    return response.json();
+  };
 
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error('No se pudieron cargar productos.');
-  }
-  return response.json();
+  const [baseProducts, variableProducts] = await Promise.all([
+    request(),
+    request({ type: 'variable' }),
+  ]);
+
+  const merged = [...baseProducts, ...variableProducts];
+  const unique = new Map();
+  merged.forEach((product) => {
+    if (product?.id) {
+      unique.set(product.id, product);
+    }
+  });
+  return Array.from(unique.values());
 }
 
 export async function fetchAllProducts({ perPage = 50, maxPages = 10 } = {}) {

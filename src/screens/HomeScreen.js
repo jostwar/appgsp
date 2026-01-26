@@ -967,6 +967,7 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontSize: 24,
     fontWeight: '700',
+    textAlign: 'center',
   },
   heroText: {
     color: colors.textSoft,
