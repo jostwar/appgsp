@@ -205,7 +205,12 @@ const findValueByKeys = (data, keys = []) => {
 
 const matchesCedulaValue = (value, target) => {
   if (!value || !target) return false;
-  return normalizeId(value) === target;
+  const normalizedValue = normalizeId(value);
+  if (!normalizedValue) return false;
+  if (normalizedValue === target) return true;
+  const diff = Math.abs(normalizedValue.length - target.length);
+  if (diff > 1) return false;
+  return normalizedValue.startsWith(target) || target.startsWith(normalizedValue);
 };
 
 const findClientByCedula = (data, cedula) => {
@@ -288,36 +293,46 @@ const fetchListadoClientes = async ({ pagina, vendedor }) => {
     : null;
   const clientesJson = extractJsonPrefix(clientesData?.xml);
   const clientesText = parseMaybeJson(clientesData?.parsed?.['#text']);
-  return (
+  const data =
     (clientesPayload && Object.keys(clientesPayload || {}).length > 0
       ? clientesPayload
       : null) ||
     clientesJson ||
-    clientesText
-  );
+    clientesText;
+  return {
+    data,
+    meta: extractPagination(data),
+  };
 };
 
-const findClientInfo = async ({ cedula, vendedor, allowFallback = false }) => {
+const findClientInfo = async ({ cedula, vendedor }) => {
   const firstPage = await fetchListadoClientes({ pagina: 1, vendedor });
-  let clientInfo = firstPage ? buildClientInfo(firstPage, cedula) : null;
+  let clientInfo = firstPage.data ? buildClientInfo(firstPage.data, cedula) : null;
+  let pagesScanned = 1;
+  const baseMeta = firstPage.meta;
   if (clientInfo) {
-    return clientInfo;
+    return { info: clientInfo, meta: baseMeta, pagesScanned, vendedor };
   }
 
-  if (vendedor && !allowFallback) {
-    return null;
+  if (vendedor) {
+    return { info: null, meta: baseMeta, pagesScanned, vendedor };
   }
 
-  const { pages } = extractPagination(firstPage);
-  const maxPages = Math.min(pages, 20);
+  const maxPages = Math.min(baseMeta.pages, 20);
   for (let page = 2; page <= maxPages; page += 1) {
     const pageData = await fetchListadoClientes({ pagina: page, vendedor: '' });
-    clientInfo = pageData ? buildClientInfo(pageData, cedula) : null;
+    pagesScanned = page;
+    clientInfo = pageData.data ? buildClientInfo(pageData.data, cedula) : null;
     if (clientInfo) {
-      return clientInfo;
+      return {
+        info: clientInfo,
+        meta: pageData.meta,
+        pagesScanned,
+        vendedor: '',
+      };
     }
   }
-  return null;
+  return { info: null, meta: baseMeta, pagesScanned, vendedor: '' };
 };
 
 const escapeHtml = (value) =>
@@ -393,6 +408,7 @@ const renderRewardsPortal = ({
   defaultVendedor = '',
   clientName = '',
   clientInfo = null,
+  clientSearch = null,
   points = null,
   total = null,
   error = null,
@@ -827,7 +843,16 @@ const renderRewardsPortal = ({
             }
             ${
               cedula && !clientInfo
-                ? '<div class="label">Cliente no encontrado en ListadoClientes.</div>'
+                ? `<div class="label">Cliente no encontrado en ListadoClientes.</div>
+                   <div class="muted">Registros: ${
+                     clientSearch?.meta?.total ?? '—'
+                   } · Páginas: ${clientSearch?.meta?.pages ?? '—'} · Consultadas: ${
+                     clientSearch?.pagesScanned ?? '—'
+                   }${
+                     clientSearch?.vendedor
+                       ? ` · Vendedor: ${escapeHtml(clientSearch.vendedor)}`
+                       : ''
+                   }</div>`
                 : ''
             }
             ${
@@ -1277,18 +1302,21 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     );
   }
 
+  const initialSearch = await findClientInfo({ cedula, vendedor });
+  const fallbackSearch =
+    DEFAULT_CXC_VENDEDOR && !vendedorInput
+      ? await findClientInfo({ cedula, vendedor: '' })
+      : null;
+  const activeSearch = initialSearch?.info
+    ? initialSearch
+    : fallbackSearch || initialSearch;
+  const clientInfo = activeSearch?.info || null;
+
   try {
-    const [facturasData, initialClientInfo] = await Promise.all([
-      cxc.detalleFacturasPedido(buildCxcDetalleParams({ cedula })),
-      findClientInfo({ cedula, vendedor, allowFallback: Boolean(vendedorInput) }),
-    ]);
-    const clientInfo =
-      initialClientInfo ||
-      (DEFAULT_CXC_VENDEDOR && !vendedorInput
-        ? await findClientInfo({ cedula, vendedor: '' })
-        : null);
-    const data = facturasData;
-    if (isCxcFunctionInactive(data?.xml)) {
+    const facturasData = await cxc.detalleFacturasPedido(
+      buildCxcDetalleParams({ cedula })
+    );
+    if (isCxcFunctionInactive(facturasData?.xml)) {
       return res.send(
         renderRewardsPortal({
           cedula,
@@ -1299,6 +1327,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           gspCareList,
           gspCareActive,
           clientInfo,
+          clientSearch: activeSearch,
           vendedor,
           vendedorInput,
           defaultVendedor: DEFAULT_CXC_VENDEDOR,
@@ -1307,16 +1336,18 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
       );
     }
     const payload = parseMaybeJson(
-      data.result ?? data.response ?? data.parsed ?? {}
+      facturasData.result ?? facturasData.response ?? facturasData.parsed ?? {}
     );
     const name = findValueByKeys(payload, CLIENT_NAME_KEYS);
     const total = sumTotalsForKey(payload, 'total');
-    const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
+    const points =
+      CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
       renderRewardsPortal({
         cedula,
         clientName: name,
         clientInfo,
+        clientSearch: activeSearch,
         total,
         points,
         rewards,
@@ -1338,6 +1369,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         editReward,
         gspCareList,
         gspCareActive,
+        clientInfo,
+        clientSearch: activeSearch,
         vendedor,
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
