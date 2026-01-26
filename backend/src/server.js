@@ -532,6 +532,13 @@ const renderRewardsPortal = ({
                 ? `<div class="label">Nombre: <strong>${escapeHtml(
                     clientName
                   )}</strong></div>`
+                : `<div class="label">Nombre: <strong>—</strong></div>`
+            }
+            ${
+              cedula
+                ? `<div class="label">Valor compras: <strong>${formatNumber(
+                    total ?? 0
+                  )}</strong></div>`
                 : ''
             }
             ${
@@ -880,12 +887,15 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     const name = findValueByKeys(payload, [
       'nombre',
       'nombrecliente',
+      'nombre_cliente',
       'nombre_completo',
       'razonsocial',
       'razon_social',
       'cliente',
       'strcli_nombre',
       'strpar_nombre',
+      'strcli_razon',
+      'strpar_razonsocial',
     ]);
     const total = sumTotalsForKey(payload, 'total');
     const points = CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
@@ -1351,12 +1361,15 @@ app.post('/api/cxc/points', async (req, res) => {
     const name = findValueByKeys(payload, [
       'nombre',
       'nombrecliente',
+      'nombre_cliente',
       'nombre_completo',
       'razonsocial',
       'razon_social',
       'cliente',
       'strcli_nombre',
       'strpar_nombre',
+      'strcli_razon',
+      'strpar_razonsocial',
     ]);
     const idValue = findValueByKeys(payload, [
       'cedula',
