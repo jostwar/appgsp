@@ -35,6 +35,7 @@ const persistNotification = async (notification) => {
       title: String(content.title || '').trim(),
       body: String(content.body || '').trim(),
       data: content.data || {},
+      read: false,
       receivedAt: new Date().toISOString(),
     };
     const raw = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);

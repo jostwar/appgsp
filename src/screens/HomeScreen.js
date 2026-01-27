@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -44,11 +45,27 @@ export default function HomeScreen() {
     try {
       const raw = await AsyncStorage.getItem('gsp_notifications');
       const parsed = raw ? JSON.parse(raw) : [];
-      setNotifications(Array.isArray(parsed) ? parsed : []);
+      const list = Array.isArray(parsed) ? parsed : [];
+      setNotifications(list);
+      setUnreadCount(list.filter((item) => !item?.read).length);
     } catch (_error) {
       setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setNotificationsLoading(false);
+    }
+  }, []);
+  const markAllNotificationsRead = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('gsp_notifications');
+      const parsed = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      const next = list.map((item) => ({ ...item, read: true }));
+      await AsyncStorage.setItem('gsp_notifications', JSON.stringify(next));
+      setNotifications(next);
+      setUnreadCount(0);
+    } catch (_error) {
+      // ignore
     }
   }, []);
   const registerForPushNotificationsAsync = async () => {
@@ -75,20 +92,21 @@ export default function HomeScreen() {
             ? [{ text: 'Ir a Ajustes', onPress: () => Linking.openSettings() }, { text: 'OK' }]
             : [{ text: 'OK' }]
         );
-        return;
+      } else {
+        await registerPushToken({
+          token,
+          cedula: user?.cedula,
+          email: user?.email,
+          platform: Platform.OS,
+        });
       }
-      await registerPushToken({
-        token,
-        cedula: user?.cedula,
-        email: user?.email,
-        platform: Platform.OS,
-      });
       await loadNotifications();
+      await markAllNotificationsRead();
       setNotificationsOpen(true);
     } catch (_error) {
       Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
     }
-  }, [loadNotifications, user?.cedula, user?.email]);
+  }, [loadNotifications, markAllNotificationsRead, user?.cedula, user?.email]);
   const handleNotificationsClose = useCallback(() => {
     setNotificationsOpen(false);
   }, []);
@@ -96,10 +114,18 @@ export default function HomeScreen() {
     try {
       await AsyncStorage.removeItem('gsp_notifications');
       setNotifications([]);
+      setUnreadCount(0);
     } catch (_error) {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      loadNotifications();
+    });
+    return () => subscription.remove();
+  }, [loadNotifications]);
   const services = useMemo(
     () => [
       'Cotizaciones y pedidos en minutos',
@@ -553,7 +579,13 @@ export default function HomeScreen() {
             ) : (
               <ScrollView style={styles.modalList}>
                 {notifications.map((item) => (
-                  <View key={item.id} style={styles.modalItem}>
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.modalItem,
+                      item?.read ? styles.modalItemRead : styles.modalItemUnread,
+                    ]}
+                  >
                     <Text style={styles.modalItemTitle}>{item.title || 'GSPRewards'}</Text>
                     {item.body ? (
                       <Text style={styles.modalItemBody}>{item.body}</Text>
@@ -602,6 +634,7 @@ export default function HomeScreen() {
           </View>
           <Pressable style={styles.iconButton} onPress={handleNotificationsPress}>
             <Ionicons name="notifications-outline" size={20} color={colors.textMain} />
+            {unreadCount > 0 ? <View style={styles.iconBadge} /> : null}
           </Pressable>
         </View>
 
@@ -1170,6 +1203,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  iconBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(7, 10, 18, 0.65)',
@@ -1208,6 +1250,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: spacing.md,
     marginBottom: spacing.sm,
+  },
+  modalItemUnread: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  modalItemRead: {
+    opacity: 0.8,
   },
   modalItemTitle: {
     color: colors.textMain,
