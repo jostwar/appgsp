@@ -295,6 +295,13 @@ const CARTERA_CUPO_KEYS = [
   'cli_cupcre',
   'cli_cupcred',
   'limite_credito',
+  'limitecredito',
+  'limite',
+  'cupo_disponible',
+  'cupodisponible',
+  'credito_disponible',
+  'creditodisponible',
+  'cupo_aprobado',
 ];
 const CARTERA_SALDO_KEYS = [
   'saldo',
@@ -510,7 +517,7 @@ const findClientInfo = async ({ cedula, vendedor, useRemoteFallback = true }) =>
 const findSellerFromCartera = async ({ cedula }) => {
   if (!cedula) return '';
   const data = await cxc
-    .estadoCartera({ fecha: formatDateTime(new Date()), cedula })
+    .estadoCartera({ fecha: formatDateTimeNow(), cedula })
     .catch(() => null);
   const payload = data
     ? parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {})
@@ -573,6 +580,7 @@ const formatDateTime = (value, { endOfDay = false } = {}) => {
   }
   return parsed.toISOString();
 };
+const formatDateTimeNow = () => new Date().toISOString();
 
 const parseCarteraNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -3057,7 +3065,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
-    const fecha = formatDateTime(new Date());
+    const fecha = formatDateTimeNow();
     const data = await cxc.estadoCartera({ fecha, cedula, vendedor });
     if (debug) {
       return res.json(data);
