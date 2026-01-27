@@ -22,11 +22,25 @@ export default function ProfileScreen({ navigation }) {
     baseStyle,
     pressed && styles.pressed,
   ];
+  const formatName = (value) =>
+    value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   const { user, signOut } = useAuth();
-  const displayName =
-    user?.firstName || user?.lastName
-      ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
-      : user?.fullName || user?.name || 'Usuario GSP';
+  const displayName = (() => {
+    const firstName = user?.firstName?.trim() || '';
+    const lastName = user?.lastName?.trim() || '';
+    if (firstName || lastName) {
+      return `${firstName} ${lastName}`.trim();
+    }
+    const fullName = formatName(user?.fullName);
+    if (fullName) {
+      return fullName.split(' ').slice(0, 2).join(' ');
+    }
+    const fallbackName = formatName(user?.name);
+    if (fallbackName) {
+      return fallbackName.split(' ').slice(0, 2).join(' ');
+    }
+    return 'Usuario GSP';
+  })();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [preferredChannel, setPreferredChannel] = useState('WhatsApp');
   const [prefsLoaded, setPrefsLoaded] = useState(false);

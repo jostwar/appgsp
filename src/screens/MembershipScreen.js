@@ -8,14 +8,24 @@ import { useAuth } from '../store/auth';
 export default function MembershipScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
-  const memberName =
-    user?.firstName || user?.lastName
-      ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim()
-      : user?.fullName
-        ? user.fullName.split(' ').slice(0, 2).join(' ')
-        : user?.name
-          ? user.name.split(' ').slice(0, 2).join(' ')
-          : 'Cliente GSP';
+  const formatName = (value) =>
+    value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const memberName = (() => {
+    const firstName = user?.firstName?.trim() || '';
+    const lastName = user?.lastName?.trim() || '';
+    if (firstName || lastName) {
+      return `${firstName} ${lastName}`.trim();
+    }
+    const fullName = formatName(user?.fullName);
+    if (fullName) {
+      return fullName.split(' ').slice(0, 2).join(' ');
+    }
+    const fallbackName = formatName(user?.name);
+    if (fallbackName) {
+      return fallbackName.split(' ').slice(0, 2).join(' ');
+    }
+    return 'Cliente GSP';
+  })();
   const validUntil = '31 dic 2026';
   const plans = useMemo(
     () => [
