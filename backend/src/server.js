@@ -1,5 +1,6 @@
 import './env.js';
 import express from 'express';
+import axios from 'axios';
 import cors from 'cors';
 import helmet from 'helmet';
 import fs from 'fs';
@@ -25,6 +26,7 @@ const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
 const offersPath = path.resolve(__dirname, '../data', 'offers.json');
 const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
+const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
   process.env.CXC_CLIENTS_REFRESH_HOURS || 24
 );
@@ -942,6 +944,8 @@ const renderRewardsPortal = ({
   weeklyProduct = null,
   section = 'inicio',
   refreshStatus = '',
+  notificationStatus = '',
+  pushTokensCount = 0,
   timings = null,
 } = {}) => {
   const rewardsList = rewards;
@@ -1004,6 +1008,7 @@ const renderRewardsPortal = ({
   const showClientes = normalizedSection === 'clientes';
   const showPremios = normalizedSection === 'premios';
   const showCare = normalizedSection === 'gsp-care';
+  const showNotifications = normalizedSection === 'notificaciones';
   const showOfertas = normalizedSection === 'ofertas';
   const showWeekly = normalizedSection === 'producto-semana';
   const rewardsCount = rewardsList.length;
@@ -1318,6 +1323,7 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=inicio">Inicio</a>
           <a href="/admin/rewards?section=clientes">Buscar cliente</a>
           <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=notificaciones">Notificaciones</a>
           <a href="/admin/rewards?section=ofertas">Ofertas</a>
           <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
@@ -1332,6 +1338,7 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=inicio">Dashboard</a>
           <a href="/admin/rewards?section=clientes">Buscar cliente</a>
           <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=notificaciones">Notificaciones</a>
           <a href="/admin/rewards?section=ofertas">Ofertas</a>
           <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
@@ -1693,6 +1700,31 @@ const renderRewardsPortal = ({
                 )
                 .join('')}
             </div>
+          </div>`
+              : ''
+          }
+
+          ${
+            showNotifications
+              ? `<div id="notificaciones" class="card">
+            <h2 class="section-title">Notificaciones push</h2>
+            <p class="section-subtitle">
+              Envía mensajes a los usuarios registrados en la app.
+            </p>
+            ${notificationStatus === 'ok'
+              ? '<div class="alert" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">Notificación enviada.</div>'
+              : ''}
+            ${notificationStatus === 'error'
+              ? '<div class="alert">No se pudo enviar la notificación.</div>'
+              : ''}
+            <div class="label">Tokens activos: <strong>${pushTokensCount}</strong></div>
+            <form class="form-grid" method="post" action="/admin/notifications/send">
+              <input type="hidden" name="section" value="notificaciones" />
+              <input type="text" name="title" placeholder="Título" required />
+              <input type="text" name="body" placeholder="Mensaje" required />
+              <input type="text" name="url" placeholder="URL opcional (ej. https://gsp.com.co)" />
+              <button type="submit">Enviar notificación</button>
+            </form>
           </div>`
               : ''
           }
@@ -2123,6 +2155,94 @@ const saveGspCare = (items) => {
   }
 };
 
+const isExpoPushToken = (token) =>
+  typeof token === 'string' &&
+  (token.startsWith('ExponentPushToken') || token.startsWith('ExpoPushToken'));
+
+const loadPushTokens = () => {
+  try {
+    const raw = fs.readFileSync(pushTokensPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+};
+
+const savePushTokens = (tokens) => {
+  try {
+    fs.mkdirSync(path.dirname(pushTokensPath), { recursive: true });
+    fs.writeFileSync(pushTokensPath, JSON.stringify(tokens, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar push-tokens.json:', error?.message || error);
+  }
+};
+
+const upsertPushToken = ({ token, cedula, email, platform } = {}) => {
+  if (!isExpoPushToken(token)) return null;
+  const stored = loadPushTokens();
+  const now = new Date().toISOString();
+  const normalizedToken = String(token).trim();
+  const index = stored.findIndex((item) => item?.token === normalizedToken);
+  const payload = {
+    token: normalizedToken,
+    cedula: cedula ? normalizeId(cedula) : null,
+    email: email ? String(email).trim().toLowerCase() : null,
+    platform: platform ? String(platform).trim() : null,
+    lastSeenAt: now,
+  };
+  if (index >= 0) {
+    stored[index] = { ...stored[index], ...payload };
+  } else {
+    stored.push({ ...payload, createdAt: now });
+  }
+  savePushTokens(stored);
+  return payload;
+};
+
+const chunkArray = (items, size) => {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const sendPushNotifications = async ({ title, body, data } = {}) => {
+  const stored = loadPushTokens();
+  const tokens = stored.map((item) => item?.token).filter(isExpoPushToken);
+  if (!tokens.length) {
+    return { total: 0, sent: 0, failed: 0 };
+  }
+  const chunks = chunkArray(tokens, 100);
+  let sent = 0;
+  let failed = 0;
+  for (const chunk of chunks) {
+    const messages = chunk.map((token) => ({
+      to: token,
+      title: title || 'GSPRewards',
+      body: body || '',
+      sound: 'default',
+      data: data || {},
+    }));
+    try {
+      const response = await axios.post('https://exp.host/--/api/v2/push/send', messages);
+      const results = Array.isArray(response.data?.data) ? response.data.data : [];
+      results.forEach((result) => {
+        if (result?.status === 'ok') {
+          sent += 1;
+        } else {
+          failed += 1;
+        }
+      });
+    } catch (_error) {
+      failed += messages.length;
+    }
+  }
+  return { total: tokens.length, sent, failed };
+};
+
 const clientsCache = {
   updatedAt: null,
   clients: {},
@@ -2340,6 +2460,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const editId = String(req.query.editId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
   const refreshStatus = String(req.query.refresh || '').trim();
+  const notificationStatus = String(req.query.notify || '').trim();
   const vendedorInput = String(req.query.vendedor || '').trim();
   const vendedor = vendedorInput || DEFAULT_CXC_VENDEDOR;
   const allowFallback =
@@ -2348,6 +2469,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const offers = loadOffers();
   const weeklyProduct = loadWeeklyProduct();
   const gspCareList = loadGspCare();
+  const pushTokensCount = loadPushTokens().length;
   const gspCareActive = cedula
     ? gspCareList.some((item) => item.cedula === normalizeId(cedula))
     : false;
@@ -2368,6 +2490,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
         refreshStatus,
+        notificationStatus,
+        pushTokensCount,
       })
     );
   }
@@ -2436,6 +2560,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
         refreshStatus,
+        notificationStatus,
+        pushTokensCount,
       })
     );
   } catch (error) {
@@ -2460,6 +2586,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           search: searchTimings,
         },
         refreshStatus,
+        notificationStatus,
+        pushTokensCount,
       })
     );
   }
@@ -2476,6 +2604,26 @@ app.post('/admin/rewards/refresh-clients', adminAuth, async (req, res) => {
     return res.redirect(
       `/admin/rewards?section=${encodeURIComponent(section)}&refresh=error`
     );
+  }
+});
+
+app.post('/admin/notifications/send', adminAuth, async (req, res) => {
+  const section = String(req.body?.section || 'notificaciones').trim() || 'notificaciones';
+  const title = String(req.body?.title || '').trim();
+  const body = String(req.body?.body || '').trim();
+  const url = String(req.body?.url || '').trim();
+  if (!title || !body) {
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
+  }
+  try {
+    await sendPushNotifications({
+      title,
+      body,
+      data: url ? { url } : {},
+    });
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=ok`);
+  } catch (_error) {
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
   }
 });
 
@@ -2614,6 +2762,18 @@ app.post('/admin/weekly/save', adminAuth, (req, res) => {
 app.get('/api/rewards', (_req, res) => {
   const rewards = loadRewards();
   return res.json({ rewards });
+});
+
+app.post('/api/push/register', (req, res) => {
+  const { token, cedula, email, platform } = req.body || {};
+  if (!token) {
+    return res.status(400).json({ error: 'token es requerido' });
+  }
+  const saved = upsertPushToken({ token, cedula, email, platform });
+  if (!saved) {
+    return res.status(400).json({ error: 'token inválido' });
+  }
+  return res.json({ ok: true });
 });
 
 app.get('/api/home/offers', (_req, res) => {

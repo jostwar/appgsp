@@ -1,10 +1,29 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginWoo, refreshWooSession } from '../api/backend';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { loginWoo, refreshWooSession, registerPushToken } from '../api/backend';
 
 const AuthContext = createContext(null);
 const AUTH_STORAGE_KEY = 'gsp_auth';
 const REMEMBER_STORAGE_KEY = 'gsp_auth_remember';
+const PUSH_TOKEN_KEY = 'gsp_push_token';
+
+const registerForPushNotificationsAsync = async () => {
+  if (!Device.isDevice) return null;
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  if (finalStatus !== 'granted') return null;
+  const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+  const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+  return tokenResponse?.data || null;
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -49,6 +68,32 @@ export function AuthProvider({ children }) {
 
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const syncPushToken = async () => {
+      if (!user?.cedula) return;
+      try {
+        const token = await registerForPushNotificationsAsync();
+        if (!token || !isMounted) return;
+        const storedToken = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+        if (storedToken === token) return;
+        await registerPushToken({
+          token,
+          cedula: user?.cedula,
+          email: user?.email,
+          platform: Platform.OS,
+        });
+        await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+      } catch (_error) {
+        // ignore push registration errors
+      }
+    };
+    syncPushToken();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.cedula, user?.email]);
 
   const signIn = async ({ email, password, remember }) => {
     setLoading(true);

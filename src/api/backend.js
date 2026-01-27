@@ -47,6 +47,13 @@ export function refreshWooSession({ token }) {
   });
 }
 
+export function registerPushToken({ token, cedula, email, platform } = {}) {
+  return request('/api/push/register', {
+    method: 'POST',
+    body: { token, cedula, email, platform },
+  });
+}
+
 export function getRewardsPoints({ cedula }) {
   return request('/api/cxc/points', {
     method: 'POST',
