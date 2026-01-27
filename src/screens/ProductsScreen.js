@@ -474,7 +474,7 @@ export default function ProductsScreen({ route, navigation }) {
       <Modal transparent visible={showFiltersDrawer} animationType="none">
         <View style={styles.drawerContainer}>
           <Pressable
-            style={styles.drawerOverlay}
+            style={[styles.drawerOverlay, { right: drawerWidth }]}
             onPress={() => setShowFiltersDrawer(false)}
           />
           <Animated.View
