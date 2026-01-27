@@ -182,6 +182,9 @@ export default function RewardsScreen() {
             <Text style={styles.pointsHint}>{pointsError}</Text>
           ) : (
             <>
+              {pointsData?.companyName ? (
+                <Text style={styles.pointsCompany}>{pointsData.companyName}</Text>
+              ) : null}
               <Text style={styles.pointsValue}>
                 ${formatCop(pointsData?.cashback || 0)}
               </Text>
@@ -374,6 +377,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     alignSelf: 'center',
+  },
+  pointsCompany: {
+    color: colors.textSoft,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   pointsHint: {
     color: colors.textMuted,

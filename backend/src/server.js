@@ -3307,6 +3307,18 @@ app.post('/api/cxc/points', async (req, res) => {
       'strcli_razon',
       'strpar_razonsocial',
     ]);
+    let companyName = String(name || '').trim();
+    if (cedula) {
+      const clientInfo = await findClientInfo({
+        cedula,
+        vendedor: '',
+        useRemoteFallback: true,
+      });
+      const clientName = String(clientInfo?.info?.name || '').trim();
+      if (clientName) {
+        companyName = clientName;
+      }
+    }
     const idValue = findValueByKeys(filteredPayload || payload, [
       'cedula',
       'nit',
@@ -3331,6 +3343,7 @@ app.post('/api/cxc/points', async (req, res) => {
     return res.json({
       nit: normalizeId(cedula || idValue),
       name,
+      companyName: companyName || null,
       total,
       cashback,
       points,
