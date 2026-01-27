@@ -526,6 +526,24 @@ const findSellerFromCartera = async ({ cedula }) => {
   return String(seller || '').trim();
 };
 
+const resolveSellerFromClients = async (cedula) => {
+  if (!cedula) return '';
+  await ensureClientsCacheFresh();
+  const cached = await findClientInfo({
+    cedula,
+    vendedor: '',
+    useRemoteFallback: false,
+  });
+  const cachedSeller = String(cached?.info?.seller || '').trim();
+  if (cachedSeller) return cachedSeller;
+  const remote = await findClientInfo({
+    cedula,
+    vendedor: '',
+    useRemoteFallback: true,
+  });
+  return String(remote?.info?.seller || '').trim();
+};
+
 const getWooCustomerSummary = async (cedula) => {
   if (!cedula) return null;
   try {
@@ -3066,7 +3084,12 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const fecha = formatDateTimeNow();
-    const data = await cxc.estadoCartera({ fecha, cedula, vendedor });
+    const resolvedSeller = vendedor || (await resolveSellerFromClients(cedula));
+    const data = await cxc.estadoCartera({
+      fecha,
+      cedula,
+      vendedor: resolvedSeller || undefined,
+    });
     if (debug) {
       return res.json(data);
     }
