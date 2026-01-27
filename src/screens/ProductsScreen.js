@@ -77,6 +77,11 @@ export default function ProductsScreen({ route, navigation }) {
   const [showBrandMenu, setShowBrandMenu] = useState(false);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+  const [usePriceRange, setUsePriceRange] = useState(false);
+  const [minPriceInput, setMinPriceInput] = useState('');
+  const [maxPriceInput, setMaxPriceInput] = useState('');
+  const [appliedMinPrice, setAppliedMinPrice] = useState(null);
+  const [appliedMaxPrice, setAppliedMaxPrice] = useState(null);
   const drawerAnim = useRef(new Animated.Value(0));
   const [brandOptions, setBrandOptions] = useState([
     'Todas',
@@ -143,6 +148,12 @@ export default function ProductsScreen({ route, navigation }) {
     }).format(numeric);
   };
 
+  const parsePriceInput = (value) => {
+    const cleaned = String(value || '').replace(/[^\d]/g, '');
+    const numeric = Number.parseInt(cleaned || '0', 10);
+    return Number.isNaN(numeric) ? null : numeric;
+  };
+
   const filteredProducts = useMemo(() => {
     const normalizedCategoryName = normalizeText(selectedCategoryName);
     if (selectedCategoryId === 'all' && !selectedCategoryName) {
@@ -174,6 +185,15 @@ export default function ProductsScreen({ route, navigation }) {
 
   const displayedProducts = useMemo(() => {
     let list = searchedProducts;
+    if (usePriceRange && (appliedMinPrice || appliedMaxPrice)) {
+      list = list.filter((product) => {
+        const price = Number.parseFloat(product?.price || '0');
+        if (Number.isNaN(price)) return false;
+        if (appliedMinPrice !== null && price < appliedMinPrice) return false;
+        if (appliedMaxPrice !== null && price > appliedMaxPrice) return false;
+        return true;
+      });
+    }
     const sorted = [...list];
     if (sortOption === 'price-asc') {
       sorted.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
@@ -185,7 +205,7 @@ export default function ProductsScreen({ route, navigation }) {
       sorted.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     }
     return sorted;
-  }, [searchedProducts, sortOption]);
+  }, [searchedProducts, sortOption, usePriceRange, appliedMinPrice, appliedMaxPrice]);
 
   const categoryLabel = useMemo(() => {
     if (selectedCategoryId === 'all' && !selectedCategoryName) return 'Todas';
@@ -442,6 +462,52 @@ export default function ProductsScreen({ route, navigation }) {
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.filterGroup}>
+                <Text style={styles.filterLabel}>Seleccionar rango de precios</Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.rangeToggle,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => setUsePriceRange((prev) => !prev)}
+                >
+                  <Ionicons
+                    name={usePriceRange ? 'radio-button-on' : 'radio-button-off'}
+                    size={20}
+                    color={usePriceRange ? colors.primary : colors.textMuted}
+                  />
+                  <Text style={styles.rangeToggleText}>
+                    {usePriceRange ? 'Rango activo' : 'Rango desactivado'}
+                  </Text>
+                </Pressable>
+                {usePriceRange ? (
+                  <View style={styles.rangeCard}>
+                    <View style={styles.rangeInputs}>
+                      <TextInput
+                        value={minPriceInput}
+                        onChangeText={setMinPriceInput}
+                        placeholder="Min"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        style={styles.rangeInput}
+                      />
+                      <Text style={styles.rangeSeparator}>—</Text>
+                      <TextInput
+                        value={maxPriceInput}
+                        onChangeText={setMaxPriceInput}
+                        placeholder="Max"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        style={styles.rangeInput}
+                      />
+                    </View>
+                    <Text style={styles.rangeValue}>
+                      {formatCop(parsePriceInput(minPriceInput) || 0)} ·{' '}
+                      {formatCop(parsePriceInput(maxPriceInput) || 0)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.filterGroup}>
                 <Text style={styles.filterLabel}>Filtrar por</Text>
                 <View style={styles.dropdownGroup}>
                   <View style={styles.dropdownField}>
@@ -636,6 +702,26 @@ export default function ProductsScreen({ route, navigation }) {
                   ))}
                 </View>
               </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.resultsButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  if (usePriceRange) {
+                    const minValue = parsePriceInput(minPriceInput);
+                    const maxValue = parsePriceInput(maxPriceInput);
+                    setAppliedMinPrice(minValue || null);
+                    setAppliedMaxPrice(maxValue || null);
+                  } else {
+                    setAppliedMinPrice(null);
+                    setAppliedMaxPrice(null);
+                  }
+                  setShowFiltersDrawer(false);
+                }}
+              >
+                <Text style={styles.resultsButtonText}>Ver resultados</Text>
+              </Pressable>
             </ScrollView>
           </Animated.View>
         </View>
@@ -890,6 +976,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  rangeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 6,
+  },
+  rangeToggleText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rangeCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  rangeInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  rangeInput: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: colors.textMain,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rangeSeparator: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  rangeValue: {
+    color: colors.textSoft,
+    fontSize: 12,
+  },
+  resultsButton: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.buttonBg,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  resultsButtonText: {
+    color: colors.buttonText,
+    fontWeight: '700',
+    fontSize: 14,
   },
   searchInput: {
     color: colors.textMain,
