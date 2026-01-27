@@ -215,6 +215,7 @@ export default function ProfileScreen({ navigation }) {
     { label: 'Autorización datos personales', url: 'https://gsp.com.co/politica-de-tratamiento-de-datos-personales/' },
     { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantia/' },
   ];
+  const profileCompany = user?.company?.trim() || '';
   const profilePhone = user?.phone?.trim() || '—';
   return (
     <View style={styles.screen}>
@@ -236,9 +237,10 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.profileName}>
               {displayName}
             </Text>
-            <Text style={styles.profileEmail}>
-              {user?.email || 'correo@gsp.com.co'}
-            </Text>
+            {profileCompany ? (
+              <Text style={styles.profileCompany}>{profileCompany}</Text>
+            ) : null}
+            <Text style={styles.profileEmail}>{user?.email || 'correo@gsp.com.co'}</Text>
             <Text style={styles.profilePhone}>{profilePhone}</Text>
           </View>
           <View style={[styles.levelBadge, { backgroundColor: levelColor }]}>
@@ -463,6 +465,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 4,
     fontSize: 13,
+  },
+  profileCompany: {
+    color: colors.textSoft,
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
   },
   profilePhone: {
     color: colors.textSoft,

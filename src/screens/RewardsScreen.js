@@ -79,7 +79,7 @@ export default function RewardsScreen() {
   );
 
   const formatCop = (value) =>
-    new Intl.NumberFormat('es-CO').format(Number(value || 0));
+    new Intl.NumberFormat('es-CO').format(Math.round(Number(value || 0)));
 
   const estimatedMonthlyPurchases = Number(pointsData?.total || 0);
   const currentLevelIndex = levelThresholds.findIndex(
@@ -213,7 +213,10 @@ export default function RewardsScreen() {
           </View>
           <View style={styles.progressTrack}>
             <View
-              style={[styles.progressFill, { width: `${progressValue * 100}%` }]}
+              style={[
+                styles.progressFill,
+                { width: `${progressValue * 100}%`, backgroundColor: levelColor },
+              ]}
             />
             <View style={styles.progressGoal} />
           </View>
@@ -369,6 +372,8 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontSize: 34,
     fontWeight: '700',
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   pointsHint: {
     color: colors.textMuted,

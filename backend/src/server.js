@@ -2836,6 +2836,8 @@ const buildWooUserResponse = ({ data, profile, customer }) => {
     'documento',
   ];
   const metaCedula = findWooMetaValue(metaData, metaKeys);
+  const companyKeys = ['gsp_company', 'company', 'company_name', 'razon_social', 'razonsocial'];
+  const metaCompany = findWooMetaValue(metaData, companyKeys);
   const cedula = normalizeId(metaCedula || (customer ? woo.getCustomerCedula(customer) : null));
   const billing = customer?.billing || {};
   const shipping = customer?.shipping || {};
@@ -2857,7 +2859,9 @@ const buildWooUserResponse = ({ data, profile, customer }) => {
     ...normalizeMetaList(profile?.meta),
   ];
   const profileCedula = findWooMetaValue(profileMeta, metaKeys);
+  const profileCompany = findWooMetaValue(profileMeta, companyKeys);
   const resolvedCedula = normalizeId(cedula || profileCedula || '');
+  const resolvedCompany = String(metaCompany || profileCompany || '').trim();
   return {
     token: data?.token,
     user: {
@@ -2870,6 +2874,7 @@ const buildWooUserResponse = ({ data, profile, customer }) => {
       nicename: data?.user_nicename || profile?.slug || profile?.nicename,
       customerId: customer?.id || null,
       cedula: resolvedCedula || null,
+      company: resolvedCompany || null,
       phone,
     },
   };
@@ -2977,8 +2982,7 @@ app.get('/api/woo/orders', async (req, res) => {
       );
     }
 
-    const shouldSearchByEmail =
-      normalizedEmail && (!resolvedCustomerId || orders.length === 0);
+    const shouldSearchByEmail = normalizedEmail && !resolvedCustomerId;
     if (shouldSearchByEmail) {
       const emailMatches = toList(
         await woo.listOrdersBySearch(normalizedEmail, {
@@ -2995,8 +2999,7 @@ app.get('/api/woo/orders', async (req, res) => {
       orders = Array.from(map.values());
     }
 
-    const shouldSearchByCedula =
-      normalizedCedula && (!resolvedCustomerId || orders.length === 0);
+    const shouldSearchByCedula = normalizedCedula && !resolvedCustomerId;
     if (shouldSearchByCedula) {
       const cedulaMatches = toList(
         await woo.listOrdersBySearch(normalizedCedula, {
