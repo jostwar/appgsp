@@ -184,13 +184,9 @@ export async function fetchProducts({
   };
 
   const runRequest = async (extraParams) => {
-    const [baseProducts, variableProducts] = await Promise.all([
-      request(extraParams),
-      request({ type: 'variable', ...extraParams }),
-    ]);
-    const merged = [...baseProducts, ...variableProducts];
+    const products = await request(extraParams);
     const unique = new Map();
-    merged.forEach((product) => {
+    products.forEach((product) => {
       if (product?.id) {
         unique.set(product.id, product);
       }
