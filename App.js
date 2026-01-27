@@ -15,6 +15,7 @@ import { CartProvider, useCart } from './src/store/cart';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import MembershipScreen from './src/screens/MembershipScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import IntroScreen from './src/screens/IntroScreen';
 import { AuthProvider, useAuth } from './src/store/auth';
 
 const Tab = createBottomTabNavigator();
@@ -169,11 +170,14 @@ function MainTabs() {
 function RootNavigator() {
   const { user } = useAuth();
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Intro">
       {user ? (
         <Stack.Screen name="Main" component={MainTabs} />
       ) : (
-        <Stack.Screen name="Login" component={LoginScreen} />
+        <>
+          <Stack.Screen name="Intro" component={IntroScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+        </>
       )}
     </Stack.Navigator>
   );
