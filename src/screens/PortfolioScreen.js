@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View, ScrollView, Pressable, Image } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 
 export default function PortfolioScreen({ navigation }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -56,7 +58,12 @@ export default function PortfolioScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
+      >
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>Portafolio</Text>
           <Text style={styles.heroText}>

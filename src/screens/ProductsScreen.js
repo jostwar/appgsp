@@ -22,9 +22,11 @@ import {
 } from '../api/woocommerce';
 import { useCart } from '../store/cart';
 import { useFocusEffect } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProductsScreen({ route, navigation }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -748,7 +750,10 @@ export default function ProductsScreen({ route, navigation }) {
         </View>
       </Modal>
       <FlatList
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
         data={displayedProducts}
         numColumns={2}
         columnWrapperStyle={styles.productRow}

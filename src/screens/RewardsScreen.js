@@ -8,10 +8,12 @@ import {
   Linking,
   Image,
 } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { getRewardsCatalog } from '../api/backend';
 
 export default function RewardsScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const [rewards, setRewards] = useState([]);
   const [rewardsError, setRewardsError] = useState('');
   const cashbackBalance = 2_500_000;
@@ -114,7 +116,12 @@ export default function RewardsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
+      >
         <View style={styles.pointsCard}>
           <View style={styles.pointsHeader}>
             <Image

@@ -10,10 +10,12 @@ import {
   Image,
   Linking,
 } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { runSearch } from '../api/aiSearch';
 
 export default function SearchScreen({ route }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const initialQuery = route?.params?.query || '';
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState('idle');
@@ -186,7 +188,10 @@ export default function SearchScreen({ route }) {
       <FlatList
         data={normalizedResults}
         keyExtractor={(item, index) => String(item?.id || index)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
         renderItem={({ item }) => (
           <View style={styles.resultCard}>
             {item?.image ? (

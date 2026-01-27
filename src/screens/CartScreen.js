@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { useCart } from '../store/cart';
 import { createOrder, getOrderPayUrl } from '../api/woocommerce';
 
 export default function CartScreen({ navigation }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const { items, removeItem, clear, subtotal, pointsTotal, increaseItem, decreaseItem } =
     useCart();
   const [status, setStatus] = useState('idle');
@@ -73,7 +75,7 @@ export default function CartScreen({ navigation }) {
         ))}
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: spacing.xl + tabBarHeight }]}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal</Text>
           <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>

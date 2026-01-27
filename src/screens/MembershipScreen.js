@@ -2,12 +2,14 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View, ScrollView, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
 
 export default function MembershipScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const tabBarHeight = useBottomTabBarHeight();
   const formatName = (value) =>
     value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   const toTitleCase = (value) =>
@@ -69,7 +71,12 @@ export default function MembershipScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
+      >
         <View style={styles.headerCard}>
           <Image
             source={{
