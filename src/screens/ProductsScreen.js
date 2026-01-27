@@ -122,6 +122,7 @@ export default function ProductsScreen({ route, navigation }) {
     },
     []
   );
+  const navSearchRef = useRef(false);
   const drawerWidth = 320;
 
   useEffect(() => {
@@ -307,6 +308,7 @@ export default function ProductsScreen({ route, navigation }) {
     resetAppliedFilters();
     updateSearch(initialSearchQuery, { immediate: true });
     navigation?.setParams?.({ searchQuery: null });
+    navSearchRef.current = true;
   }, [initialSearchQuery, updateSearch, resetAppliedFilters, navigation]);
 
   useEffect(() => {
@@ -341,6 +343,10 @@ export default function ProductsScreen({ route, navigation }) {
         resetAppliedFilters();
         updateSearch(targetSearch, { immediate: true });
         return;
+      }
+      if (navSearchRef.current && !targetCategory && !targetBrand) {
+        updateSearch('', { immediate: true });
+        navSearchRef.current = false;
       }
       if (targetBrand) {
         setSelectedCategoryId('all');
