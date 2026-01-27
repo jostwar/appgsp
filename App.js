@@ -42,11 +42,20 @@ function MainTabs() {
           />
         ),
         tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
+          backgroundColor: colors.card,
+          borderTopColor: 'transparent',
           height: 70,
           paddingBottom: 6,
           justifyContent: 'space-around',
+          marginHorizontal: 16,
+          marginBottom: 12,
+          borderRadius: 18,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOpacity: 0.2,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 6 },
+          position: 'absolute',
         },
         tabBarShowLabel: true,
         tabBarLabelStyle: {
