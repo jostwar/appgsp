@@ -23,8 +23,6 @@ export default function RewardsScreen() {
   const [pointsError, setPointsError] = useState('');
   const customerLevel = pointsData?.level || 'Sin nivel';
   const rebatePercent = Number(pointsData?.rebate || 0);
-  const baseLevelGoal = 5_000_000;
-  const baseLevelRebate = 1;
   const levelThresholds = [
     { name: 'Blue Partner', min: 5_000_000 },
     { name: 'Purple Partner', min: 15_000_000 },
@@ -84,14 +82,20 @@ export default function RewardsScreen() {
     new Intl.NumberFormat('es-CO').format(Number(value || 0));
 
   const estimatedMonthlyPurchases = Number(pointsData?.total || 0);
-  const nextThreshold = levelThresholds.find(
-    (level) => estimatedMonthlyPurchases < level.min
+  const currentLevelIndex = levelThresholds.findIndex(
+    (level) => level.name === customerLevel
   );
-  const remainingForRebate = Math.max(0, baseLevelGoal - estimatedMonthlyPurchases);
-  const progressValue = Math.min(1, estimatedMonthlyPurchases / baseLevelGoal);
+  const nextLevel =
+    currentLevelIndex >= 0
+      ? levelThresholds[currentLevelIndex + 1]
+      : levelThresholds.find((level) => estimatedMonthlyPurchases < level.min);
+  const isMaxLevel = !nextLevel && levelThresholds.some((level) => level.name === customerLevel);
+  const targetGoal = nextLevel?.min || levelThresholds[levelThresholds.length - 1]?.min || 0;
+  const remainingForRebate = Math.max(0, targetGoal - estimatedMonthlyPurchases);
+  const progressValue = targetGoal > 0 ? Math.min(1, estimatedMonthlyPurchases / targetGoal) : 0;
   const progressPercent = Math.round(progressValue * 100);
-  const nextLevelGoal = baseLevelGoal;
-  const baseLevelCashback = baseLevelGoal * (baseLevelRebate / 100);
+  const nextLevelLabel = nextLevel?.name || 'Nivel máximo';
+  const nextLevelCashback = targetGoal ? Math.round((targetGoal * rebatePercent) / 100) : 0;
 
   useEffect(() => {
     let isMounted = true;
@@ -184,19 +188,27 @@ export default function RewardsScreen() {
               <Text style={styles.pointsHint}>
                 Rebate {rebatePercent}% · Compras mensuales antes de IVA
               </Text>
-              <Text style={styles.pointsHint}>
-                Compras ${formatCop(pointsData?.total || 0)} · Falta $
-                {formatCop(remainingForRebate)} para recibir cashback
-              </Text>
-              <Text style={styles.pointsHint}>
-                Al cumplir nivel 1 ganarías ${formatCop(baseLevelCashback)} de cashback
-              </Text>
+              {isMaxLevel ? (
+                <Text style={styles.pointsHint}>
+                  Compras ${formatCop(pointsData?.total || 0)} · Nivel máximo alcanzado
+                </Text>
+              ) : (
+                <Text style={styles.pointsHint}>
+                  Compras ${formatCop(pointsData?.total || 0)} · Falta $
+                  {formatCop(remainingForRebate)} para subir a {nextLevelLabel}
+                </Text>
+              )}
+              {isMaxLevel ? null : (
+                <Text style={styles.pointsHint}>
+                  Al cumplir {nextLevelLabel} ganarías ${formatCop(nextLevelCashback)} de cashback
+                </Text>
+              )}
             </>
           )}
           <View style={styles.progressHeader}>
             <Text style={styles.progressText}>{progressPercent}%</Text>
             <Text style={styles.progressText}>
-              {nextLevelGoal ? `Meta $${formatCop(nextLevelGoal)}` : 'Meta alcanzada'}
+              {targetGoal ? `Meta $${formatCop(targetGoal)}` : 'Meta alcanzada'}
             </Text>
           </View>
           <View style={styles.progressTrack}>

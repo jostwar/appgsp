@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../store/auth';
-import { getCarteraSummary, getWooOrders } from '../api/backend';
+import { getCarteraSummary, getRewardsPoints, getWooOrders } from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -60,7 +60,8 @@ export default function ProfileScreen({ navigation }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [carteraStatus, setCarteraStatus] = useState(null);
   const [carteraState, setCarteraState] = useState('idle');
-  const customerLevel = 'Purple Partner';
+  const [levelState, setLevelState] = useState('idle');
+  const [customerLevel, setCustomerLevel] = useState('Sin nivel');
   const levelColors = {
     'Blue Partner': '#3B82F6',
     'Purple Partner': '#8B5CF6',
@@ -139,6 +140,23 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [user?.cedula]);
 
+  const fetchLevel = useCallback(async () => {
+    if (!user?.cedula) {
+      setCustomerLevel('Sin nivel');
+      setLevelState('missing');
+      return;
+    }
+    setLevelState('loading');
+    try {
+      const data = await getRewardsPoints({ cedula: user.cedula });
+      setCustomerLevel(data?.level || 'Sin nivel');
+      setLevelState('ready');
+    } catch (_error) {
+      setCustomerLevel('Sin nivel');
+      setLevelState('error');
+    }
+  }, [user?.cedula]);
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
@@ -147,11 +165,15 @@ export default function ProfileScreen({ navigation }) {
     fetchCartera();
   }, [fetchCartera]);
 
+  useEffect(() => {
+    fetchLevel();
+  }, [fetchLevel]);
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadPrefs(), fetchOrders(), fetchCartera()]);
+    await Promise.all([loadPrefs(), fetchOrders(), fetchCartera(), fetchLevel()]);
     setIsRefreshing(false);
-  }, [loadPrefs, fetchOrders, fetchCartera]);
+  }, [loadPrefs, fetchOrders, fetchCartera, fetchLevel]);
 
   const orderItems = useMemo(
     () =>
