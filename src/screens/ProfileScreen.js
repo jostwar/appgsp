@@ -9,6 +9,7 @@ import {
   Linking,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
@@ -135,13 +136,12 @@ export default function ProfileScreen({ navigation }) {
   };
   const helpLinks = [
     { label: 'Preguntas frecuentes', url: 'https://gsp.com.co/preguntas-frecuentes/' },
-    { label: 'Contáctanos', url: 'https://gsp.com.co/contactanos/' },
+    { label: 'Contáctanos', url: 'https://gsp.com.co/contacto/' },
   ];
   const legalLinks = [
     { label: 'Términos y condiciones', url: 'https://gsp.com.co/terminos-y-condiciones/' },
-    { label: 'Autorización datos personales', url: 'https://gsp.com.co/autorizacion-datos-personales/' },
-    { label: 'Política de privacidad', url: 'https://gsp.com.co/politica-de-privacidad/' },
-    { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantias/' },
+    { label: 'Autorización datos personales', url: 'https://gsp.com.co/politica-de-tratamiento-de-datos-personales/' },
+    { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantia/' },
   ];
   return (
     <View style={styles.screen}>
