@@ -2750,7 +2750,11 @@ app.post('/api/woo/login', async (req, res) => {
     } catch (_error) {
       customer = null;
     }
-    const cedula = customer ? woo.getCustomerCedula(customer) : null;
+    const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
+    const gspNitMeta = metaData.find(
+      (meta) => String(meta?.key || '').toLowerCase() === 'gsp_nit'
+    )?.value;
+    const cedula = normalizeId(gspNitMeta || (customer ? woo.getCustomerCedula(customer) : null));
     const billing = customer?.billing || {};
     const shipping = customer?.shipping || {};
     const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
