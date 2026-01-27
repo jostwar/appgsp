@@ -386,6 +386,16 @@ export default function ProductsScreen({ route, navigation }) {
       resetAppliedFilters,
     ])
   );
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (navSearchRef.current) {
+          updateSearch('', { immediate: true });
+          navSearchRef.current = false;
+        }
+      };
+    }, [updateSearch])
+  );
 
   const load = useCallback(
     async (brandNameOverride = null) => {
