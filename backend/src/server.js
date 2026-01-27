@@ -979,6 +979,24 @@ const renderRewardsPortal = ({
         gap: 12px;
         flex-wrap: wrap;
       }
+      .suggestions {
+        background: #0f1422;
+        border: 1px solid #2a3347;
+        border-radius: 12px;
+        padding: 6px;
+        margin-top: 6px;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .suggestion-item {
+        padding: 8px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .suggestion-item:hover {
+        background: #111827;
+      }
       input[type="text"] {
         flex: 1;
         min-width: 220px;
@@ -1192,7 +1210,7 @@ const renderRewardsPortal = ({
             </p>
             <form class="form" method="get" action="/admin/rewards">
               <input type="hidden" name="section" value="clientes" />
-              <input type="text" name="cedula" placeholder="NIT o cédula" value="${escapeHtml(
+              <input type="text" id="cedula-input" name="cedula" placeholder="NIT o cédula" autocomplete="off" value="${escapeHtml(
                 cedula
               )}" />
               <input type="text" name="vendedor" placeholder="Vendedor (opcional)" value="${escapeHtml(
@@ -1200,6 +1218,7 @@ const renderRewardsPortal = ({
               )}" />
               <button type="submit">Consultar</button>
             </form>
+            <div id="cedula-suggestions" class="suggestions" style="display:none;"></div>
             ${
               !vendedorInput && defaultVendedor
                 ? `<div class="muted">Usando vendedor por defecto: ${escapeHtml(
@@ -1553,6 +1572,64 @@ const renderRewardsPortal = ({
         </main>
       </div>
     </div>
+    <script>
+      (function () {
+        const input = document.getElementById('cedula-input');
+        const list = document.getElementById('cedula-suggestions');
+        if (!input || !list) return;
+        let timer = null;
+        const clearList = () => {
+          list.innerHTML = '';
+          list.style.display = 'none';
+        };
+        const renderList = (items) => {
+          if (!items.length) {
+            clearList();
+            return;
+          }
+          list.innerHTML = items
+            .map(
+              (item) =>
+                '<div class="suggestion-item" data-cedula="' +
+                item.cedula +
+                '">' +
+                item.cedula +
+                (item.name ? ' · ' + item.name : '') +
+                '</div>'
+            )
+            .join('');
+          list.style.display = 'block';
+        };
+        input.addEventListener('input', () => {
+          const value = input.value.trim();
+          if (timer) clearTimeout(timer);
+          if (value.length < 3) {
+            clearList();
+            return;
+          }
+          timer = setTimeout(async () => {
+            try {
+              const res = await fetch('/api/cxc/clientes/suggest?q=' + encodeURIComponent(value));
+              const data = await res.json();
+              renderList(Array.isArray(data) ? data : []);
+            } catch (_error) {
+              clearList();
+            }
+          }, 200);
+        });
+        list.addEventListener('click', (event) => {
+          const target = event.target.closest('.suggestion-item');
+          if (!target) return;
+          input.value = target.getAttribute('data-cedula') || '';
+          clearList();
+          input.focus();
+        });
+        document.addEventListener('click', (event) => {
+          if (event.target === input || list.contains(event.target)) return;
+          clearList();
+        });
+      })();
+    </script>
   </body>
 </html>`;
 };
@@ -2440,6 +2517,35 @@ app.get('/api/cxc/clientes', async (req, res) => {
     return res.status(500).json({
       error: 'No se pudo consultar listado de clientes',
       details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/cxc/clientes/suggest', async (req, res) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (!query) {
+      return res.json([]);
+    }
+    await ensureClientsCacheFresh();
+    const normalized = normalizeId(query);
+    if (!normalized) {
+      return res.json([]);
+    }
+    const results = [];
+    for (const [cedula, info] of Object.entries(clientsCache.clients)) {
+      if (!cedula.startsWith(normalized)) continue;
+      results.push({
+        cedula,
+        name: info?.name || '',
+      });
+      if (results.length >= 8) break;
+    }
+    return res.json(results);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron consultar sugerencias',
+      details: error?.message,
     });
   }
 });
