@@ -632,6 +632,27 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.gspCareCard}>
+          <View style={styles.gspCareHeader}>
+            <View style={styles.gspCareBadge}>
+              <Text style={styles.gspCareBadgeText}>Nuevo</Text>
+            </View>
+            <Text style={styles.gspCareTitle}>GSP Care</Text>
+          </View>
+          <Text style={styles.gspCareText}>
+            Protege tus compras con cobertura preferencial y soporte dedicado.
+            Asegura tu inversión en segundos.
+          </Text>
+          <Pressable
+            style={pressableStyle(styles.primaryButton)}
+            onPress={() =>
+              handleNavigate('Productos', { searchQuery: 'GSPCARE', _ts: Date.now() })
+            }
+          >
+            <Text style={styles.primaryButtonText}>Ver GSP Care</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Portafolio</Text>
           <ScrollView
@@ -1049,6 +1070,40 @@ const styles = StyleSheet.create({
   },
   heroActions: {
     gap: spacing.sm,
+  },
+  gspCareCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: 20,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  gspCareHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  gspCareBadge: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  gspCareBadgeText: {
+    color: colors.buttonText,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  gspCareTitle: {
+    color: colors.textMain,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  gspCareText: {
+    color: colors.textSoft,
+    fontSize: 14,
+    lineHeight: 20,
   },
   primaryButton: {
     backgroundColor: colors.buttonBg,

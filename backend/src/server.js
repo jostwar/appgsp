@@ -638,22 +638,24 @@ const fetchVentasRange = async ({ cedula, from, to, chunkDays }) => {
   return payload;
 };
 
-const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
+const fetchVentasPayload = async ({ cedula, fecha, from, to, chunkDays } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const rangeStart = from || fecha || startOfMonth;
   const rangeEnd = to || fecha || now;
-  const chunkDays =
-    Number.isFinite(CXC_VENTAS_CHUNK_DAYS) && CXC_VENTAS_CHUNK_DAYS > 0
-      ? CXC_VENTAS_CHUNK_DAYS
-      : 7;
+  const rangeChunkDays =
+    Number.isFinite(chunkDays) && chunkDays > 0
+      ? chunkDays
+      : Number.isFinite(CXC_VENTAS_CHUNK_DAYS) && CXC_VENTAS_CHUNK_DAYS > 0
+        ? CXC_VENTAS_CHUNK_DAYS
+        : 7;
   if (!rangeStart || !rangeEnd) return [];
   const cacheKey = [
     'ventas',
     normalizeId(cedula),
     formatDateOnly(rangeStart),
     formatDateOnly(rangeEnd),
-    chunkDays,
+    rangeChunkDays,
   ].join('|');
   const cached = ventasCache.get(cacheKey);
   if (cached) return cached;
@@ -661,7 +663,7 @@ const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
     cedula,
     from: rangeStart,
     to: rangeEnd,
-    chunkDays,
+    chunkDays: rangeChunkDays,
   });
   const ttlMs = (Number.isFinite(CXC_VENTAS_CACHE_MINUTES)
     ? CXC_VENTAS_CACHE_MINUTES
@@ -737,6 +739,7 @@ const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
       cedula,
       from: rangeStart,
       to: rangeEnd,
+      chunkDays: 7,
     });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const total = getVentasTotal(filteredPayload || payload);
@@ -853,7 +856,13 @@ const renderRewardsPortal = ({
   const baseLevelCashback = `$${formatNumber(
     Math.round(BASE_LEVEL_GOAL * (BASE_LEVEL_REBATE / 100))
   )}`;
-  const careStatus = gspCareActive ? 'Activo' : 'No activo';
+  const normalizedCedula = normalizeId(cedula);
+  const carePlan = normalizedCedula
+    ? gspCareList.find((item) => item.cedula === normalizedCedula)?.plan
+    : '';
+  const careStatus = gspCareActive
+    ? `Activo${carePlan ? ` · ${escapeHtml(carePlan)}` : ''}`
+    : 'No activo';
   const normalizedSection = String(section || 'inicio').trim() || 'inicio';
   const showDashboard = normalizedSection === 'inicio';
   const showClientes = normalizedSection === 'clientes';
@@ -1592,6 +1601,12 @@ const renderRewardsPortal = ({
           <input type="hidden" name="section" value="gsp-care" />
           <input type="text" name="cedula" placeholder="NIT o cédula" required />
           <input type="text" name="fecha" placeholder="Fecha activación (YYYY-MM-DD)" />
+          <select name="plan" required>
+            <option value="">Selecciona tipo de membresía</option>
+            <option value="GSP Care 1">GSP Care 1</option>
+            <option value="GSP Care 2">GSP Care 2</option>
+            <option value="GSP Care 3">GSP Care 3</option>
+          </select>
           <button type="submit">Activar</button>
         </form>
         <div class="grid" style="margin-top:16px;">
@@ -1604,6 +1619,7 @@ const renderRewardsPortal = ({
                     <div class="label">Activado: ${escapeHtml(
                       item.activatedAt || '—'
                     )}</div>
+                    <div class="label">Membresía: ${escapeHtml(item.plan || '—')}</div>
                     <div class="reward-actions">
                       <form method="post" action="/admin/gspcare/delete">
                         <input type="hidden" name="section" value="gsp-care" />
@@ -1767,12 +1783,13 @@ const loadGspCare = () => {
       return parsed
         .map((item) => {
           if (typeof item === 'string') {
-            return { cedula: normalizeId(item), activatedAt: null };
+            return { cedula: normalizeId(item), activatedAt: null, plan: '' };
           }
           if (item && typeof item === 'object') {
             return {
               cedula: normalizeId(item.cedula || item.id || ''),
               activatedAt: String(item.activatedAt || '').trim() || null,
+              plan: String(item.plan || '').trim(),
             };
           }
           return null;
@@ -2069,7 +2086,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
 
   try {
     const ventasStart = Date.now();
-    const payload = await fetchVentasPayload({ cedula });
+    const payload = await fetchVentasPayload({ cedula, chunkDays: 7 });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, CLIENT_NAME_KEYS);
     const total = getVentasTotal(filteredPayload || payload);
@@ -2186,21 +2203,30 @@ app.post('/admin/rewards/delete', adminAuth, (req, res) => {
 });
 
 app.post('/admin/gspcare/save', adminAuth, (req, res) => {
-  const { cedula, fecha, section } = req.body || {};
+  const { cedula, fecha, section, plan } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
     return res.redirect('/admin/rewards?section=gsp-care');
   }
   const current = loadGspCare();
-  const existing = current.find((item) => item.cedula === normalized);
-  if (!existing) {
-    const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const nextPlan = String(plan || '').trim();
+  const nextActivatedAt = String(fecha || '').trim() || today;
+  const existingIndex = current.findIndex((item) => item.cedula === normalized);
+  if (existingIndex >= 0) {
+    current[existingIndex] = {
+      ...current[existingIndex],
+      activatedAt: nextActivatedAt,
+      plan: nextPlan || current[existingIndex].plan || '',
+    };
+  } else {
     current.unshift({
       cedula: normalized,
-      activatedAt: String(fecha || '').trim() || today,
+      activatedAt: nextActivatedAt,
+      plan: nextPlan,
     });
-    saveGspCare(current);
   }
+  saveGspCare(current);
   const targetSection = section || 'gsp-care';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
@@ -2712,7 +2738,7 @@ app.post('/api/cxc/points', async (req, res) => {
       });
     }
 
-    const payload = await fetchVentasPayload({ cedula, fecha });
+    const payload = await fetchVentasPayload({ cedula, fecha, chunkDays: 7 });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, [
       'nombre',
@@ -2742,9 +2768,11 @@ app.post('/api/cxc/points', async (req, res) => {
     const level = getLevelForTotal(total);
     const rebate = getRebateForTotal(total);
     const cashback = total ? Math.round((total * rebate) / 100) : 0;
-    const gspCareActive = cedula
-      ? loadGspCare().some((item) => item.cedula === normalizeId(cedula))
-      : false;
+    const gspCareList = loadGspCare();
+    const gspCareEntry = cedula
+      ? gspCareList.find((item) => item.cedula === normalizeId(cedula))
+      : null;
+    const gspCareActive = Boolean(gspCareEntry);
 
     return res.json({
       nit: normalizeId(cedula || idValue),
@@ -2755,6 +2783,7 @@ app.post('/api/cxc/points', async (req, res) => {
       level,
       rebate,
       gspCare: gspCareActive,
+      gspCarePlan: gspCareEntry?.plan || null,
       divisor: divisorValue,
       totalKey: keyToUse,
     });
