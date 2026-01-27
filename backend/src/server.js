@@ -480,6 +480,11 @@ const formatMonthLabel = (date) => {
   return `${month} ${date.getFullYear()}`;
 };
 
+const isMaxJsonError = (error) => {
+  const raw = String(error?.response?.data || error?.message || '').toLowerCase();
+  return raw.includes('maxjsonlength');
+};
+
 const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -541,6 +546,39 @@ const splitDateRange = (start, end, chunkDays) => {
 const extractVentasPayload = (data) =>
   parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
 
+const fetchVentasRange = async ({ cedula, from, to, chunkDays }) => {
+  const payload = [];
+  const ranges = splitDateRange(from, to, chunkDays);
+  if (ranges.length === 0) return payload;
+
+  for (const range of ranges) {
+    try {
+      const data = await cxc.generarInfoVentas(
+        buildVentasParams({ cedula, from: range.from, to: range.to })
+      );
+      const parsed = extractVentasPayload(data);
+      if (Array.isArray(parsed)) {
+        payload.push(...parsed);
+      } else if (parsed && typeof parsed === 'object') {
+        payload.push(parsed);
+      }
+    } catch (error) {
+      if (isMaxJsonError(error) && chunkDays > 1) {
+        const fallback = await fetchVentasRange({
+          cedula,
+          from: range.from,
+          to: range.to,
+          chunkDays: 1,
+        });
+        payload.push(...fallback);
+        continue;
+      }
+    }
+  }
+
+  return payload;
+};
+
 const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -550,27 +588,8 @@ const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
     Number.isFinite(CXC_VENTAS_CHUNK_DAYS) && CXC_VENTAS_CHUNK_DAYS > 0
       ? CXC_VENTAS_CHUNK_DAYS
       : 7;
-  const ranges = splitDateRange(rangeStart, rangeEnd, chunkDays);
-  if (ranges.length === 0) {
-    const single = await cxc.generarInfoVentas(
-      buildVentasParams({ cedula, fecha, from, to })
-    );
-    return extractVentasPayload(single);
-  }
-
-  const combined = [];
-  for (const range of ranges) {
-    const data = await cxc.generarInfoVentas(
-      buildVentasParams({ cedula, from: range.from, to: range.to })
-    );
-    const payload = extractVentasPayload(data);
-    if (Array.isArray(payload)) {
-      combined.push(...payload);
-    } else if (payload && typeof payload === 'object') {
-      combined.push(payload);
-    }
-  }
-  return combined;
+  if (!rangeStart || !rangeEnd) return [];
+  return fetchVentasRange({ cedula, from: rangeStart, to: rangeEnd, chunkDays });
 };
 
 const filterVentasPayload = (payload, cedula) => {
@@ -1684,29 +1703,6 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const clientInfo = activeSearch?.info || null;
 
   try {
-    const facturasData = await cxc.generarInfoVentas(
-      buildVentasParams({ cedula })
-    );
-    if (isCxcFunctionInactive(facturasData?.xml)) {
-      return res.send(
-        renderRewardsPortal({
-          cedula,
-          error:
-            'CxC respondió "Función no activa" para GenerarInfoVentas. Solicita al proveedor habilitar el método.',
-          rewards,
-          editReward,
-          gspCareList,
-          gspCareActive,
-          clientInfo,
-          clientSearch: activeSearch,
-          wooSummary,
-          vendedor,
-          vendedorInput,
-          defaultVendedor: DEFAULT_CXC_VENDEDOR,
-          section,
-        })
-      );
-    }
     const payload = await fetchVentasPayload({ cedula });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, CLIENT_NAME_KEYS);
