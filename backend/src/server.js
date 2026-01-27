@@ -3244,7 +3244,7 @@ app.post('/api/cxc/points', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      error: 'No se pudieron calcular puntos desde CxC',
+      error: 'No se pudo calcular cashback desde CxC',
       details: error?.response?.data || error?.message,
     });
   }

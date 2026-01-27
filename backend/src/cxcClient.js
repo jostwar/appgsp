@@ -237,7 +237,7 @@ export const cxc = {
       strPar_Cedula: cedula,
       strPar_Vended: vendedor,
     }).catch(() =>
-      this.call('EstadoCuentasCartera', {
+      this.call('EstadoDeCuentaCartera', {
         datPar_Fecha: fecha,
         strPar_Cedula: cedula,
         strPar_Vended: vendedor,
