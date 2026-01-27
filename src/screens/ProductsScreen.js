@@ -82,7 +82,9 @@ export default function ProductsScreen({ route, navigation }) {
   const [maxPriceInput, setMaxPriceInput] = useState('');
   const [appliedMinPrice, setAppliedMinPrice] = useState(null);
   const [appliedMaxPrice, setAppliedMaxPrice] = useState(null);
+  const [cartToast, setCartToast] = useState(null);
   const drawerAnim = useRef(new Animated.Value(0));
+  const toastTimer = useRef(null);
   const [brandOptions, setBrandOptions] = useState([
     'Todas',
     'Samsung',
@@ -117,6 +119,25 @@ export default function ProductsScreen({ route, navigation }) {
       useNativeDriver: true,
     }).start();
   }, [showFiltersDrawer]);
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current) {
+        clearTimeout(toastTimer.current);
+      }
+    },
+    []
+  );
+
+  const showCartToast = (product) => {
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current);
+    }
+    setCartToast(product);
+    toastTimer.current = setTimeout(() => {
+      setCartToast(null);
+    }, 2500);
+  };
 
   const normalizeBrandOptions = useCallback((options) => {
     const unique = Array.from(new Set(options)).sort((a, b) =>
@@ -863,6 +884,7 @@ export default function ProductsScreen({ route, navigation }) {
                       addItem(item);
                       setAddedId(item.id);
                       setTimeout(() => setAddedId(null), 900);
+                      showCartToast(item);
                     }}
                   >
                     <Text style={styles.primaryButtonText}>
@@ -883,6 +905,36 @@ export default function ProductsScreen({ route, navigation }) {
           ) : null
         }
       />
+      {cartToast ? (
+        <View style={styles.toastWrapper}>
+          <View style={styles.toastCard}>
+            <View style={styles.toastHeader}>
+              <Text style={styles.toastTitle}>Agregaste a tu carrito</Text>
+              <Pressable
+                style={({ pressed }) => [pressed && styles.pressed]}
+                onPress={() => setCartToast(null)}
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={styles.toastBody} numberOfLines={2} ellipsizeMode="tail">
+              {cartToast.name}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.toastButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                setCartToast(null);
+                navigation.navigate('Carrito');
+              }}
+            >
+              <Text style={styles.toastButtonText}>Ver en el carrito</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1210,5 +1262,44 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
+  },
+  toastWrapper: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: 90,
+  },
+  toastCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  toastHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toastTitle: {
+    color: colors.textMain,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  toastBody: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  toastButton: {
+    backgroundColor: colors.buttonBg,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  toastButtonText: {
+    color: colors.buttonText,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
