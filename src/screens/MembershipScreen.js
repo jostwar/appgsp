@@ -48,6 +48,39 @@ export default function MembershipScreen() {
     ],
     []
   );
+  const savingsItems = useMemo(
+    () => [
+      { id: 'password', label: 'Password', qty: 10, normal: 30_000, member: 0 },
+      { id: 'firmware', label: 'Firmware', qty: 10, normal: 40_000, member: 0 },
+      {
+        id: 'diag-ptz',
+        label: 'Diagnóstico cámaras PTZ',
+        qty: 10,
+        normal: 95_000,
+        member: 0,
+      },
+      {
+        id: 'diag-cctv',
+        label: 'Diagnóstico cámaras y grabadores',
+        qty: 10,
+        normal: 20_000,
+        member: 0,
+      },
+      { id: 'mano', label: 'Cambios mano a mano', qty: 2, normal: 600_000, member: 0 },
+    ],
+    []
+  );
+  const savingsTotal = useMemo(
+    () =>
+      savingsItems.reduce(
+        (sum, item) =>
+          sum + Math.max(0, (item.normal - item.member) * item.qty),
+        0
+      ),
+    [savingsItems]
+  );
+  const annualMembershipValue = 399_000;
+  const netSavings = Math.max(0, savingsTotal - annualMembershipValue);
 
   const benefits = useMemo(
     () => [
@@ -64,6 +97,12 @@ export default function MembershipScreen() {
     []
   );
 
+  const formatCop = (value) =>
+    new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(Number(value || 0));
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -119,6 +158,56 @@ export default function MembershipScreen() {
             </View>
           ))}
           <Text style={styles.subtitle}>Costos IVA incluido</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Ahorro anual estimado</Text>
+          <View style={styles.savingsHeader}>
+            <Text style={styles.savingsHeaderLabel}>Servicio</Text>
+            <Text style={styles.savingsHeaderValue}>Cant.</Text>
+          </View>
+          {savingsItems.map((item) => {
+            const normalTotal = item.normal * item.qty;
+            const memberTotal = item.member * item.qty;
+            const savings = Math.max(0, normalTotal - memberTotal);
+            return (
+              <View key={item.id} style={styles.savingsRow}>
+                <View style={styles.savingsRowMain}>
+                  <Text style={styles.savingsLabel}>{item.label}</Text>
+                  <Text style={styles.savingsQty}>x{item.qty}</Text>
+                </View>
+                <View style={styles.savingsRowValues}>
+                  <View style={styles.savingsValueBlock}>
+                    <Text style={styles.savingsValueLabel}>Normal</Text>
+                    <Text style={styles.savingsValue}>{formatCop(normalTotal)}</Text>
+                  </View>
+                  <View style={styles.savingsValueBlock}>
+                    <Text style={styles.savingsValueLabel}>Con membresía</Text>
+                    <Text style={styles.savingsValue}>{formatCop(memberTotal)}</Text>
+                  </View>
+                  <View style={styles.savingsValueBlock}>
+                    <Text style={styles.savingsValueLabel}>Ahorro</Text>
+                    <Text style={styles.savingsValue}>{formatCop(savings)}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+          <Text style={styles.savingsNote}>
+            Certificaciones y capacitaciones pueden ser pagas según el caso.
+          </Text>
+          <View style={styles.row}>
+            <Text style={styles.totalLabel}>Total ahorro anual</Text>
+            <Text style={styles.totalValue}>{formatCop(savingsTotal)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.totalLabel}>Membresía anual</Text>
+            <Text style={styles.totalValue}>{formatCop(annualMembershipValue)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.totalLabel}>Ahorro neto estimado</Text>
+            <Text style={styles.totalValue}>{formatCop(netSavings)}</Text>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -274,6 +363,73 @@ const styles = StyleSheet.create({
   value: {
     color: colors.textMain,
     fontWeight: '600',
+    fontSize: 14,
+  },
+  savingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  savingsHeaderLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  savingsHeaderValue: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  savingsRow: {
+    gap: spacing.xs,
+  },
+  savingsRowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  savingsLabel: {
+    color: colors.textSoft,
+    fontSize: 13,
+    flex: 1,
+  },
+  savingsQty: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  savingsRowValues: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  savingsValueBlock: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  savingsValueLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+  },
+  savingsValue: {
+    color: colors.textMain,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  savingsNote: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  totalLabel: {
+    color: colors.textMain,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  totalValue: {
+    color: colors.textMain,
+    fontWeight: '700',
     fontSize: 14,
   },
   benefitRow: {

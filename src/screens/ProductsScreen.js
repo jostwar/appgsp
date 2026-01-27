@@ -99,6 +99,14 @@ export default function ProductsScreen({ route, navigation }) {
     'EZVIZ',
   ]);
   const { addItem } = useCart();
+  const resetAppliedFilters = useCallback(() => {
+    setUsePriceRange(false);
+    setMinPriceInput('');
+    setMaxPriceInput('');
+    setAppliedMinPrice(null);
+    setAppliedMaxPrice(null);
+    setSortOption('recomendado');
+  }, []);
   const initialCategoryName = route?.params?.categoryName;
   const initialBrandName = route?.params?.brandName;
   const initialSearchQuery = route?.params?.searchQuery;
@@ -288,15 +296,17 @@ export default function ProductsScreen({ route, navigation }) {
     setSelectedCategoryName(null);
     setSelectedBrand(initialBrandName);
     setActiveBrandName(initialBrandName);
+    resetAppliedFilters();
     updateSearch('', { immediate: true });
-  }, [initialBrandName, updateSearch]);
+  }, [initialBrandName, updateSearch, resetAppliedFilters]);
 
   useEffect(() => {
     if (!initialSearchQuery) return;
     setSelectedCategoryId('all');
     setSelectedCategoryName(null);
+    resetAppliedFilters();
     updateSearch(initialSearchQuery, { immediate: true });
-  }, [initialSearchQuery, updateSearch]);
+  }, [initialSearchQuery, updateSearch, resetAppliedFilters]);
 
   useEffect(() => {
     if (!pendingCategoryName || categories.length === 0) return;
@@ -311,8 +321,9 @@ export default function ProductsScreen({ route, navigation }) {
       setSelectedCategoryId('all');
       setSelectedCategoryName(pendingCategoryName);
     }
+    resetAppliedFilters();
     setPendingCategoryName(null);
-  }, [categories, pendingCategoryName]);
+  }, [categories, pendingCategoryName, resetAppliedFilters]);
 
   useFocusEffect(
     useCallback(() => {
@@ -326,6 +337,7 @@ export default function ProductsScreen({ route, navigation }) {
       if (targetSearch) {
         setSelectedCategoryId('all');
         setSelectedCategoryName(null);
+        resetAppliedFilters();
         updateSearch(targetSearch, { immediate: true });
         return;
       }
@@ -334,12 +346,14 @@ export default function ProductsScreen({ route, navigation }) {
         setSelectedCategoryName(null);
         setSelectedBrand(targetBrand);
         setActiveBrandName(targetBrand);
+        resetAppliedFilters();
         updateSearch('', { immediate: true });
         return;
       }
       if (!targetCategory) {
         setSelectedCategoryId('all');
         setSelectedCategoryName(null);
+        resetAppliedFilters();
         updateSearch('', { immediate: true });
         return;
       }
@@ -354,6 +368,7 @@ export default function ProductsScreen({ route, navigation }) {
         setSelectedCategoryId('all');
         setSelectedCategoryName(targetCategory);
       }
+      resetAppliedFilters();
       updateSearch('', { immediate: true });
     }, [
       route?.params?.categoryName,
@@ -361,6 +376,7 @@ export default function ProductsScreen({ route, navigation }) {
       route?.params?._ts,
       categories,
       updateSearch,
+      resetAppliedFilters,
     ])
   );
 
@@ -612,6 +628,7 @@ export default function ProductsScreen({ route, navigation }) {
                           onPress={() => {
                             setSelectedCategoryId('all');
                             setSelectedCategoryName(null);
+                            resetAppliedFilters();
                             setShowCategoryMenu(false);
                           }}
                         >
@@ -627,6 +644,7 @@ export default function ProductsScreen({ route, navigation }) {
                             onPress={() => {
                               setSelectedCategoryId(category.id);
                               setSelectedCategoryName(null);
+                              resetAppliedFilters();
                               setShowCategoryMenu(false);
                             }}
                           >
@@ -677,6 +695,7 @@ export default function ProductsScreen({ route, navigation }) {
                               setSelectedCategoryId('all');
                               setSelectedCategoryName(null);
                               setActiveBrandName(option === 'Todas' ? null : option);
+                              resetAppliedFilters();
                               updateSearch('', { immediate: true });
                             }}
                           >
@@ -730,6 +749,7 @@ export default function ProductsScreen({ route, navigation }) {
                                 setSelectedCategoryId('all');
                                 setSelectedCategoryName(option);
                               }
+                              resetAppliedFilters();
                             }}
                           >
                             <Text style={styles.dropdownItemText}>{option}</Text>
