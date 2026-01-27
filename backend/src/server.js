@@ -1139,9 +1139,6 @@ const renderRewardsPortal = ({
                   )}</div>`
                 : ''
             }
-            <div class="muted">
-              Si no conoces el vendedor, intentamos buscar en varias páginas.
-            </div>
             <div class="client-details">
               ${
                 cedula
@@ -1220,7 +1217,7 @@ const renderRewardsPortal = ({
               }
               ${
                 clientInfo?.cupo
-                  ? `<div class="label">Cupo: <strong>${formatNumber(
+                  ? `<div class="label">Cupo: <strong>$${formatNumber(
                       clientInfo.cupo
                     )}</strong></div>`
                   : ''
@@ -1252,7 +1249,7 @@ const renderRewardsPortal = ({
               }
               ${
                 cedula
-                  ? `<div class="label">Valor compras: <strong>${formatNumber(
+                  ? `<div class="label">Valor compras: <strong>$${formatNumber(
                       total ?? 0
                     )}</strong></div>`
                   : ''
