@@ -15,6 +15,8 @@ const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
 const DEFAULT_CXC_VENDEDOR = String(process.env.CXC_DEFAULT_VENDEDOR || '').trim();
 const CXC_TOKEN = process.env.CXC_TOKEN;
 const CXC_EMPRESA = process.env.CXC_EMPRESA;
+const CXC_VENTAS_CHUNK_DAYS = Number(process.env.CXC_VENTAS_CHUNK_DAYS || 7);
+const CXC_VENTAS_START_YEAR = Number(process.env.CXC_VENTAS_START_YEAR || 2026);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
@@ -459,6 +461,25 @@ const formatDateOnly = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatMonthLabel = (date) => {
+  const monthNames = [
+    'Ene',
+    'Feb',
+    'Mar',
+    'Abr',
+    'May',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dic',
+  ];
+  const month = monthNames[date.getMonth()] || '';
+  return `${month} ${date.getFullYear()}`;
+};
+
 const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -482,18 +503,74 @@ const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   };
 };
 
-const buildVentasParams = ({ cedula, fecha } = {}) => {
+const buildVentasParams = ({ cedula, fecha, from, to } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const from = formatDateOnly(fecha || startOfMonth);
-  const to = formatDateOnly(fecha || now);
+  const rangeStart = from || fecha || startOfMonth;
+  const rangeEnd = to || fecha || now;
+  const fromValue = formatDateOnly(rangeStart);
+  const toValue = formatDateOnly(rangeEnd);
   const objPar_Objeto = CXC_TOKEN;
   return {
     strPar_Empresa: CXC_EMPRESA,
-    datPar_FecIni: from,
-    datPar_FecFin: to,
+    datPar_FecIni: fromValue,
+    datPar_FecFin: toValue,
     objPar_Objeto,
   };
+};
+
+const splitDateRange = (start, end, chunkDays) => {
+  const ranges = [];
+  if (!start || !end) return ranges;
+  const cursor = new Date(start);
+  const last = new Date(end);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime())) return ranges;
+  while (cursor <= last) {
+    const rangeStart = new Date(cursor);
+    const rangeEnd = new Date(cursor);
+    rangeEnd.setDate(rangeEnd.getDate() + chunkDays - 1);
+    if (rangeEnd > last) {
+      rangeEnd.setTime(last.getTime());
+    }
+    ranges.push({ from: rangeStart, to: rangeEnd });
+    cursor.setDate(cursor.getDate() + chunkDays);
+  }
+  return ranges;
+};
+
+const extractVentasPayload = (data) =>
+  parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+
+const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const rangeStart = from || fecha || startOfMonth;
+  const rangeEnd = to || fecha || now;
+  const chunkDays =
+    Number.isFinite(CXC_VENTAS_CHUNK_DAYS) && CXC_VENTAS_CHUNK_DAYS > 0
+      ? CXC_VENTAS_CHUNK_DAYS
+      : 7;
+  const ranges = splitDateRange(rangeStart, rangeEnd, chunkDays);
+  if (ranges.length === 0) {
+    const single = await cxc.generarInfoVentas(
+      buildVentasParams({ cedula, fecha, from, to })
+    );
+    return extractVentasPayload(single);
+  }
+
+  const combined = [];
+  for (const range of ranges) {
+    const data = await cxc.generarInfoVentas(
+      buildVentasParams({ cedula, from: range.from, to: range.to })
+    );
+    const payload = extractVentasPayload(data);
+    if (Array.isArray(payload)) {
+      combined.push(...payload);
+    } else if (payload && typeof payload === 'object') {
+      combined.push(payload);
+    }
+  }
+  return combined;
 };
 
 const filterVentasPayload = (payload, cedula) => {
@@ -525,6 +602,42 @@ const getVentasTotal = (payload, totalKey) => {
     if (fallback > 0) return fallback;
   }
   return sumTotalsForKey(payload, 'total');
+};
+
+const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
+  if (!cedula) return [];
+  const yearStart = Number.isFinite(startYear) ? startYear : CXC_VENTAS_START_YEAR;
+  const now = new Date();
+  const startDate = new Date(yearStart, 0, 1);
+  const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const rows = [];
+  const cursor = new Date(startDate);
+
+  while (cursor <= endDate) {
+    const rangeStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const rangeEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const payload = await fetchVentasPayload({
+      cedula,
+      from: rangeStart,
+      to: rangeEnd,
+    });
+    const filteredPayload = filterVentasPayload(payload, cedula);
+    const total = getVentasTotal(filteredPayload || payload);
+    const rebate = getRebateForTotal(total);
+    const cashback = total ? Math.round((total * rebate) / 100) : 0;
+    rows.push({
+      year: rangeStart.getFullYear(),
+      month: rangeStart.getMonth() + 1,
+      label: formatMonthLabel(rangeStart),
+      total,
+      rebate,
+      cashback,
+      level: getLevelForTotal(total),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return rows;
 };
 
 const LEVELS = [
@@ -561,6 +674,7 @@ const renderRewardsPortal = ({
   points = null,
   total = null,
   error = null,
+  monthlySummary = [],
   rewards = [],
   editReward = null,
   gspCareActive = false,
@@ -568,6 +682,7 @@ const renderRewardsPortal = ({
   section = 'inicio',
 } = {}) => {
   const rewardsList = rewards;
+  const monthlyRows = Array.isArray(monthlySummary) ? monthlySummary : [];
   const activeReward = editReward || {
     id: '',
     title: '',
@@ -869,6 +984,24 @@ const renderRewardsPortal = ({
       .totals .item strong {
         font-size: 18px;
       }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .table th,
+      .table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #1f2937;
+        text-align: left;
+      }
+      .table th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .table tbody tr:hover {
+        background: #0f1422;
+      }
     </style>
   </head>
   <body>
@@ -1108,6 +1241,42 @@ const renderRewardsPortal = ({
             ${
               cedula
                 ? `<div class="label">GSP Care: <strong>${careStatus}</strong></div>`
+                : ''
+            }
+            ${
+              cedula
+                ? `<div class="label" style="margin-top:16px;">Rebate y cashback mensual</div>
+                   ${
+                     monthlyRows.length
+                       ? `<table class="table" style="margin-top:8px;">
+                           <thead>
+                             <tr>
+                               <th>Mes</th>
+                               <th>Compras</th>
+                               <th>Nivel</th>
+                               <th>Rebate</th>
+                               <th>Cashback</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             ${monthlyRows
+                               .map(
+                                 (row) =>
+                                   `<tr>
+                                     <td>${escapeHtml(row.label)}</td>
+                                     <td>$${formatNumber(row.total || 0)}</td>
+                                     <td>${escapeHtml(row.level)}</td>
+                                     <td>${row.rebate || 0}%</td>
+                                     <td>$${formatNumber(row.cashback || 0)}</td>
+                                   </tr>`
+                               )
+                               .join('')}
+                           </tbody>
+                         </table>`
+                       : `<div class="muted" style="margin-top:8px;">
+                           Sin compras registradas desde ${CXC_VENTAS_START_YEAR}.
+                         </div>`
+                   }`
                 : ''
             }
             ${
@@ -1538,12 +1707,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         })
       );
     }
-    const payload = parseMaybeJson(
-      facturasData.result ?? facturasData.response ?? facturasData.parsed ?? {}
-    );
+    const payload = await fetchVentasPayload({ cedula });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, CLIENT_NAME_KEYS);
     const total = getVentasTotal(filteredPayload || payload);
+    const monthlySummary = await buildVentasMonthlySummary({ cedula });
     const points =
       CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
@@ -1555,6 +1723,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         wooSummary,
         total,
         points,
+        monthlySummary,
         rewards,
         editReward,
         gspCareList,
@@ -2125,9 +2294,7 @@ app.post('/api/cxc/points', async (req, res) => {
       });
     }
 
-    const payload = parseMaybeJson(
-      data.result ?? data.response ?? data.parsed ?? {}
-    );
+    const payload = await fetchVentasPayload({ cedula, fecha });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, [
       'nombre',
