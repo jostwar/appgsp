@@ -478,6 +478,19 @@ const formatDateOnly = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatDateLabel = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-CO', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+};
+
 const formatMonthLabel = (date) => {
   const monthNames = [
     'Ene',
@@ -679,7 +692,7 @@ const getVentasTotal = (payload, totalKey) => {
 };
 
 const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
-  if (!cedula) return [];
+  if (!cedula) return { rows: [], updatedAt: null };
   const yearStart = Number.isFinite(startYear) ? startYear : CXC_VENTAS_START_YEAR;
   const now = new Date();
   const maxMonths =
@@ -734,8 +747,9 @@ const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
   const ttlMs = (Number.isFinite(CXC_VENTAS_CACHE_MINUTES)
     ? CXC_VENTAS_CACHE_MINUTES
     : 15) * 60 * 1000;
-  ventasCache.set(summaryKey, rows, ttlMs);
-  return rows;
+  const payload = { rows, updatedAt: new Date().toISOString() };
+  ventasCache.set(summaryKey, payload, ttlMs);
+  return payload;
 };
 
 const LEVELS = [
@@ -772,7 +786,7 @@ const renderRewardsPortal = ({
   points = null,
   total = null,
   error = null,
-  monthlySummary = [],
+  monthlySummary = { rows: [], updatedAt: null },
   rewards = [],
   editReward = null,
   gspCareActive = false,
@@ -780,7 +794,8 @@ const renderRewardsPortal = ({
   section = 'inicio',
 } = {}) => {
   const rewardsList = rewards;
-  const monthlyRows = Array.isArray(monthlySummary) ? monthlySummary : [];
+  const monthlyRows = Array.isArray(monthlySummary?.rows) ? monthlySummary.rows : [];
+  const monthlyUpdatedAt = monthlySummary?.updatedAt || null;
   const activeReward = editReward || {
     id: '',
     title: '',
@@ -1334,6 +1349,9 @@ const renderRewardsPortal = ({
                     )}</strong></div>`
                   : ''
               }
+              <div class="label">Clientes actualizados: <strong>${formatDateLabel(
+                clientsCache.updatedAt
+              )}</strong></div>
               ${
                 cedula
                   ? `<div class="label">Valor compras: <strong>$${formatNumber(
@@ -1365,6 +1383,9 @@ const renderRewardsPortal = ({
             ${
               cedula
                 ? `<div class="label" style="margin-top:16px;">Rebate y cashback mensual</div>
+                   <div class="muted" style="margin-top:4px;">
+                     Compras actualizadas: ${formatDateLabel(monthlyUpdatedAt)}
+                   </div>
                    ${
                      monthlyRows.length
                        ? `<table class="table" style="margin-top:8px;">
