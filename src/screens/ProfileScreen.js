@@ -133,6 +133,16 @@ export default function ProfileScreen({ navigation }) {
       maximumFractionDigits: 0,
     }).format(Number.isNaN(numeric) ? 0 : numeric);
   };
+  const helpLinks = [
+    { label: 'Preguntas frecuentes', url: 'https://gsp.com.co/preguntas-frecuentes/' },
+    { label: 'Contáctanos', url: 'https://gsp.com.co/contactanos/' },
+  ];
+  const legalLinks = [
+    { label: 'Términos y condiciones', url: 'https://gsp.com.co/terminos-y-condiciones/' },
+    { label: 'Autorización datos personales', url: 'https://gsp.com.co/autorizacion-datos-personales/' },
+    { label: 'Política de privacidad', url: 'https://gsp.com.co/politica-de-privacidad/' },
+    { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantias/' },
+  ];
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -245,6 +255,46 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ayuda</Text>
+          <View style={styles.linkCard}>
+            {helpLinks.map((item, index) => (
+              <Pressable
+                key={item.label}
+                style={({ pressed }) => [
+                  styles.linkRow,
+                  index === helpLinks.length - 1 && styles.linkRowLast,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => Linking.openURL(item.url)}
+              >
+                <Text style={styles.linkText}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <View style={styles.linkCard}>
+            {legalLinks.map((item, index) => (
+              <Pressable
+                key={item.label}
+                style={({ pressed }) => [
+                  styles.linkRow,
+                  index === legalLinks.length - 1 && styles.linkRowLast,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => Linking.openURL(item.url)}
+              >
+                <Text style={styles.linkText}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Acciones rápidas</Text>
           <Pressable
             style={pressableStyle(styles.primaryButton)}
@@ -337,6 +387,30 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontWeight: '600',
     fontSize: 14,
+  },
+  linkCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  linkRowLast: {
+    borderBottomWidth: 0,
+  },
+  linkText: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '600',
   },
   sectionHint: {
     color: colors.textMuted,
