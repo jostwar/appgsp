@@ -3094,18 +3094,73 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.json(data);
     }
     const payload = parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {});
-    const cupoCredito = parseCarteraNumber(
+    let cupoCredito = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_CUPO_KEYS)
     );
-    const saldoCartera = parseCarteraNumber(
+    let saldoCartera = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_SALDO_KEYS)
     );
-    const saldoPorVencer = parseCarteraNumber(
+    let saldoPorVencer = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_POR_VENCER_KEYS)
     );
-    const saldoVencido = parseCarteraNumber(
+    let saldoVencido = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_VENCIDO_KEYS)
     );
+    if (Array.isArray(payload)) {
+      const totals = payload.reduce(
+        (acc, item) => {
+          const saldo = parseCarteraNumber(
+            findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO
+          );
+          const daysRaw =
+            findValueByKeys(item, [
+              'daiaven',
+              'diasvenc',
+              'dias_venc',
+              'dias_vencimiento',
+              'diasvencido',
+              'dias_vencido',
+            ]) || item?.DAIAVEN;
+          const dias = Number(daysRaw || 0);
+          acc.saldoCartera += saldo;
+          if (dias > 0) {
+            acc.saldoVencido += saldo;
+          } else {
+            acc.saldoPorVencer += saldo;
+          }
+          return acc;
+        },
+        { saldoCartera: 0, saldoPorVencer: 0, saldoVencido: 0 }
+      );
+      if (totals.saldoCartera > 0) {
+        saldoCartera = totals.saldoCartera;
+      }
+      if (totals.saldoPorVencer > 0 || totals.saldoVencido > 0) {
+        saldoPorVencer = totals.saldoPorVencer;
+        saldoVencido = totals.saldoVencido;
+      }
+    }
+    if (!cupoCredito) {
+      const cachedClient = await findClientInfo({
+        cedula,
+        vendedor: resolvedSeller || '',
+        useRemoteFallback: false,
+      });
+      const cachedCupo = parseCarteraNumber(cachedClient?.info?.cupo);
+      if (cachedCupo) {
+        cupoCredito = cachedCupo;
+      } else {
+        const remoteClient = await findClientInfo({
+          cedula,
+          vendedor: resolvedSeller || '',
+          useRemoteFallback: true,
+        });
+        const remoteCupo = parseCarteraNumber(remoteClient?.info?.cupo);
+        if (remoteCupo) {
+          cupoCredito = remoteCupo;
+        }
+      }
+    }
     return res.json({
       cupoCredito,
       saldoCartera,
