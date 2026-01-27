@@ -15,11 +15,13 @@ import {
 import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Location from 'expo-location';
 import { searchProducts } from '../api/woocommerce';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const tabBarHeight = useBottomTabBarHeight();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -432,7 +434,10 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
         keyboardShouldPersistTaps="always"
         refreshControl={
           <RefreshControl
