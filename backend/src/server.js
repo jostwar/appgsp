@@ -18,6 +18,7 @@ const CXC_EMPRESA = process.env.CXC_EMPRESA;
 const CXC_VENTAS_CHUNK_DAYS = Number(process.env.CXC_VENTAS_CHUNK_DAYS || 7);
 const CXC_VENTAS_START_YEAR = Number(process.env.CXC_VENTAS_START_YEAR || 2026);
 const CXC_VENTAS_MAX_MONTHS = Number(process.env.CXC_VENTAS_MAX_MONTHS || 12);
+const CXC_VENTAS_CACHE_MINUTES = Number(process.env.CXC_VENTAS_CACHE_MINUTES || 15);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
@@ -487,6 +488,25 @@ const isMaxJsonError = (error) => {
   return raw.includes('maxjsonlength');
 };
 
+const buildCache = () => {
+  const store = new Map();
+  const get = (key) => {
+    const entry = store.get(key);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      store.delete(key);
+      return null;
+    }
+    return entry.value;
+  };
+  const set = (key, value, ttlMs) => {
+    store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  };
+  return { get, set };
+};
+
+const ventasCache = buildCache();
+
 const buildCxcDetalleParams = ({ cedula, fecha } = {}) => {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -591,7 +611,26 @@ const fetchVentasPayload = async ({ cedula, fecha, from, to } = {}) => {
       ? CXC_VENTAS_CHUNK_DAYS
       : 7;
   if (!rangeStart || !rangeEnd) return [];
-  return fetchVentasRange({ cedula, from: rangeStart, to: rangeEnd, chunkDays });
+  const cacheKey = [
+    'ventas',
+    normalizeId(cedula),
+    formatDateOnly(rangeStart),
+    formatDateOnly(rangeEnd),
+    chunkDays,
+  ].join('|');
+  const cached = ventasCache.get(cacheKey);
+  if (cached) return cached;
+  const payload = await fetchVentasRange({
+    cedula,
+    from: rangeStart,
+    to: rangeEnd,
+    chunkDays,
+  });
+  const ttlMs = (Number.isFinite(CXC_VENTAS_CACHE_MINUTES)
+    ? CXC_VENTAS_CACHE_MINUTES
+    : 15) * 60 * 1000;
+  ventasCache.set(cacheKey, payload, ttlMs);
+  return payload;
 };
 
 const filterVentasPayload = (payload, cedula) => {
@@ -640,6 +679,17 @@ const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
   if (maxStartDate > startDate) {
     startDate.setTime(maxStartDate.getTime());
   }
+  const summaryKey = [
+    'summary',
+    normalizeId(cedula),
+    startDate.getFullYear(),
+    startDate.getMonth() + 1,
+    endDate.getFullYear(),
+    endDate.getMonth() + 1,
+    maxMonths,
+  ].join('|');
+  const cached = ventasCache.get(summaryKey);
+  if (cached) return cached;
   const rows = [];
   const cursor = new Date(startDate);
 
@@ -667,6 +717,10 @@ const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
+  const ttlMs = (Number.isFinite(CXC_VENTAS_CACHE_MINUTES)
+    ? CXC_VENTAS_CACHE_MINUTES
+    : 15) * 60 * 1000;
+  ventasCache.set(summaryKey, rows, ttlMs);
   return rows;
 };
 
