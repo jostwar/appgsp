@@ -10,20 +10,31 @@ export default function MembershipScreen() {
   const navigation = useNavigation();
   const formatName = (value) =>
     value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const toTitleCase = (value) =>
+    value
+      ? value
+          .toLowerCase()
+          .split(' ')
+          .filter(Boolean)
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+      : '';
+  const pickFirstLast = (value) => {
+    const tokens = formatName(value).split(' ').filter(Boolean);
+    if (tokens.length === 0) return '';
+    if (tokens.length === 1) return tokens[0];
+    return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+  };
   const memberName = (() => {
     const firstName = user?.firstName?.trim() || '';
     const lastName = user?.lastName?.trim() || '';
     if (firstName || lastName) {
-      return `${firstName} ${lastName}`.trim();
+      return toTitleCase(`${firstName} ${lastName}`.trim());
     }
-    const fullName = formatName(user?.fullName);
-    if (fullName) {
-      return fullName.split(' ').slice(0, 2).join(' ');
-    }
-    const fallbackName = formatName(user?.name);
-    if (fallbackName) {
-      return fallbackName.split(' ').slice(0, 2).join(' ');
-    }
+    const fullName = pickFirstLast(user?.fullName);
+    if (fullName) return toTitleCase(fullName);
+    const fallbackName = pickFirstLast(user?.name);
+    if (fallbackName) return toTitleCase(fallbackName);
     return 'Cliente GSP';
   })();
   const validUntil = '31 dic 2026';
