@@ -33,6 +33,11 @@ const CLIENTS_CACHE_MAX_PAGES = Number(process.env.CXC_CLIENTS_MAX_PAGES || 50);
 const normalizeKey = (value) => String(value || '').toLowerCase();
 const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
 const stripLeadingZeros = (value) => String(value || '').replace(/^0+/, '');
+const normalizeMetaList = (meta) => {
+  if (Array.isArray(meta)) return meta;
+  if (!meta || typeof meta !== 'object') return [];
+  return Object.entries(meta).map(([key, value]) => ({ key, value }));
+};
 const resolveWooMetaValue = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number') return String(value);
@@ -2792,7 +2797,7 @@ app.get('/api/woo/cedulas', async (req, res) => {
 });
 
 const buildWooUserResponse = ({ data, profile, customer }) => {
-  const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
+  const metaData = normalizeMetaList(customer?.meta_data);
   const metaKeys = [
     'gsp_nit',
     'gsp_cedula',
@@ -2822,8 +2827,8 @@ const buildWooUserResponse = ({ data, profile, customer }) => {
     data?.user_display_name ||
     '';
   const profileMeta = [
-    ...(Array.isArray(profile?.meta_data) ? profile.meta_data : []),
-    ...(Array.isArray(profile?.meta) ? profile.meta : []),
+    ...normalizeMetaList(profile?.meta_data),
+    ...normalizeMetaList(profile?.meta),
   ];
   const profileCedula = findWooMetaValue(profileMeta, metaKeys);
   const resolvedCedula = normalizeId(cedula || profileCedula || '');
