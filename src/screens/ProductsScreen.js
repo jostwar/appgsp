@@ -306,7 +306,8 @@ export default function ProductsScreen({ route, navigation }) {
     setSelectedCategoryName(null);
     resetAppliedFilters();
     updateSearch(initialSearchQuery, { immediate: true });
-  }, [initialSearchQuery, updateSearch, resetAppliedFilters]);
+    navigation?.setParams?.({ searchQuery: null });
+  }, [initialSearchQuery, updateSearch, resetAppliedFilters, navigation]);
 
   useEffect(() => {
     if (!pendingCategoryName || categories.length === 0) return;
