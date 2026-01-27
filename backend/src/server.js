@@ -228,6 +228,37 @@ const CARTERA_SELLER_KEYS = [
   'vendedor_asignado',
   'asesor',
 ];
+const CARTERA_CUPO_KEYS = [
+  'cupo',
+  'cupo_credito',
+  'credito',
+  'creditolimit',
+  'cli_cupcre',
+  'cli_cupcred',
+  'limite_credito',
+];
+const CARTERA_SALDO_KEYS = [
+  'saldo',
+  'saldo_total',
+  'saldototal',
+  'total',
+  'total_cartera',
+  'cartera_total',
+];
+const CARTERA_POR_VENCER_KEYS = [
+  'por_vencer',
+  'porvencer',
+  'saldo_por_vencer',
+  'no_vencido',
+  'saldo_no_vencido',
+  'por_vencer_total',
+];
+const CARTERA_VENCIDO_KEYS = [
+  'vencido',
+  'saldo_vencido',
+  'vencido_total',
+  'cartera_vencida',
+];
 
 const findValueByKeys = (data, keys = []) => {
   if (!data) return '';
@@ -477,6 +508,14 @@ const formatDateTime = (value, { endOfDay = false } = {}) => {
     parsed.setHours(0, 0, 0, 0);
   }
   return parsed.toISOString();
+};
+
+const parseCarteraNumber = (value) => {
+  if (typeof value === 'number') return value;
+  const raw = String(value || '').replace(/[^\d.-]/g, '');
+  if (!raw) return 0;
+  const numeric = Number.parseFloat(raw);
+  return Number.isNaN(numeric) ? 0 : numeric;
 };
 
 const formatDateOnly = (value) => {
@@ -2879,6 +2918,44 @@ app.get('/api/cxc/estado-cartera', async (req, res) => {
       return res.json(data);
     }
     return res.json(data.result ?? data.response ?? data.parsed ?? {});
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar estado de cartera',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
+  try {
+    const { cedula, vendedor, debug } = req.query;
+    if (!cedula) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    const fecha = formatDateTime(new Date());
+    const data = await cxc.estadoCartera({ fecha, cedula, vendedor });
+    if (debug) {
+      return res.json(data);
+    }
+    const payload = parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {});
+    const cupoCredito = parseCarteraNumber(
+      findValueByKeys(payload, CARTERA_CUPO_KEYS)
+    );
+    const saldoCartera = parseCarteraNumber(
+      findValueByKeys(payload, CARTERA_SALDO_KEYS)
+    );
+    const saldoPorVencer = parseCarteraNumber(
+      findValueByKeys(payload, CARTERA_POR_VENCER_KEYS)
+    );
+    const saldoVencido = parseCarteraNumber(
+      findValueByKeys(payload, CARTERA_VENCIDO_KEYS)
+    );
+    return res.json({
+      cupoCredito,
+      saldoCartera,
+      saldoPorVencer,
+      saldoVencido,
+    });
   } catch (error) {
     return res.status(500).json({
       error: 'No se pudo consultar estado de cartera',

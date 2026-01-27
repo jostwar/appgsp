@@ -64,3 +64,9 @@ export function getWooOrders({ cedula, customerId, email, page, perPage } = {}) 
     params: { cedula, customerId, email, page, perPage },
   });
 }
+
+export function getCarteraSummary({ cedula, vendedor } = {}) {
+  return request('/api/cxc/estado-cartera/summary', {
+    params: { cedula, vendedor },
+  });
+}

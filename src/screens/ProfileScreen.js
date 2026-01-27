@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../store/auth';
-import { getWooOrders } from '../api/backend';
+import { getCarteraSummary, getWooOrders } from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -58,6 +58,8 @@ export default function ProfileScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [ordersStatus, setOrdersStatus] = useState('idle');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [carteraStatus, setCarteraStatus] = useState(null);
+  const [carteraState, setCarteraState] = useState('idle');
   const customerLevel = 'Purple Partner';
   const levelColors = {
     'Blue Partner': '#3B82F6',
@@ -120,15 +122,36 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [user?.cedula, user?.customerId, user?.email]);
 
+  const fetchCartera = useCallback(async () => {
+    if (!user?.cedula) {
+      setCarteraStatus(null);
+      setCarteraState('missing');
+      return;
+    }
+    setCarteraState('loading');
+    try {
+      const data = await getCarteraSummary({ cedula: user?.cedula });
+      setCarteraStatus(data || null);
+      setCarteraState('ready');
+    } catch (_error) {
+      setCarteraStatus(null);
+      setCarteraState('error');
+    }
+  }, [user?.cedula]);
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
+  useEffect(() => {
+    fetchCartera();
+  }, [fetchCartera]);
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadPrefs(), fetchOrders()]);
+    await Promise.all([loadPrefs(), fetchOrders(), fetchCartera()]);
     setIsRefreshing(false);
-  }, [loadPrefs, fetchOrders]);
+  }, [loadPrefs, fetchOrders, fetchCartera]);
 
   const orderItems = useMemo(
     () =>
@@ -213,6 +236,48 @@ export default function ProfileScreen({ navigation }) {
           >
             <Text style={styles.primaryButtonText}>Conocer planes</Text>
           </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Estado de cartera</Text>
+          {carteraState === 'loading' ? (
+            <Text style={styles.sectionHint}>Consultando cartera...</Text>
+          ) : carteraState === 'error' ? (
+            <Text style={styles.sectionHint}>No se pudo consultar cartera.</Text>
+          ) : carteraState === 'missing' ? (
+            <Text style={styles.sectionHint}>No hay cédula asociada.</Text>
+          ) : (
+            <View style={styles.preferenceCard}>
+              <View>
+                <Text style={styles.preferenceLabel}>Cupo crédito</Text>
+                <Text style={styles.preferenceValue}>
+                  {formatCop(carteraStatus?.cupoCredito || 0)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.preferenceLabel}>Saldo cartera</Text>
+                <Text style={styles.preferenceValue}>
+                  {formatCop(carteraStatus?.saldoCartera || 0)}
+                </Text>
+              </View>
+            </View>
+          )}
+          {carteraState === 'ready' ? (
+            <View style={styles.preferenceCard}>
+              <View>
+                <Text style={styles.preferenceLabel}>Por vencer</Text>
+                <Text style={styles.preferenceValue}>
+                  {formatCop(carteraStatus?.saldoPorVencer || 0)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.preferenceLabel}>Vencido</Text>
+                <Text style={styles.preferenceValue}>
+                  {formatCop(carteraStatus?.saldoVencido || 0)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.section}>
