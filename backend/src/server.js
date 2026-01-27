@@ -2767,6 +2767,26 @@ app.post('/api/woo/login', async (req, res) => {
       profile?.name ||
       data?.user_display_name ||
       '';
+    const metaKeys = [
+      'gsp_nit',
+      'gsp_cedula',
+      'gsp_cedula_nit',
+      'billing_cedula',
+      'billing_nit',
+      'cedula',
+      'nit',
+      'identificacion',
+      'documento',
+    ];
+    const profileMeta = [
+      ...(Array.isArray(profile?.meta_data) ? profile.meta_data : []),
+      ...(Array.isArray(profile?.meta) ? profile.meta : []),
+    ];
+    const profileCedula = profileMeta.find((item) => {
+      const key = String(item?.key || '').toLowerCase();
+      return metaKeys.some((candidate) => key === candidate || key.includes(candidate));
+    })?.value;
+    const resolvedCedula = normalizeId(cedula || profileCedula || '');
     return res.json({
       token: data?.token,
       user: {
@@ -2778,13 +2798,36 @@ app.post('/api/woo/login', async (req, res) => {
         fullName,
         nicename: data?.user_nicename,
         customerId: customer?.id || null,
-        cedula: cedula || null,
+        cedula: resolvedCedula || null,
         phone,
       },
     });
   } catch (error) {
     return res.status(401).json({
       error: 'Credenciales inválidas',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/woo/cedula-by-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: 'email es requerido' });
+    }
+    const customer = await woo.findCustomerByEmail(email);
+    if (!customer) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    const cedula = woo.getCustomerCedula(customer);
+    return res.json({
+      cedula: cedula || null,
+      customerId: customer?.id || null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo obtener cédula por email',
       details: error?.response?.data || error?.message,
     });
   }

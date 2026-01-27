@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../store/auth';
-import { getCarteraSummary, getWooOrders } from '../api/backend';
+import { getCarteraSummary, getCedulaByEmail, getWooOrders } from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -39,7 +39,7 @@ export default function ProfileScreen({ navigation }) {
     if (tokens.length === 1) return tokens[0];
     return `${tokens[0]} ${tokens[tokens.length - 1]}`;
   };
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateUser } = useAuth();
   const displayName = (() => {
     const firstName = user?.firstName?.trim() || '';
     const lastName = user?.lastName?.trim() || '';
@@ -60,6 +60,7 @@ export default function ProfileScreen({ navigation }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [carteraStatus, setCarteraStatus] = useState(null);
   const [carteraState, setCarteraState] = useState('idle');
+  const [resolvedCedula, setResolvedCedula] = useState(user?.cedula || null);
   const customerLevel = 'Purple Partner';
   const levelColors = {
     'Blue Partner': '#3B82F6',
@@ -123,25 +124,51 @@ export default function ProfileScreen({ navigation }) {
   }, [user?.cedula, user?.customerId, user?.email]);
 
   const fetchCartera = useCallback(async () => {
-    if (!user?.cedula) {
+    const cedulaValue = resolvedCedula || user?.cedula;
+    if (!cedulaValue) {
       setCarteraStatus(null);
       setCarteraState('missing');
       return;
     }
     setCarteraState('loading');
     try {
-      const data = await getCarteraSummary({ cedula: user?.cedula });
+      const data = await getCarteraSummary({ cedula: cedulaValue });
       setCarteraStatus(data || null);
       setCarteraState('ready');
     } catch (_error) {
       setCarteraStatus(null);
       setCarteraState('error');
     }
-  }, [user?.cedula]);
+  }, [user?.cedula, resolvedCedula]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  useEffect(() => {
+    setResolvedCedula(user?.cedula || null);
+  }, [user?.cedula]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const resolveCedula = async () => {
+      if (user?.cedula || !user?.email) return;
+      try {
+        const data = await getCedulaByEmail({ email: user.email });
+        if (!isMounted) return;
+        if (data?.cedula) {
+          setResolvedCedula(data.cedula);
+          await updateUser({ cedula: data.cedula, customerId: data?.customerId });
+        }
+      } catch (_error) {
+        // ignore cedula lookup errors
+      }
+    };
+    resolveCedula();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.cedula, user?.email, updateUser]);
 
   useEffect(() => {
     fetchCartera();
