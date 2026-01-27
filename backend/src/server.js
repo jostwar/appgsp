@@ -32,6 +32,7 @@ const CLIENTS_CACHE_MAX_PAGES = Number(process.env.CXC_CLIENTS_MAX_PAGES || 50);
 
 const normalizeKey = (value) => String(value || '').toLowerCase();
 const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
+const stripLeadingZeros = (value) => String(value || '').replace(/^0+/, '');
 
 const toNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -155,14 +156,29 @@ const CLIENT_ID_KEYS = [
   'identificacion',
   'identificación',
   'cli_cedula',
+  'cli_documento',
+  'cli_identificacion',
   'strcli_cedula',
   'strcli_nit',
   'strcli_documento',
+  'strcli_identificacion',
+  'strcli_doc',
   'strpar_cedula',
   'strpar_nit',
   'strpar_documento',
+  'strpar_identificacion',
+  'strpar_doc',
   'cliente_nit',
   'cliente_cedula',
+  'nit_cliente',
+  'nitcliente',
+  'documento_cliente',
+  'identificacion_cliente',
+  'numero_documento',
+  'num_documento',
+  'idcliente',
+  'cliente_id',
+  'clienteid',
 ];
 const CLIENT_NAME_KEYS = [
   'nombre',
@@ -298,6 +314,11 @@ const matchesCedulaValue = (value, target) => {
   const normalizedValue = normalizeId(value);
   if (!normalizedValue) return false;
   if (normalizedValue === target) return true;
+  const valueNoZeros = stripLeadingZeros(normalizedValue);
+  const targetNoZeros = stripLeadingZeros(target);
+  if (valueNoZeros && targetNoZeros && valueNoZeros === targetNoZeros) {
+    return true;
+  }
   const diff = Math.abs(normalizedValue.length - target.length);
   if (diff > 1) return false;
   return normalizedValue.startsWith(target) || target.startsWith(normalizedValue);
@@ -616,8 +637,11 @@ const buildVentasParams = ({ cedula, fecha, from, to } = {}) => {
   const fromValue = formatDateOnly(rangeStart);
   const toValue = formatDateOnly(rangeEnd);
   const objPar_Objeto = CXC_TOKEN;
+  const normalizedCedula = normalizeId(cedula);
   return {
     strPar_Empresa: CXC_EMPRESA,
+    strPar_Nit: normalizedCedula || undefined,
+    strPar_Cedula: normalizedCedula || undefined,
     datPar_FecIni: fromValue,
     datPar_FecFin: toValue,
     objPar_Objeto,
@@ -2751,13 +2775,58 @@ app.post('/api/woo/login', async (req, res) => {
       customer = null;
     }
     const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
-    const gspNitMeta = metaData.find(
-      (meta) => String(meta?.key || '').toLowerCase() === 'gsp_nit'
-    )?.value;
-    const cedula = normalizeId(gspNitMeta || (customer ? woo.getCustomerCedula(customer) : null));
+    const resolveMetaValue = (value) => {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string' || typeof value === 'number') return String(value);
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          const resolved = resolveMetaValue(entry);
+          if (resolved) return resolved;
+        }
+        return '';
+      }
+      if (typeof value === 'object') {
+        return resolveMetaValue(
+          value.value ??
+            value.id ??
+            value.cedula ??
+            value.nit ??
+            value.gsp_nit ??
+            value.gsp_cedula ??
+            ''
+        );
+      }
+      return '';
+    };
+    const findMetaValue = (meta, keys) => {
+      const normalized = keys.map((key) => String(key || '').toLowerCase());
+      for (const key of normalized) {
+        const entry = meta.find((item) => String(item?.key || '').toLowerCase() === key);
+        const resolved = resolveMetaValue(entry?.value);
+        if (resolved) return resolved;
+      }
+      for (const key of normalized) {
+        const entry = meta.find((item) => String(item?.key || '').toLowerCase().includes(key));
+        const resolved = resolveMetaValue(entry?.value);
+        if (resolved) return resolved;
+      }
+      return '';
+    };
+    const metaKeys = [
+      'gsp_nit',
+      'gsp_cedula',
+      'gsp_cedula_nit',
+      'billing_cedula',
+      'billing_nit',
+      'cedula',
+      'nit',
+      'identificacion',
+      'documento',
+    ];
+    const metaCedula = findMetaValue(metaData, metaKeys);
+    const cedula = normalizeId(metaCedula || (customer ? woo.getCustomerCedula(customer) : null));
     const billing = customer?.billing || {};
     const shipping = customer?.shipping || {};
-    const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
     const gspPhone = metaData.find(
       (meta) => String(meta?.key || '').toLowerCase() === 'gsp_phone'
     )?.value;
@@ -2771,25 +2840,11 @@ app.post('/api/woo/login', async (req, res) => {
       profile?.name ||
       data?.user_display_name ||
       '';
-    const metaKeys = [
-      'gsp_nit',
-      'gsp_cedula',
-      'gsp_cedula_nit',
-      'billing_cedula',
-      'billing_nit',
-      'cedula',
-      'nit',
-      'identificacion',
-      'documento',
-    ];
     const profileMeta = [
       ...(Array.isArray(profile?.meta_data) ? profile.meta_data : []),
       ...(Array.isArray(profile?.meta) ? profile.meta : []),
     ];
-    const profileCedula = profileMeta.find((item) => {
-      const key = String(item?.key || '').toLowerCase();
-      return metaKeys.some((candidate) => key === candidate || key.includes(candidate));
-    })?.value;
+    const profileCedula = findMetaValue(profileMeta, metaKeys);
     const resolvedCedula = normalizeId(cedula || profileCedula || '');
     return res.json({
       token: data?.token,
