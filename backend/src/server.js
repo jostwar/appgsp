@@ -13,6 +13,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 const CXC_POINTS_DIVISOR = Number(process.env.CXC_POINTS_DIVISOR || 10000);
 const DEFAULT_CXC_VENDEDOR = String(process.env.CXC_DEFAULT_VENDEDOR || '').trim();
+const CXC_TOKEN = process.env.CXC_TOKEN;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
