@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
-import { getRewardsCatalog, getRewardsPoints } from '../api/backend';
+import { getCarteraSummary, getRewardsCatalog, getRewardsPoints } from '../api/backend';
 import { useAuth } from '../store/auth';
 
 export default function RewardsScreen() {
@@ -21,6 +21,8 @@ export default function RewardsScreen() {
   const [pointsStatus, setPointsStatus] = useState('idle');
   const [pointsData, setPointsData] = useState(null);
   const [pointsError, setPointsError] = useState('');
+  const [carteraStatus, setCarteraStatus] = useState(null);
+  const [carteraState, setCarteraState] = useState('idle');
   const customerLevel = pointsData?.level || 'Sin nivel';
   const rebatePercent = Number(pointsData?.rebate || 0);
   const levelThresholds = [
@@ -151,6 +153,38 @@ export default function RewardsScreen() {
     };
   }, [user?.cedula]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadCartera = async () => {
+      if (!user?.cedula) {
+        setCarteraStatus(null);
+        setCarteraState('missing');
+        return;
+      }
+      setCarteraState('loading');
+      try {
+        const data = await getCarteraSummary({ cedula: user.cedula });
+        if (isMounted) {
+          setCarteraStatus(data || null);
+          setCarteraState('ready');
+        }
+      } catch (_error) {
+        if (isMounted) {
+          setCarteraStatus(null);
+          setCarteraState('error');
+        }
+      }
+    };
+
+    loadCartera();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.cedula]);
+
+  const hasOverdueBalance = Number(carteraStatus?.saldoVencido || 0) > 0;
+  const canRequestCashback = carteraState === 'ready' && !hasOverdueBalance;
+
   const rewardsToShow = rewards.length ? rewards : fallbackRewards;
 
   return (
@@ -226,6 +260,28 @@ export default function RewardsScreen() {
           <View style={styles.levelRow}>
             <View style={[styles.levelDot, { backgroundColor: levelColor }]} />
             <Text style={styles.levelText}>{customerLevel}</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.actionCard}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                !canRequestCashback && styles.primaryButtonDisabled,
+                pressed && styles.pressed,
+              ]}
+              disabled={!canRequestCashback}
+            >
+              <Text style={styles.primaryButtonText}>Solicitar cashback</Text>
+            </Pressable>
+            {carteraState === 'error' ? (
+              <Text style={styles.pointsHint}>No se pudo validar cartera.</Text>
+            ) : hasOverdueBalance ? (
+              <Text style={styles.pointsHint}>
+                Tienes saldo vencido. Contacta a cartera para solicitar cashback.
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -440,6 +496,12 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
   },
+  actionCard: {
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: 20,
+    gap: spacing.sm,
+  },
   sectionTitle: {
     color: colors.textMain,
     fontSize: 20,
@@ -500,6 +562,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     marginTop: spacing.sm,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5,
   },
   primaryButtonText: {
     color: colors.buttonText,
