@@ -7,8 +7,10 @@ import {
   Image,
   ImageBackground,
   Pressable,
+  Alert,
   Linking,
   TextInput,
+  Platform,
   useWindowDimensions,
   RefreshControl,
 } from 'react-native';
@@ -17,16 +19,58 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Location from 'expo-location';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { searchProducts } from '../api/woocommerce';
-import { getHomeOffers, getWeeklyProduct } from '../api/backend';
+import { getHomeOffers, getWeeklyProduct, registerPushToken } from '../api/backend';
+import { useAuth } from '../store/auth';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
+  const { user } = useAuth();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
   ];
+  const registerForPushNotificationsAsync = async () => {
+    if (!Device.isDevice) return null;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return null;
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+    return tokenResponse?.data || null;
+  };
+  const handleNotificationsPress = useCallback(async () => {
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (!token) {
+        Alert.alert(
+          'Notificaciones',
+          'Activa las notificaciones en Ajustes para recibir alertas.',
+          Linking.openSettings
+            ? [{ text: 'Ir a Ajustes', onPress: () => Linking.openSettings() }, { text: 'OK' }]
+            : [{ text: 'OK' }]
+        );
+        return;
+      }
+      await registerPushToken({
+        token,
+        cedula: user?.cedula,
+        email: user?.email,
+        platform: Platform.OS,
+      });
+      Alert.alert('Notificaciones', 'Notificaciones activadas.');
+    } catch (_error) {
+      Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
+    }
+  }, [user?.cedula, user?.email]);
   const services = useMemo(
     () => [
       'Cotizaciones y pedidos en minutos',
@@ -485,7 +529,7 @@ export default function HomeScreen() {
               returnKeyType="search"
             />
           </View>
-          <Pressable style={styles.iconButton}>
+          <Pressable style={styles.iconButton} onPress={handleNotificationsPress}>
             <Ionicons name="notifications-outline" size={20} color={colors.textMain} />
           </Pressable>
         </View>
