@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Pressable,
   Alert,
+  Modal,
   Linking,
   TextInput,
   Platform,
@@ -18,6 +19,7 @@ import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -30,10 +32,25 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
   const { user } = useAuth();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
   ];
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const raw = await AsyncStorage.getItem('gsp_notifications');
+      const parsed = raw ? JSON.parse(raw) : [];
+      setNotifications(Array.isArray(parsed) ? parsed : []);
+    } catch (_error) {
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
   const registerForPushNotificationsAsync = async () => {
     if (!Device.isDevice) return null;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -66,11 +83,23 @@ export default function HomeScreen() {
         email: user?.email,
         platform: Platform.OS,
       });
-      Alert.alert('Notificaciones', 'Notificaciones activadas.');
+      await loadNotifications();
+      setNotificationsOpen(true);
     } catch (_error) {
       Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
     }
-  }, [user?.cedula, user?.email]);
+  }, [loadNotifications, user?.cedula, user?.email]);
+  const handleNotificationsClose = useCallback(() => {
+    setNotificationsOpen(false);
+  }, []);
+  const handleClearNotifications = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem('gsp_notifications');
+      setNotifications([]);
+    } catch (_error) {
+      // ignore
+    }
+  }, []);
   const services = useMemo(
     () => [
       'Cotizaciones y pedidos en minutos',
@@ -503,6 +532,48 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <Modal
+        visible={notificationsOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleNotificationsClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Notificaciones</Text>
+              <Pressable style={styles.modalClose} onPress={handleNotificationsClose}>
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            {notificationsLoading ? (
+              <Text style={styles.modalHint}>Cargando...</Text>
+            ) : notifications.length === 0 ? (
+              <Text style={styles.modalHint}>No hay notificaciones.</Text>
+            ) : (
+              <ScrollView style={styles.modalList}>
+                {notifications.map((item) => (
+                  <View key={item.id} style={styles.modalItem}>
+                    <Text style={styles.modalItemTitle}>{item.title || 'GSPRewards'}</Text>
+                    {item.body ? (
+                      <Text style={styles.modalItemBody}>{item.body}</Text>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.modalClear,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleClearNotifications}
+            >
+              <Text style={styles.modalClearText}>Limpiar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -1098,6 +1169,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 10, 18, 0.65)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: colors.textMain,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalClose: {
+    padding: 4,
+  },
+  modalHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  modalList: {
+    maxHeight: 320,
+  },
+  modalItem: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  modalItemTitle: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalItemBody: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  modalClear: {
+    alignSelf: 'flex-end',
+  },
+  modalClearText: {
+    color: colors.textMuted,
+    fontSize: 13,
   },
   locationWidget: {
     backgroundColor: colors.surface,

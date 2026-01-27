@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Image, Linking, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import HomeScreen from './src/screens/HomeScreen';
 import RewardsScreen from './src/screens/RewardsScreen';
@@ -22,6 +23,31 @@ import { AuthProvider, useAuth } from './src/store/auth';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+const NOTIFICATIONS_STORAGE_KEY = 'gsp_notifications';
+
+const persistNotification = async (notification) => {
+  if (!notification) return;
+  try {
+    const content = notification?.request?.content || {};
+    const identifier = notification?.request?.identifier || '';
+    const payload = {
+      id: String(identifier || Date.now()),
+      title: String(content.title || '').trim(),
+      body: String(content.body || '').trim(),
+      data: content.data || {},
+      receivedAt: new Date().toISOString(),
+    };
+    const raw = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(list) && list.some((item) => item?.id === payload.id)) {
+      return;
+    }
+    const next = Array.isArray(list) ? [payload, ...list] : [payload];
+    await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next.slice(0, 50)));
+  } catch (_error) {
+    // ignore storage errors
+  }
+};
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -195,15 +221,24 @@ function RootNavigator() {
 
 export default function App() {
   useEffect(() => {
+    const receivedSubscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        persistNotification(notification);
+      }
+    );
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const url = response?.notification?.request?.content?.data?.url;
+        persistNotification(response?.notification);
         if (url) {
           Linking.openURL(String(url)).catch(() => null);
         }
       }
     );
-    return () => subscription.remove();
+    return () => {
+      receivedSubscription.remove();
+      subscription.remove();
+    };
   }, []);
   return (
     <AuthProvider>
