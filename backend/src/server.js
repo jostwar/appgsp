@@ -802,6 +802,7 @@ const renderRewardsPortal = ({
   gspCareActive = false,
   gspCareList = [],
   section = 'inicio',
+  refreshStatus = '',
 } = {}) => {
   const rewardsList = rewards;
   const monthlyRows = Array.isArray(monthlySummary?.rows) ? monthlySummary.rows : [];
@@ -1243,6 +1244,17 @@ const renderRewardsPortal = ({
               )}" />
               <button type="submit">Consultar</button>
             </form>
+            <form class="form" method="post" action="/admin/rewards/refresh-clients">
+              <input type="hidden" name="section" value="clientes" />
+              <button type="submit" class="btn-secondary">Refrescar clientes</button>
+            </form>
+            ${
+              refreshStatus === 'ok'
+                ? `<div class="muted">Clientes refrescados manualmente.</div>`
+                : refreshStatus === 'error'
+                  ? `<div class="label">No se pudo refrescar clientes.</div>`
+                  : ''
+            }
             <div id="cedula-suggestions" class="suggestions" style="display:none;"></div>
             ${
               !vendedorInput && defaultVendedor
@@ -1990,6 +2002,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
+  const refreshStatus = String(req.query.refresh || '').trim();
   const vendedorInput = String(req.query.vendedor || '').trim();
   const vendedor = vendedorInput || DEFAULT_CXC_VENDEDOR;
   const allowFallback =
@@ -2013,6 +2026,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
+        refreshStatus,
       })
     );
   }
@@ -2061,6 +2075,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
+        refreshStatus,
       })
     );
   } catch (error) {
@@ -2079,7 +2094,22 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
+        refreshStatus,
       })
+    );
+  }
+});
+
+app.post('/admin/rewards/refresh-clients', adminAuth, async (req, res) => {
+  const section = String(req.body?.section || 'clientes').trim() || 'clientes';
+  try {
+    await refreshClientsCache();
+    return res.redirect(
+      `/admin/rewards?section=${encodeURIComponent(section)}&refresh=ok`
+    );
+  } catch (_error) {
+    return res.redirect(
+      `/admin/rewards?section=${encodeURIComponent(section)}&refresh=error`
     );
   }
 });

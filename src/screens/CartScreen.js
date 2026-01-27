@@ -1,6 +1,14 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../theme';
 import { useCart } from '../store/cart';
 import { createOrder, getOrderPayUrl } from '../api/woocommerce';
@@ -19,6 +27,28 @@ export default function CartScreen({ navigation }) {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(Number(value || 0));
+  const getBrandLabel = (product) => {
+    if (Array.isArray(product?.brands) && product.brands.length > 0) {
+      const brand = product.brands[0];
+      return typeof brand === 'string' ? brand : brand?.name;
+    }
+    if (product?.brand) {
+      return typeof product.brand === 'string' ? product.brand : product.brand?.name;
+    }
+    if (Array.isArray(product?.attributes)) {
+      const brandAttr = product.attributes.find((attr) =>
+        String(attr?.name || '').toLowerCase().includes('marca')
+      );
+      const option =
+        Array.isArray(brandAttr?.options) && brandAttr.options.length > 0
+          ? brandAttr.options[0]
+          : brandAttr?.option;
+      if (option) {
+        return option;
+      }
+    }
+    return '';
+  };
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -42,37 +72,72 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.countLabel}>Productos en carrito</Text>
           <Text style={styles.countValue}>{totalItems}</Text>
         </View>
-        {items.map((item) => (
-          <View key={item.id} style={styles.itemCard}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemTitle}>{item.name}</Text>
-              <Text style={styles.itemMeta}>
-                {item.quantity} x {formatCop(item.price)}
-              </Text>
-              <View style={styles.quantityRow}>
-                <Pressable
-                  style={pressableStyle(styles.quantityButton)}
-                  onPress={() => decreaseItem(item.id)}
-                >
-                  <Text style={styles.quantityButtonText}>-</Text>
-                </Pressable>
-                <Text style={styles.quantityValue}>{item.quantity}</Text>
-                <Pressable
-                  style={pressableStyle(styles.quantityButton)}
-                  onPress={() => increaseItem(item.id)}
-                >
-                  <Text style={styles.quantityButtonText}>+</Text>
-                </Pressable>
+        {items.map((item) => {
+          const image =
+            item.images && item.images.length > 0
+              ? item.images[0].src
+              : item.image && item.image !== 'null'
+                ? item.image
+                : null;
+          const brandLabel = getBrandLabel(item);
+          const regularPrice = Number(item.regular_price || 0);
+          const currentPrice = Number(item.price || 0);
+          const showDiscount = regularPrice > currentPrice && currentPrice > 0;
+          const discountPercent = showDiscount
+            ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
+            : 0;
+
+          return (
+            <View key={item.id} style={styles.itemCard}>
+              <View style={styles.itemMedia}>
+                {image ? (
+                  <Image source={{ uri: image }} style={styles.itemImage} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imageText}>Sin imagen</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemTitle} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                {brandLabel ? (
+                  <Text style={styles.itemBrand}>Marca: {brandLabel}</Text>
+                ) : null}
+                {item.sku ? <Text style={styles.itemSku}>SKU: {item.sku}</Text> : null}
+                <View style={styles.priceRow}>
+                  {showDiscount ? (
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountText}>-{discountPercent}%</Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.priceValue}>{formatCop(item.price)}</Text>
+                  {showDiscount ? (
+                    <Text style={styles.priceOld}>{formatCop(regularPrice)}</Text>
+                  ) : null}
+                </View>
+                <View style={styles.controlsRow}>
+                  <View style={styles.qtyPill}>
+                    <Pressable
+                      style={pressableStyle(styles.qtyIconButton)}
+                      onPress={() => decreaseItem(item.id)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#2563eb" />
+                    </Pressable>
+                    <Text style={styles.qtyValue}>{item.quantity}</Text>
+                    <Pressable
+                      style={pressableStyle(styles.qtyIconButton)}
+                      onPress={() => increaseItem(item.id)}
+                    >
+                      <Ionicons name="add" size={18} color="#2563eb" />
+                    </Pressable>
+                  </View>
+                </View>
               </View>
             </View>
-            <Pressable
-              style={pressableStyle(styles.secondaryButton)}
-              onPress={() => removeItem(item.id)}
-            >
-              <Text style={styles.secondaryButtonText}>Quitar</Text>
-            </Pressable>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={[styles.footer, { paddingBottom: spacing.xl + tabBarHeight }]}>
@@ -80,9 +145,13 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.totalLabel}>Subtotal</Text>
           <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>
         </View>
+        <View style={styles.shippingRow}>
+          <Text style={styles.shippingLabel}>Envío</Text>
+          <Text style={styles.shippingValue}>Se calcula en el checkout</Text>
+        </View>
         <Text style={styles.taxNote}>IVA incluido</Text>
         <View style={styles.pointsRow}>
-          <Text style={styles.pointsLabel}>Puntos acumulados</Text>
+          <Text style={styles.pointsLabel}>Cashback acumulado</Text>
           <Text style={styles.pointsValue}>{pointsTotal}</Text>
         </View>
         <Pressable
@@ -152,48 +221,99 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: spacing.md,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  itemMedia: {
+    width: 78,
+    height: 78,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageText: {
+    color: colors.textMuted,
+    fontSize: 11,
   },
   itemInfo: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
   itemTitle: {
     color: colors.textMain,
     fontWeight: '600',
     fontSize: 15,
   },
-  itemMeta: {
-    color: colors.textMuted,
-    fontSize: 13,
+  itemBrand: {
+    color: colors.textSoft,
+    fontSize: 12,
   },
-  quantityRow: {
+  itemSku: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
+    gap: spacing.xs,
   },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  discountBadge: {
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
   },
-  quantityButtonText: {
+  discountText: {
+    color: '#f8fafc',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  priceValue: {
     color: colors.textMain,
     fontSize: 16,
     fontWeight: '700',
   },
-  quantityValue: {
-    color: colors.textMain,
-    fontSize: 14,
-    fontWeight: '600',
-    minWidth: 24,
+  priceOld: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textDecorationLine: 'line-through',
+  },
+  controlsRow: {
+    marginTop: spacing.xs,
+  },
+  qtyPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#e7f3ff',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  qtyIconButton: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyValue: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13,
+    minWidth: 18,
     textAlign: 'center',
   },
   footer: {
@@ -204,6 +324,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  shippingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   pointsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -212,10 +337,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
   },
+  shippingLabel: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
   totalValue: {
     color: colors.textMain,
     fontSize: 18,
     fontWeight: '700',
+  },
+  shippingValue: {
+    color: colors.textSoft,
+    fontSize: 13,
   },
   taxNote: {
     color: colors.textMuted,
