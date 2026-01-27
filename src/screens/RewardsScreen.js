@@ -10,16 +10,19 @@ import {
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
-import { getRewardsCatalog } from '../api/backend';
+import { getRewardsCatalog, getRewardsPoints } from '../api/backend';
+import { useAuth } from '../store/auth';
 
 export default function RewardsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
+  const { user } = useAuth();
   const [rewards, setRewards] = useState([]);
   const [rewardsError, setRewardsError] = useState('');
-  const cashbackBalance = 2_500_000;
-  const nextLevelPoints = 1550;
-  const customerLevel = 'Purple Partner';
-  const rebatePercent = 1;
+  const [pointsStatus, setPointsStatus] = useState('idle');
+  const [pointsData, setPointsData] = useState(null);
+  const [pointsError, setPointsError] = useState('');
+  const customerLevel = pointsData?.level || 'Sin nivel';
+  const rebatePercent = Number(pointsData?.rebate || 0);
   const baseLevelGoal = 5_000_000;
   const baseLevelRebate = 1;
   const levelThresholds = [
@@ -80,7 +83,7 @@ export default function RewardsScreen() {
   const formatCop = (value) =>
     new Intl.NumberFormat('es-CO').format(Number(value || 0));
 
-  const estimatedMonthlyPurchases = 2_500_000;
+  const estimatedMonthlyPurchases = Number(pointsData?.total || 0);
   const nextThreshold = levelThresholds.find(
     (level) => estimatedMonthlyPurchases < level.min
   );
@@ -112,6 +115,38 @@ export default function RewardsScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadPoints = async () => {
+      if (!user?.cedula) {
+        setPointsData(null);
+        setPointsStatus('missing');
+        setPointsError('');
+        return;
+      }
+      setPointsStatus('loading');
+      setPointsError('');
+      try {
+        const data = await getRewardsPoints({ cedula: user.cedula });
+        if (isMounted) {
+          setPointsData(data || null);
+          setPointsStatus('ready');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setPointsData(null);
+          setPointsStatus('error');
+          setPointsError(error?.message || 'No se pudieron cargar las compras');
+        }
+      }
+    };
+
+    loadPoints();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.cedula]);
+
   const rewardsToShow = rewards.length ? rewards : fallbackRewards;
 
   return (
@@ -133,17 +168,31 @@ export default function RewardsScreen() {
             />
             <Text style={styles.pointsLabel}>Saldo de cashback</Text>
           </View>
-          <Text style={styles.pointsValue}>
-            ${formatCop(cashbackBalance)}
-          </Text>
-          <Text style={styles.pointsHint}>Rebate nivel 1 · Compras mensuales antes de IVA</Text>
-          <Text style={styles.pointsHint}>
-            Cashback acumulado ${formatCop(cashbackBalance)} · Falta $
-            {formatCop(remainingForRebate)} para recibir cashback
-          </Text>
-          <Text style={styles.pointsHint}>
-            Al cumplir nivel 1 ganarías ${formatCop(baseLevelCashback)} de cashback
-          </Text>
+          {pointsStatus === 'loading' ? (
+            <Text style={styles.pointsHint}>Consultando compras...</Text>
+          ) : pointsStatus === 'missing' ? (
+            <Text style={styles.pointsHint}>
+              No hay cédula asociada. Cierra sesión e inicia de nuevo para sincronizar tu NIT.
+            </Text>
+          ) : pointsStatus === 'error' ? (
+            <Text style={styles.pointsHint}>{pointsError}</Text>
+          ) : (
+            <>
+              <Text style={styles.pointsValue}>
+                ${formatCop(pointsData?.cashback || 0)}
+              </Text>
+              <Text style={styles.pointsHint}>
+                Rebate {rebatePercent}% · Compras mensuales antes de IVA
+              </Text>
+              <Text style={styles.pointsHint}>
+                Compras ${formatCop(pointsData?.total || 0)} · Falta $
+                {formatCop(remainingForRebate)} para recibir cashback
+              </Text>
+              <Text style={styles.pointsHint}>
+                Al cumplir nivel 1 ganarías ${formatCop(baseLevelCashback)} de cashback
+              </Text>
+            </>
+          )}
           <View style={styles.progressHeader}>
             <Text style={styles.progressText}>{progressPercent}%</Text>
             <Text style={styles.progressText}>
