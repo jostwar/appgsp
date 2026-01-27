@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Image, Text, View } from 'react-native';
+import { Image, Linking, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import HomeScreen from './src/screens/HomeScreen';
 import RewardsScreen from './src/screens/RewardsScreen';
 import PortfolioScreen from './src/screens/PortfolioScreen';
@@ -20,6 +22,14 @@ import { AuthProvider, useAuth } from './src/store/auth';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 function MainTabs() {
   const { items } = useCart();
@@ -184,6 +194,17 @@ function RootNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const url = response?.notification?.request?.content?.data?.url;
+        if (url) {
+          Linking.openURL(String(url)).catch(() => null);
+        }
+      }
+    );
+    return () => subscription.remove();
+  }, []);
   return (
     <AuthProvider>
       <CartProvider>
