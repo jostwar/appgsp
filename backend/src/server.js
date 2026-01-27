@@ -434,9 +434,10 @@ const escapeHtml = (value) =>
 
 const formatNumber = (value) => {
   const number = Number(value || 0);
-  return new Intl.NumberFormat('es-CO').format(
-    Number.isNaN(number) ? 0 : number
-  );
+  return new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Number.isNaN(number) ? 0 : number);
 };
 
 const formatDateTime = (value, { endOfDay = false } = {}) => {
@@ -965,6 +966,9 @@ const renderRewardsPortal = ({
         font-size: 13px;
         color: var(--muted);
       }
+      .client-details .label {
+        margin-top: 6px;
+      }
       .conversion {
         display: flex;
         justify-content: space-between;
@@ -1128,140 +1132,142 @@ const renderRewardsPortal = ({
             <div class="muted">
               Si no conoces el vendedor, intentamos buscar en varias páginas.
             </div>
-            ${
-              cedula
-                ? `<div class="label" style="margin-top:12px;">NIT/Cédula: <strong>${escapeHtml(
-                    cedula
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              !cedula
-                ? `<div class="label" style="margin-top:12px;">NIT/Cédula: <strong>—</strong></div>
-                   <div class="label">Nombre: <strong>—</strong></div>
-                   <div class="label">Vendedor: <strong>—</strong></div>
-                   <div class="label">Correo: <strong>—</strong></div>
-                   <div class="label">Teléfono: <strong>—</strong></div>
-                   <div class="label">Dirección: <strong>—</strong></div>
-                   <div class="label">Cupo: <strong>—</strong></div>
-                   <div class="label">Usuario e-commerce GSP: <strong>—</strong></div>`
-                : ''
-            }
-            ${
-              displayName
-                ? `<div class="label">Nombre: <strong>${escapeHtml(
-                    displayName
-                  )}</strong></div>`
-                : `<div class="label">Nombre: <strong>—</strong></div>`
-            }
-            ${
-              cedula && !clientInfo
-                ? `<div class="label">Cliente no encontrado en ListadoClientes.</div>
-                   <div class="muted">Registros: ${
-                     clientSearch?.meta?.total ?? '—'
-                   } · Páginas: ${clientSearch?.meta?.pages ?? '—'} · Consultadas: ${
-                     clientSearch?.pagesScanned ?? '—'
-                   }${
-                     clientSearch?.vendedor
-                       ? ` · Vendedor: ${escapeHtml(clientSearch.vendedor)}`
-                       : ''
-                   }</div>`
-                : ''
-            }
-            ${
-              clientInfo?.seller
-                ? `<div class="label">Vendedor: <strong>${escapeHtml(
-                    clientInfo.seller
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.email
-                ? `<div class="label">Correo: <strong>${escapeHtml(
-                    clientInfo.email
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.phone
-                ? `<div class="label">Teléfono: <strong>${escapeHtml(
-                    clientInfo.phone
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.city
-                ? `<div class="label">Ciudad: <strong>${escapeHtml(
-                    clientInfo.city
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.address
-                ? `<div class="label">Dirección: <strong>${escapeHtml(
-                    clientInfo.address
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.cupo
-                ? `<div class="label">Cupo: <strong>${formatNumber(
-                    clientInfo.cupo
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">Usuario e-commerce GSP: <strong>${
-                    wooSummary?.status || '—'
-                  }${
-                    wooSummary?.customer?.email
-                      ? ` · ${escapeHtml(wooSummary.customer.email)}`
-                      : ''
-                  }</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.plazo
-                ? `<div class="label">Plazo: <strong>${escapeHtml(
-                    clientInfo.plazo
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              clientInfo?.birthDate
-                ? `<div class="label">Nacimiento: <strong>${escapeHtml(
-                    clientInfo.birthDate
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">Valor compras: <strong>${formatNumber(
-                    total ?? 0
-                  )}</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">Nivel: <strong>${levelValue}</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">Rebate: <strong>${rebateValue}%</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">Cashback estimado: <strong>${cashbackValue}</strong></div>`
-                : ''
-            }
-            ${
-              cedula
-                ? `<div class="label">GSP Care: <strong>${careStatus}</strong></div>`
-                : ''
-            }
+            <div class="client-details">
+              ${
+                cedula
+                  ? `<div class="label">NIT/Cédula: <strong>${escapeHtml(
+                      cedula
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                !cedula
+                  ? `<div class="label">NIT/Cédula: <strong>—</strong></div>
+                     <div class="label">Nombre: <strong>—</strong></div>
+                     <div class="label">Vendedor: <strong>—</strong></div>
+                     <div class="label">Correo: <strong>—</strong></div>
+                     <div class="label">Teléfono: <strong>—</strong></div>
+                     <div class="label">Dirección: <strong>—</strong></div>
+                     <div class="label">Cupo: <strong>—</strong></div>
+                     <div class="label">Usuario e-commerce GSP: <strong>—</strong></div>`
+                  : ''
+              }
+              ${
+                displayName
+                  ? `<div class="label">Nombre: <strong>${escapeHtml(
+                      displayName
+                    )}</strong></div>`
+                  : `<div class="label">Nombre: <strong>—</strong></div>`
+              }
+              ${
+                cedula && !clientInfo
+                  ? `<div class="label">Cliente no encontrado en ListadoClientes.</div>
+                     <div class="muted">Registros: ${
+                       clientSearch?.meta?.total ?? '—'
+                     } · Páginas: ${clientSearch?.meta?.pages ?? '—'} · Consultadas: ${
+                       clientSearch?.pagesScanned ?? '—'
+                     }${
+                       clientSearch?.vendedor
+                         ? ` · Vendedor: ${escapeHtml(clientSearch.vendedor)}`
+                         : ''
+                     }</div>`
+                  : ''
+              }
+              ${
+                clientInfo?.seller
+                  ? `<div class="label">Vendedor: <strong>${escapeHtml(
+                      clientInfo.seller
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.email
+                  ? `<div class="label">Correo: <strong>${escapeHtml(
+                      clientInfo.email
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.phone
+                  ? `<div class="label">Teléfono: <strong>${escapeHtml(
+                      clientInfo.phone
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.city
+                  ? `<div class="label">Ciudad: <strong>${escapeHtml(
+                      clientInfo.city
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.address
+                  ? `<div class="label">Dirección: <strong>${escapeHtml(
+                      clientInfo.address
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.cupo
+                  ? `<div class="label">Cupo: <strong>${formatNumber(
+                      clientInfo.cupo
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">Usuario e-commerce GSP: <strong>${
+                      wooSummary?.status || '—'
+                    }${
+                      wooSummary?.customer?.email
+                        ? ` · ${escapeHtml(wooSummary.customer.email)}`
+                        : ''
+                    }</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.plazo
+                  ? `<div class="label">Plazo: <strong>${escapeHtml(
+                      clientInfo.plazo
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                clientInfo?.birthDate
+                  ? `<div class="label">Nacimiento: <strong>${escapeHtml(
+                      clientInfo.birthDate
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">Valor compras: <strong>${formatNumber(
+                      total ?? 0
+                    )}</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">Nivel: <strong>${levelValue}</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">Rebate: <strong>${rebateValue}%</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">Cashback estimado: <strong>${cashbackValue}</strong></div>`
+                  : ''
+              }
+              ${
+                cedula
+                  ? `<div class="label">GSP Care: <strong>${careStatus}</strong></div>`
+                  : ''
+              }
+            </div>
             ${
               cedula
                 ? `<div class="label" style="margin-top:16px;">Rebate y cashback mensual</div>
