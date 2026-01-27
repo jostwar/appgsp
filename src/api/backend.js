@@ -70,9 +70,3 @@ export function getCarteraSummary({ cedula, vendedor } = {}) {
     params: { cedula, vendedor },
   });
 }
-
-export function getCedulaByEmail({ email } = {}) {
-  return request('/api/woo/cedula-by-email', {
-    params: { email },
-  });
-}

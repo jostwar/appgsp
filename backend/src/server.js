@@ -2810,29 +2810,6 @@ app.post('/api/woo/login', async (req, res) => {
   }
 });
 
-app.get('/api/woo/cedula-by-email', async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) {
-      return res.status(400).json({ error: 'email es requerido' });
-    }
-    const customer = await woo.findCustomerByEmail(email);
-    if (!customer) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
-    }
-    const cedula = woo.getCustomerCedula(customer);
-    return res.json({
-      cedula: cedula || null,
-      customerId: customer?.id || null,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: 'No se pudo obtener cédula por email',
-      details: error?.response?.data || error?.message,
-    });
-  }
-});
-
 app.get('/api/woo/orders', async (req, res) => {
   try {
     const { cedula, customerId, page, perPage, email } = req.query;

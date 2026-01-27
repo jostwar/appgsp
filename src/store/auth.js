@@ -12,14 +12,11 @@ export function AuthProvider({ children }) {
   const [sessionEmail, setSessionEmail] = useState(null);
   const [sessionPassword, setSessionPassword] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [rememberSession, setRememberSession] = useState(false);
-
   useEffect(() => {
     const restoreSession = async () => {
       try {
         const remember = await AsyncStorage.getItem(REMEMBER_STORAGE_KEY);
         if (remember !== 'true') return;
-        setRememberSession(true);
         const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
         if (!stored) return;
         const parsed = JSON.parse(stored);
@@ -43,14 +40,12 @@ export function AuthProvider({ children }) {
       setSessionEmail(email || data?.user?.email || null);
       setSessionPassword(password || null);
       if (remember) {
-        setRememberSession(true);
         await AsyncStorage.setItem(
           AUTH_STORAGE_KEY,
           JSON.stringify({ user: data?.user || null, token: data?.token || null })
         );
         await AsyncStorage.setItem(REMEMBER_STORAGE_KEY, 'true');
       } else {
-        setRememberSession(false);
         await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
         await AsyncStorage.setItem(REMEMBER_STORAGE_KEY, 'false');
       }
@@ -67,26 +62,12 @@ export function AuthProvider({ children }) {
     setToken(null);
     setSessionEmail(null);
     setSessionPassword(null);
-    setRememberSession(false);
     try {
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
       await AsyncStorage.setItem(REMEMBER_STORAGE_KEY, 'false');
     } catch (_error) {
       // ignore sign out errors
     }
-  };
-
-  const updateUser = async (nextUser = {}) => {
-    setUser((prev) => {
-      const merged = { ...(prev || {}), ...(nextUser || {}) };
-      if (rememberSession) {
-        AsyncStorage.setItem(
-          AUTH_STORAGE_KEY,
-          JSON.stringify({ user: merged, token })
-        ).catch(() => null);
-      }
-      return merged;
-    });
   };
 
   const value = useMemo(
@@ -98,9 +79,8 @@ export function AuthProvider({ children }) {
       loading,
       signIn,
       signOut,
-      updateUser,
     }),
-    [user, token, sessionEmail, sessionPassword, loading, rememberSession]
+    [user, token, sessionEmail, sessionPassword, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
