@@ -22,6 +22,11 @@ const CXC_VENTAS_CACHE_MINUTES = Number(process.env.CXC_VENTAS_CACHE_MINUTES || 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
+const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
+const CLIENTS_CACHE_REFRESH_HOURS = Number(
+  process.env.CXC_CLIENTS_REFRESH_HOURS || 24
+);
+const CLIENTS_CACHE_MAX_PAGES = Number(process.env.CXC_CLIENTS_MAX_PAGES || 50);
 
 const normalizeKey = (value) => String(value || '').toLowerCase();
 const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
@@ -358,6 +363,15 @@ const fetchListadoClientes = async ({ pagina, vendedor }) => {
 };
 
 const findClientInfo = async ({ cedula, vendedor }) => {
+  const normalized = normalizeId(cedula);
+  if (normalized && clientsCache.clients[normalized]) {
+    return {
+      info: clientsCache.clients[normalized],
+      meta: { total: Object.keys(clientsCache.clients).length, pages: 1 },
+      pagesScanned: 0,
+      vendedor: 'cache',
+    };
+  }
   const firstPage = await fetchListadoClientes({ pagina: 1, vendedor });
   let clientInfo = firstPage.data ? buildClientInfo(firstPage.data, cedula) : null;
   let pagesScanned = 1;
@@ -1652,6 +1666,122 @@ const saveGspCare = (items) => {
   }
 };
 
+const clientsCache = {
+  updatedAt: null,
+  clients: {},
+};
+
+const loadClientsCache = () => {
+  try {
+    const raw = fs.readFileSync(clientsCachePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      clientsCache.updatedAt = parsed.updatedAt || null;
+      clientsCache.clients =
+        parsed.clients && typeof parsed.clients === 'object' ? parsed.clients : {};
+    }
+  } catch (_error) {
+    // ignore missing cache
+  }
+};
+
+const saveClientsCache = () => {
+  try {
+    fs.mkdirSync(path.dirname(clientsCachePath), { recursive: true });
+    fs.writeFileSync(
+      clientsCachePath,
+      JSON.stringify(
+        {
+          updatedAt: clientsCache.updatedAt,
+          clients: clientsCache.clients,
+        },
+        null,
+        2
+      )
+    );
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo guardar clients-cache.json:', error?.message || error);
+  }
+};
+
+const buildClientInfoFromRecord = (record) => {
+  if (!record || typeof record !== 'object') return null;
+  const cedula = normalizeId(findValueByKeys(record, CLIENT_ID_KEYS));
+  if (!cedula) return null;
+  return {
+    cedula,
+    name: findValueByKeys(record, CLIENT_NAME_KEYS),
+    email: findValueByKeys(record, CLIENT_EMAIL_KEYS),
+    phone: findValueByKeys(record, CLIENT_PHONE_KEYS),
+    city: findValueByKeys(record, CLIENT_CITY_KEYS),
+    address: findValueByKeys(record, CLIENT_ADDRESS_KEYS),
+    seller: findValueByKeys(record, CLIENT_SELLER_KEYS),
+    cupo: findValueByKeys(record, CLIENT_CUPO_KEYS),
+    plazo: findValueByKeys(record, CLIENT_PLAZO_KEYS),
+    birthDate: findValueByKeys(record, CLIENT_BIRTH_KEYS),
+  };
+};
+
+const collectClientRecords = (node, acc = []) => {
+  if (!node) return acc;
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectClientRecords(item, acc));
+    return acc;
+  }
+  if (typeof node !== 'object') return acc;
+  const candidate = buildClientInfoFromRecord(node);
+  if (candidate) {
+    acc.push(candidate);
+  }
+  Object.values(node).forEach((value) => {
+    if (typeof value === 'object') {
+      collectClientRecords(value, acc);
+    }
+  });
+  return acc;
+};
+
+const refreshClientsCache = async () => {
+  const now = new Date();
+  const cache = {};
+  const firstPage = await fetchListadoClientes({ pagina: 1, vendedor: '' });
+  const totalPages = Math.min(firstPage.meta.pages, CLIENTS_CACHE_MAX_PAGES);
+  const firstRecords = collectClientRecords(firstPage.data);
+  firstRecords.forEach((item) => {
+    cache[item.cedula] = item;
+  });
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const pageData = await fetchListadoClientes({ pagina: page, vendedor: '' });
+    const records = collectClientRecords(pageData.data);
+    records.forEach((item) => {
+      cache[item.cedula] = item;
+    });
+  }
+
+  clientsCache.clients = cache;
+  clientsCache.updatedAt = now.toISOString();
+  saveClientsCache();
+  return cache;
+};
+
+const ensureClientsCacheFresh = async () => {
+  if (!clientsCache.updatedAt) {
+    await refreshClientsCache();
+    return;
+  }
+  const updated = new Date(clientsCache.updatedAt);
+  if (Number.isNaN(updated.getTime())) {
+    await refreshClientsCache();
+    return;
+  }
+  const diffHours = (Date.now() - updated.getTime()) / (1000 * 60 * 60);
+  if (diffHours >= CLIENTS_CACHE_REFRESH_HOURS) {
+    await refreshClientsCache();
+  }
+};
+
 const parseBasicAuth = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
   const encoded = header.replace('Basic ', '').trim();
@@ -1710,6 +1840,18 @@ const adminAuth = async (req, res, next) => {
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
+
+loadClientsCache();
+ensureClientsCacheFresh().catch((error) => {
+  // eslint-disable-next-line no-console
+  console.warn('No se pudo refrescar clients cache:', error?.message || error);
+});
+setInterval(() => {
+  ensureClientsCacheFresh().catch((error) => {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo refrescar clients cache:', error?.message || error);
+  });
+}, CLIENTS_CACHE_REFRESH_HOURS * 60 * 60 * 1000);
 
 app.get('/admin', adminAuth, (_req, res) => {
   res.redirect('/admin/rewards');
