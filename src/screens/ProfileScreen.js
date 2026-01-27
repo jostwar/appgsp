@@ -171,7 +171,6 @@ export default function ProfileScreen({ navigation }) {
     { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantia/' },
   ];
   const profilePhone = user?.phone?.trim() || '—';
-  const profileAddress = user?.address?.trim() || '—';
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -196,7 +195,6 @@ export default function ProfileScreen({ navigation }) {
               {user?.email || 'correo@gsp.com.co'}
             </Text>
             <Text style={styles.profilePhone}>{profilePhone}</Text>
-            <Text style={styles.profileAddress}>{profileAddress}</Text>
           </View>
           <View style={[styles.levelBadge, { backgroundColor: levelColor }]}>
             <Text style={styles.levelBadgeText}>Nivel {customerLevel}</Text>
@@ -383,11 +381,6 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     marginTop: 2,
     fontSize: 13,
-  },
-  profileAddress: {
-    color: colors.textMuted,
-    marginTop: 2,
-    fontSize: 12,
   },
   levelBadge: {
     backgroundColor: colors.accent,
