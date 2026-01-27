@@ -803,6 +803,7 @@ const renderRewardsPortal = ({
   gspCareList = [],
   section = 'inicio',
   refreshStatus = '',
+  timings = null,
 } = {}) => {
   const rewardsList = rewards;
   const monthlyRows = Array.isArray(monthlySummary?.rows) ? monthlySummary.rows : [];
@@ -1379,6 +1380,15 @@ const renderRewardsPortal = ({
                   ? `<div class="label">Valor compras: <strong>$${formatNumber(
                       total ?? 0
                     )}</strong></div>`
+                  : ''
+              }
+              ${
+                timings
+                  ? `<div class="muted">Tiempos: clientes ${
+                      timings.search?.baseMs ?? '—'
+                    }ms · ventas ${timings.ventasMs ?? '—'}ms · resumen ${
+                      timings.monthlyMs ?? '—'
+                    }ms</div>`
                   : ''
               }
               ${
@@ -2031,14 +2041,17 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     );
   }
 
+  const searchStart = Date.now();
   const [autoSeller, initialSearch, wooSummary] = await Promise.all([
     allowFallback ? findSellerFromCartera({ cedula }) : Promise.resolve(''),
     findClientInfo({ cedula, vendedor, useRemoteFallback: false }),
     getWooCustomerSummary(cedula),
   ]);
+  const autoSearchStart = Date.now();
   const autoSearch = autoSeller
     ? await findClientInfo({ cedula, vendedor: autoSeller, useRemoteFallback: false })
     : null;
+  const fallbackSearchStart = Date.now();
   const fallbackSearch = allowFallback
     ? await findClientInfo({ cedula, vendedor: '', useRemoteFallback: false })
     : null;
@@ -2048,13 +2061,22 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
       ? autoSearch
       : fallbackSearch || initialSearch;
   const clientInfo = activeSearch?.info || null;
+  const searchTimings = {
+    baseMs: Date.now() - searchStart,
+    autoMs: autoSeller ? Date.now() - autoSearchStart : 0,
+    fallbackMs: allowFallback ? Date.now() - fallbackSearchStart : 0,
+  };
 
   try {
+    const ventasStart = Date.now();
     const payload = await fetchVentasPayload({ cedula });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, CLIENT_NAME_KEYS);
     const total = getVentasTotal(filteredPayload || payload);
+    const ventasMs = Date.now() - ventasStart;
+    const monthlyStart = Date.now();
     const monthlySummary = await buildVentasMonthlySummary({ cedula });
+    const monthlyMs = Date.now() - monthlyStart;
     const points =
       CXC_POINTS_DIVISOR > 0 ? Math.floor(total / CXC_POINTS_DIVISOR) : 0;
     return res.send(
@@ -2067,6 +2089,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         total,
         points,
         monthlySummary,
+        timings: {
+          search: searchTimings,
+          ventasMs,
+          monthlyMs,
+        },
         rewards,
         editReward,
         gspCareList,
@@ -2094,6 +2121,9 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section,
+        timings: {
+          search: searchTimings,
+        },
         refreshStatus,
       })
     );

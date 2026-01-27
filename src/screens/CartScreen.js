@@ -15,8 +15,7 @@ import { createOrder, getOrderPayUrl } from '../api/woocommerce';
 
 export default function CartScreen({ navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { items, removeItem, clear, subtotal, pointsTotal, increaseItem, decreaseItem } =
-    useCart();
+  const { items, removeItem, clear, subtotal, increaseItem, decreaseItem } = useCart();
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -27,6 +26,16 @@ export default function CartScreen({ navigation }) {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(Number(value || 0));
+  const getRebatePercent = (value) => {
+    const total = Number(value || 0);
+    if (total >= 30_000_000) return 2;
+    if (total >= 15_000_000) return 1.5;
+    if (total >= 5_000_000) return 1;
+    return 0;
+  };
+  const rebatePercent = getRebatePercent(subtotal);
+  const estimatedCashback =
+    rebatePercent > 0 ? Math.round((subtotal * rebatePercent) / 100) : 0;
   const getBrandLabel = (product) => {
     if (Array.isArray(product?.brands) && product.brands.length > 0) {
       const brand = product.brands[0];
@@ -145,14 +154,14 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.totalLabel}>Subtotal</Text>
           <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>
         </View>
+        <Text style={styles.taxNote}>IVA incluido</Text>
         <View style={styles.shippingRow}>
           <Text style={styles.shippingLabel}>Envío</Text>
           <Text style={styles.shippingValue}>Se calcula en el checkout</Text>
         </View>
-        <Text style={styles.taxNote}>IVA incluido</Text>
         <View style={styles.pointsRow}>
-          <Text style={styles.pointsLabel}>Cashback acumulado</Text>
-          <Text style={styles.pointsValue}>{pointsTotal}</Text>
+          <Text style={styles.pointsLabel}>Cashback estimado</Text>
+          <Text style={styles.pointsValue}>{formatCop(estimatedCashback)}</Text>
         </View>
         <Pressable
           style={pressableStyle(styles.primaryButton)}
