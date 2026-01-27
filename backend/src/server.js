@@ -22,6 +22,8 @@ const CXC_VENTAS_CACHE_MINUTES = Number(process.env.CXC_VENTAS_CACHE_MINUTES || 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
+const offersPath = path.resolve(__dirname, '../data', 'offers.json');
+const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
   process.env.CXC_CLIENTS_REFRESH_HOURS || 24
@@ -804,6 +806,8 @@ const renderRewardsPortal = ({
   editReward = null,
   gspCareActive = false,
   gspCareList = [],
+  offers = [],
+  weeklyProduct = null,
   section = 'inicio',
   refreshStatus = '',
   timings = null,
@@ -868,6 +872,8 @@ const renderRewardsPortal = ({
   const showClientes = normalizedSection === 'clientes';
   const showPremios = normalizedSection === 'premios';
   const showCare = normalizedSection === 'gsp-care';
+  const showOfertas = normalizedSection === 'ofertas';
+  const showWeekly = normalizedSection === 'producto-semana';
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
   const gspCareSavings = [
@@ -1180,6 +1186,8 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=inicio">Inicio</a>
           <a href="/admin/rewards?section=clientes">Buscar cliente</a>
           <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=ofertas">Ofertas</a>
+          <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </nav>
@@ -1192,6 +1200,8 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=inicio">Dashboard</a>
           <a href="/admin/rewards?section=clientes">Buscar cliente</a>
           <a href="/admin/rewards?section=premios">Premios</a>
+          <a href="/admin/rewards?section=ofertas">Ofertas</a>
+          <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </aside>
@@ -1555,6 +1565,93 @@ const renderRewardsPortal = ({
               : ''
           }
 
+          ${
+            showOfertas
+              ? `<div id="ofertas" class="card">
+            <h2 class="section-title">Ofertas</h2>
+            <p class="section-subtitle">
+              Publica ofertas que verán los clientes en la app.
+            </p>
+            <form class="form-grid" method="post" action="/admin/offers/save">
+              <input type="hidden" name="section" value="ofertas" />
+              <input type="text" name="title" placeholder="Título" required />
+              <input type="text" name="subtitle" placeholder="Subtítulo" />
+              <input type="text" name="price" placeholder="Precio" />
+              <input type="text" name="image" placeholder="URL de imagen" />
+              <input type="text" name="searchQuery" placeholder="SKU o búsqueda" />
+              <input type="text" name="cta" placeholder="Texto botón (ej. Ver oferta)" />
+              <button type="submit">Agregar oferta</button>
+            </form>
+            <div class="grid" style="margin-top:16px;">
+              ${offers.length
+                ? offers
+                    .map(
+                      (offer) => `<div class="subcard">
+                        ${offer.image ? `<img class="reward-image" src="${offer.image}" alt="${escapeHtml(offer.title || '')}" />` : ''}
+                        <h3>${escapeHtml(offer.title || '')}</h3>
+                        <div class="label">${escapeHtml(offer.subtitle || '')}</div>
+                        <div class="label">${escapeHtml(offer.price || '')}</div>
+                        <div class="label">Búsqueda: ${escapeHtml(offer.searchQuery || '—')}</div>
+                        <div class="reward-actions">
+                          <form method="post" action="/admin/offers/delete">
+                            <input type="hidden" name="section" value="ofertas" />
+                            <input type="hidden" name="id" value="${offer.id}" />
+                            <button type="submit" class="btn-secondary">Eliminar</button>
+                          </form>
+                        </div>
+                      </div>`
+                    )
+                    .join('')
+                : '<div class="alert">No hay ofertas registradas.</div>'}
+            </div>
+          </div>`
+              : ''
+          }
+
+          ${
+            showWeekly
+              ? `<div id="producto-semana" class="card">
+            <h2 class="section-title">Producto de la semana</h2>
+            <p class="section-subtitle">
+              Define el producto destacado en la app.
+            </p>
+            <form class="form-grid" method="post" action="/admin/weekly/save">
+              <input type="hidden" name="section" value="producto-semana" />
+              <input type="text" name="title" placeholder="Título" required value="${escapeHtml(
+                weeklyProduct?.title || ''
+              )}" />
+              <input type="text" name="subtitle" placeholder="Subtítulo" value="${escapeHtml(
+                weeklyProduct?.subtitle || ''
+              )}" />
+              <input type="text" name="price" placeholder="Precio" value="${escapeHtml(
+                weeklyProduct?.price || ''
+              )}" />
+              <input type="text" name="image" placeholder="URL de imagen" value="${escapeHtml(
+                weeklyProduct?.image || ''
+              )}" />
+              <input type="text" name="searchQuery" placeholder="SKU o búsqueda" value="${escapeHtml(
+                weeklyProduct?.searchQuery || ''
+              )}" />
+              <input type="text" name="cta" placeholder="Texto botón" value="${escapeHtml(
+                weeklyProduct?.cta || ''
+              )}" />
+              <button type="submit">Guardar producto</button>
+            </form>
+            ${
+              weeklyProduct
+                ? `<div class="subcard" style="margin-top:16px;">
+                    ${weeklyProduct.image ? `<img class="reward-image" src="${weeklyProduct.image}" alt="${escapeHtml(weeklyProduct.title || '')}" />` : ''}
+                    <h3>${escapeHtml(weeklyProduct.title || '')}</h3>
+                    <div class="label">${escapeHtml(weeklyProduct.subtitle || '')}</div>
+                    <div class="label">${escapeHtml(weeklyProduct.price || '')}</div>
+                    <div class="label">Búsqueda: ${escapeHtml(weeklyProduct.searchQuery || '—')}</div>
+                  </div>`
+                : '<div class="alert">No hay producto configurado.</div>'
+            }
+          </div>`
+              : ''
+          }
+
       ${
         showDashboard
           ? `<div class="card">
@@ -1806,6 +1903,53 @@ const saveRewards = (rewards) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('No se pudo guardar rewards.json:', error?.message || error);
+  }
+};
+
+const loadOffers = () => {
+  try {
+    const raw = fs.readFileSync(offersPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer offers.json:', error?.message || error);
+    return [];
+  }
+};
+
+const saveOffers = (offers) => {
+  try {
+    fs.mkdirSync(path.dirname(offersPath), { recursive: true });
+    fs.writeFileSync(offersPath, JSON.stringify(offers, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar offers.json:', error?.message || error);
+  }
+};
+
+const loadWeeklyProduct = () => {
+  try {
+    const raw = fs.readFileSync(weeklyProductPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer weekly-product.json:', error?.message || error);
+    return null;
+  }
+};
+
+const saveWeeklyProduct = (product) => {
+  try {
+    fs.mkdirSync(path.dirname(weeklyProductPath), { recursive: true });
+    fs.writeFileSync(weeklyProductPath, JSON.stringify(product, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      'No se pudo guardar weekly-product.json:',
+      error?.message || error
+    );
   }
 };
 
@@ -2069,6 +2213,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const allowFallback =
     !vendedorInput || (DEFAULT_CXC_VENDEDOR && vendedorInput === DEFAULT_CXC_VENDEDOR);
   const rewards = loadRewards();
+  const offers = loadOffers();
+  const weeklyProduct = loadWeeklyProduct();
   const gspCareList = loadGspCare();
   const gspCareActive = cedula
     ? gspCareList.some((item) => item.cedula === normalizeId(cedula))
@@ -2080,6 +2226,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     return res.send(
       renderRewardsPortal({
         rewards,
+        offers,
+        weeklyProduct,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2146,6 +2294,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
           monthlyMs,
         },
         rewards,
+        offers,
+        weeklyProduct,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2162,6 +2312,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         cedula,
         error: error?.response?.data || error?.message || 'No se pudo calcular',
         rewards,
+        offers,
+        weeklyProduct,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2278,9 +2430,68 @@ app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
 });
 
+app.post('/admin/offers/save', adminAuth, (req, res) => {
+  const { title, subtitle, price, image, searchQuery, cta, section } = req.body || {};
+  if (!title) {
+    return res.redirect('/admin/rewards?section=ofertas');
+  }
+  const offers = loadOffers();
+  offers.unshift({
+    id: `${Date.now()}`,
+    title: String(title).trim(),
+    subtitle: String(subtitle || '').trim(),
+    price: String(price || '').trim(),
+    image: String(image || '').trim(),
+    searchQuery: String(searchQuery || '').trim(),
+    cta: String(cta || '').trim(),
+  });
+  saveOffers(offers);
+  const targetSection = section || 'ofertas';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
+});
+
+app.post('/admin/offers/delete', adminAuth, (req, res) => {
+  const { id, section } = req.body || {};
+  if (!id) {
+    return res.redirect('/admin/rewards?section=ofertas');
+  }
+  const offers = loadOffers().filter((offer) => String(offer.id) !== String(id));
+  saveOffers(offers);
+  const targetSection = section || 'ofertas';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
+});
+
+app.post('/admin/weekly/save', adminAuth, (req, res) => {
+  const { title, subtitle, price, image, searchQuery, cta, section } = req.body || {};
+  if (!title) {
+    return res.redirect('/admin/rewards?section=producto-semana');
+  }
+  const payload = {
+    title: String(title).trim(),
+    subtitle: String(subtitle || '').trim(),
+    price: String(price || '').trim(),
+    image: String(image || '').trim(),
+    searchQuery: String(searchQuery || '').trim(),
+    cta: String(cta || '').trim(),
+  };
+  saveWeeklyProduct(payload);
+  const targetSection = section || 'producto-semana';
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
+});
+
 app.get('/api/rewards', (_req, res) => {
   const rewards = loadRewards();
   return res.json({ rewards });
+});
+
+app.get('/api/home/offers', (_req, res) => {
+  const offers = loadOffers();
+  return res.json({ offers });
+});
+
+app.get('/api/home/weekly', (_req, res) => {
+  const product = loadWeeklyProduct();
+  return res.json({ product });
 });
 
 app.post('/api/login', async (req, res) => {

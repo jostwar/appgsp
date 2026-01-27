@@ -51,6 +51,14 @@ export function getRewardsCatalog() {
   return request('/api/rewards');
 }
 
+export function getHomeOffers() {
+  return request('/api/home/offers');
+}
+
+export function getWeeklyProduct() {
+  return request('/api/home/weekly');
+}
+
 export function getWooOrders({ cedula, customerId, email, page, perPage } = {}) {
   return request('/api/woo/orders', {
     params: { cedula, customerId, email, page, perPage },

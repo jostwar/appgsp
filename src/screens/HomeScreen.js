@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import * as Location from 'expo-location';
 import { searchProducts } from '../api/woocommerce';
+import { getHomeOffers, getWeeklyProduct } from '../api/backend';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -319,6 +320,8 @@ export default function HomeScreen() {
   const searchDebounceRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [homeOffers, setHomeOffers] = useState([]);
+  const [weeklyProduct, setWeeklyProduct] = useState(null);
 
   const loadLocation = useCallback(async () => {
     setLocationError('');
@@ -360,6 +363,29 @@ export default function HomeScreen() {
 
     return () => clearInterval(interval);
   }, [sliderImages.length]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadHomeData = async () => {
+      try {
+        const [offersData, weeklyData] = await Promise.all([
+          getHomeOffers().catch(() => ({ offers: [] })),
+          getWeeklyProduct().catch(() => ({ product: null })),
+        ]);
+        if (!isMounted) return;
+        setHomeOffers(Array.isArray(offersData?.offers) ? offersData.offers : []);
+        setWeeklyProduct(weeklyData?.product || null);
+      } catch (_error) {
+        if (!isMounted) return;
+        setHomeOffers([]);
+        setWeeklyProduct(null);
+      }
+    };
+    loadHomeData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const formatCop = (value) => {
     if (!value) return '';
@@ -652,6 +678,88 @@ export default function HomeScreen() {
             <Text style={styles.primaryButtonText}>Ver GSP Care</Text>
           </Pressable>
         </View>
+
+        {weeklyProduct ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Producto de la semana</Text>
+            <View style={styles.featureCard}>
+              {weeklyProduct.image ? (
+                <Image
+                  source={{ uri: weeklyProduct.image }}
+                  style={styles.featureImage}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View style={styles.featureContent}>
+                <Text style={styles.featureTitle}>{weeklyProduct.title}</Text>
+                {weeklyProduct.subtitle ? (
+                  <Text style={styles.featureSubtitle}>{weeklyProduct.subtitle}</Text>
+                ) : null}
+                {weeklyProduct.price ? (
+                  <Text style={styles.featurePrice}>{weeklyProduct.price}</Text>
+                ) : null}
+                <Pressable
+                  style={pressableStyle(styles.primaryButton)}
+                  onPress={() =>
+                    weeklyProduct.searchQuery
+                      ? handleNavigate('Productos', {
+                          searchQuery: weeklyProduct.searchQuery,
+                          _ts: Date.now(),
+                        })
+                      : null
+                  }
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {weeklyProduct.cta || 'Ver producto'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {homeOffers.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ofertas</Text>
+            <View style={styles.offersGrid}>
+              {homeOffers.map((offer) => (
+                <View key={offer.id} style={styles.offerCard}>
+                  {offer.image ? (
+                    <Image
+                      source={{ uri: offer.image }}
+                      style={styles.offerImage}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  <View style={styles.offerContent}>
+                    <Text style={styles.offerTitle}>{offer.title}</Text>
+                    {offer.subtitle ? (
+                      <Text style={styles.offerSubtitle}>{offer.subtitle}</Text>
+                    ) : null}
+                    {offer.price ? (
+                      <Text style={styles.offerPrice}>{offer.price}</Text>
+                    ) : null}
+                    <Pressable
+                      style={pressableStyle(styles.secondaryButton)}
+                      onPress={() =>
+                        offer.searchQuery
+                          ? handleNavigate('Productos', {
+                              searchQuery: offer.searchQuery,
+                              _ts: Date.now(),
+                            })
+                          : null
+                      }
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        {offer.cta || 'Ver oferta'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Portafolio</Text>
@@ -1129,6 +1237,67 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
+  },
+  featureCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  featureImage: {
+    width: '100%',
+    height: 160,
+  },
+  featureContent: {
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  featureTitle: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  featureSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  featurePrice: {
+    color: colors.textMain,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  offersGrid: {
+    gap: spacing.md,
+  },
+  offerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  offerImage: {
+    width: '100%',
+    height: 140,
+  },
+  offerContent: {
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  offerTitle: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  offerSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  offerPrice: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '700',
   },
   sectionTitle: {
     color: colors.textMain,
