@@ -12,10 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../theme';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../store/auth';
 import { getWooOrders } from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
+  const tabBarHeight = useBottomTabBarHeight();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -146,7 +148,10 @@ export default function ProfileScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: spacing.xxl + tabBarHeight },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
