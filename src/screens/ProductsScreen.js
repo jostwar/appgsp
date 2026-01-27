@@ -170,11 +170,6 @@ export default function ProductsScreen({ route, navigation }) {
       maximumFractionDigits: 0,
     }).format(numeric);
   };
-  const stripHtml = (value) =>
-    String(value || '')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
   const getBrandLabel = (product) => {
     if (Array.isArray(product?.brands) && product.brands.length > 0) {
       const brand = product.brands[0];
@@ -836,7 +831,6 @@ export default function ProductsScreen({ route, navigation }) {
           const isVariable = item.type === 'variable';
           const isExternal = item.type === 'external';
           const brandLabel = getBrandLabel(item);
-          const description = stripHtml(item?.short_description || item?.description);
           const openProduct = () => {
             if (productUrl) {
               navigation.navigate('Checkout', { url: productUrl, forceLogin: true });
@@ -858,6 +852,11 @@ export default function ProductsScreen({ route, navigation }) {
                 )}
               </Pressable>
               <View style={styles.cardBody}>
+                {brandLabel ? (
+                  <Text style={styles.brand} numberOfLines={1} ellipsizeMode="tail">
+                    {brandLabel}
+                  </Text>
+                ) : null}
                 <Pressable
                   style={({ pressed }) => [pressed && styles.pressed]}
                   onPress={openProduct}
@@ -867,16 +866,6 @@ export default function ProductsScreen({ route, navigation }) {
                     {item.name}
                   </Text>
                 </Pressable>
-                {brandLabel ? (
-                  <Text style={styles.brand} numberOfLines={1} ellipsizeMode="tail">
-                    {brandLabel}
-                  </Text>
-                ) : null}
-                {description ? (
-                  <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-                    {description}
-                  </Text>
-                ) : null}
                 <Text style={styles.price}>{formatCop(item.price)}</Text>
                 {item.sku ? <Text style={styles.sku}>{item.sku}</Text> : null}
                 <Text style={styles.stock}>
@@ -1265,13 +1254,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  description: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 16,
-  },
   price: {
-    color: colors.textSoft,
+    color: colors.textMain,
     fontSize: 14,
   },
   stock: {
