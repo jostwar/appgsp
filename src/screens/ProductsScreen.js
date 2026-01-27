@@ -498,6 +498,7 @@ export default function ProductsScreen({ route, navigation }) {
               <Pressable
                 style={styles.drawerClose}
                 onPress={() => setShowFiltersDrawer(false)}
+                hitSlop={10}
               >
                 <Ionicons name="close" size={18} color={colors.textMain} />
               </Pressable>
@@ -989,6 +990,7 @@ const styles = StyleSheet.create({
   drawerOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(3, 7, 18, 0.6)',
+    zIndex: 1,
   },
   filterDrawer: {
     backgroundColor: colors.background,
@@ -996,6 +998,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderBottomLeftRadius: 20,
     height: '100%',
+    zIndex: 2,
   },
   drawerHeader: {
     flexDirection: 'row',
