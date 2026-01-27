@@ -242,6 +242,15 @@ export default function ProductsScreen({ route, navigation }) {
       });
     }
     const sorted = [...list];
+    const prioritizeGspCare = (items) => {
+      const index = items.findIndex(
+        (item) => String(item?.sku || '').toUpperCase() === 'GSPCARE'
+      );
+      if (index <= 0) return items;
+      const [match] = items.splice(index, 1);
+      items.unshift(match);
+      return items;
+    };
     if (sortOption === 'price-asc') {
       sorted.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
     }
@@ -251,7 +260,7 @@ export default function ProductsScreen({ route, navigation }) {
     if (sortOption === 'name-asc') {
       sorted.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     }
-    return sorted;
+    return prioritizeGspCare(sorted);
   }, [searchedProducts, sortOption, usePriceRange, appliedMinPrice, appliedMaxPrice]);
 
   const categoryLabel = useMemo(() => {

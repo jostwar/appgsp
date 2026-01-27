@@ -152,9 +152,11 @@ export default function CartScreen({ navigation }) {
       <View style={[styles.footer, { paddingBottom: spacing.xl + tabBarHeight }]}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal</Text>
-          <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>
+          <View style={styles.totalValueGroup}>
+            <Text style={styles.totalValue}>{formatCop(subtotal)}</Text>
+            <Text style={styles.taxNote}>IVA incluido</Text>
+          </View>
         </View>
-        <Text style={styles.taxNote}>IVA incluido</Text>
         <View style={styles.shippingRow}>
           <Text style={styles.shippingLabel}>Envío</Text>
           <Text style={styles.shippingValue}>Se calcula en el checkout</Text>
@@ -345,6 +347,9 @@ const styles = StyleSheet.create({
   totalLabel: {
     color: colors.textMuted,
     fontSize: 14,
+  },
+  totalValueGroup: {
+    alignItems: 'flex-end',
   },
   shippingLabel: {
     color: colors.textMuted,
