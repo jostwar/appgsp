@@ -33,6 +33,44 @@ const CLIENTS_CACHE_MAX_PAGES = Number(process.env.CXC_CLIENTS_MAX_PAGES || 50);
 const normalizeKey = (value) => String(value || '').toLowerCase();
 const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
 const stripLeadingZeros = (value) => String(value || '').replace(/^0+/, '');
+const resolveWooMetaValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const resolved = resolveWooMetaValue(entry);
+      if (resolved) return resolved;
+    }
+    return '';
+  }
+  if (typeof value === 'object') {
+    return resolveWooMetaValue(
+      value.value ??
+        value.id ??
+        value.cedula ??
+        value.nit ??
+        value.gsp_nit ??
+        value.gsp_cedula ??
+        ''
+    );
+  }
+  return '';
+};
+
+const findWooMetaValue = (meta, keys) => {
+  const normalized = keys.map((key) => String(key || '').toLowerCase());
+  for (const key of normalized) {
+    const entry = meta.find((item) => String(item?.key || '').toLowerCase() === key);
+    const resolved = resolveWooMetaValue(entry?.value);
+    if (resolved) return resolved;
+  }
+  for (const key of normalized) {
+    const entry = meta.find((item) => String(item?.key || '').toLowerCase().includes(key));
+    const resolved = resolveWooMetaValue(entry?.value);
+    if (resolved) return resolved;
+  }
+  return '';
+};
 
 const toNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -2753,6 +2791,59 @@ app.get('/api/woo/cedulas', async (req, res) => {
   }
 });
 
+const buildWooUserResponse = ({ data, profile, customer }) => {
+  const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
+  const metaKeys = [
+    'gsp_nit',
+    'gsp_cedula',
+    'gsp_cedula_nit',
+    'billing_cedula',
+    'billing_nit',
+    'cedula',
+    'nit',
+    'identificacion',
+    'documento',
+  ];
+  const metaCedula = findWooMetaValue(metaData, metaKeys);
+  const cedula = normalizeId(metaCedula || (customer ? woo.getCustomerCedula(customer) : null));
+  const billing = customer?.billing || {};
+  const shipping = customer?.shipping || {};
+  const gspPhone = metaData.find(
+    (meta) => String(meta?.key || '').toLowerCase() === 'gsp_phone'
+  )?.value;
+  const phone = String(gspPhone || billing.phone || shipping.phone || '').trim();
+  const billingFirst = customer?.billing?.first_name || '';
+  const billingLast = customer?.billing?.last_name || '';
+  const firstName = billingFirst || profile?.first_name || '';
+  const lastName = billingLast || profile?.last_name || '';
+  const fullName =
+    `${firstName} ${lastName}`.trim() ||
+    profile?.name ||
+    data?.user_display_name ||
+    '';
+  const profileMeta = [
+    ...(Array.isArray(profile?.meta_data) ? profile.meta_data : []),
+    ...(Array.isArray(profile?.meta) ? profile.meta : []),
+  ];
+  const profileCedula = findWooMetaValue(profileMeta, metaKeys);
+  const resolvedCedula = normalizeId(cedula || profileCedula || '');
+  return {
+    token: data?.token,
+    user: {
+      id: data?.user_id || profile?.id,
+      email: data?.user_email || profile?.email,
+      name: data?.user_display_name || profile?.name,
+      firstName,
+      lastName,
+      fullName,
+      nicename: data?.user_nicename || profile?.slug || profile?.nicename,
+      customerId: customer?.id || null,
+      cedula: resolvedCedula || null,
+      phone,
+    },
+  };
+};
+
 app.post('/api/woo/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -2774,96 +2865,46 @@ app.post('/api/woo/login', async (req, res) => {
     } catch (_error) {
       customer = null;
     }
-    const metaData = Array.isArray(customer?.meta_data) ? customer.meta_data : [];
-    const resolveMetaValue = (value) => {
-      if (value === null || value === undefined) return '';
-      if (typeof value === 'string' || typeof value === 'number') return String(value);
-      if (Array.isArray(value)) {
-        for (const entry of value) {
-          const resolved = resolveMetaValue(entry);
-          if (resolved) return resolved;
-        }
-        return '';
-      }
-      if (typeof value === 'object') {
-        return resolveMetaValue(
-          value.value ??
-            value.id ??
-            value.cedula ??
-            value.nit ??
-            value.gsp_nit ??
-            value.gsp_cedula ??
-            ''
-        );
-      }
-      return '';
-    };
-    const findMetaValue = (meta, keys) => {
-      const normalized = keys.map((key) => String(key || '').toLowerCase());
-      for (const key of normalized) {
-        const entry = meta.find((item) => String(item?.key || '').toLowerCase() === key);
-        const resolved = resolveMetaValue(entry?.value);
-        if (resolved) return resolved;
-      }
-      for (const key of normalized) {
-        const entry = meta.find((item) => String(item?.key || '').toLowerCase().includes(key));
-        const resolved = resolveMetaValue(entry?.value);
-        if (resolved) return resolved;
-      }
-      return '';
-    };
-    const metaKeys = [
-      'gsp_nit',
-      'gsp_cedula',
-      'gsp_cedula_nit',
-      'billing_cedula',
-      'billing_nit',
-      'cedula',
-      'nit',
-      'identificacion',
-      'documento',
-    ];
-    const metaCedula = findMetaValue(metaData, metaKeys);
-    const cedula = normalizeId(metaCedula || (customer ? woo.getCustomerCedula(customer) : null));
-    const billing = customer?.billing || {};
-    const shipping = customer?.shipping || {};
-    const gspPhone = metaData.find(
-      (meta) => String(meta?.key || '').toLowerCase() === 'gsp_phone'
-    )?.value;
-    const phone = String(gspPhone || billing.phone || shipping.phone || '').trim();
-    const billingFirst = customer?.billing?.first_name || '';
-    const billingLast = customer?.billing?.last_name || '';
-    const firstName = billingFirst || profile?.first_name || '';
-    const lastName = billingLast || profile?.last_name || '';
-    const fullName =
-      `${firstName} ${lastName}`.trim() ||
-      profile?.name ||
-      data?.user_display_name ||
-      '';
-    const profileMeta = [
-      ...(Array.isArray(profile?.meta_data) ? profile.meta_data : []),
-      ...(Array.isArray(profile?.meta) ? profile.meta : []),
-    ];
-    const profileCedula = findMetaValue(profileMeta, metaKeys);
-    const resolvedCedula = normalizeId(cedula || profileCedula || '');
-    return res.json({
-      token: data?.token,
-      user: {
-        id: data?.user_id,
-        email: data?.user_email,
-        name: data?.user_display_name,
-        firstName,
-        lastName,
-        fullName,
-        nicename: data?.user_nicename,
-        customerId: customer?.id || null,
-        cedula: resolvedCedula || null,
-        phone,
-      },
-    });
+    return res.json(buildWooUserResponse({ data, profile, customer }));
   } catch (error) {
     return res.status(401).json({
       error: 'Credenciales inválidas',
+      details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.post('/api/woo/session', async (req, res) => {
+  try {
+    const authHeader = String(req.headers.authorization || '');
+    const token =
+      req.body?.token ||
+      (authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7) : '');
+    if (!token) {
+      return res.status(400).json({ error: 'token es requerido' });
+    }
+    const profile = await woo.getWpUserMe(token);
+    const email = profile?.email || profile?.user_email;
+    if (!email) {
+      return res.status(404).json({ error: 'No se encontró email en el perfil' });
+    }
+    let customer = null;
+    try {
+      customer = await woo.findCustomerByEmail(email);
+    } catch (_error) {
+      customer = null;
+    }
+    const data = {
+      token,
+      user_id: profile?.id,
+      user_email: email,
+      user_display_name: profile?.name,
+      user_nicename: profile?.slug || profile?.nicename,
+    };
+    return res.json(buildWooUserResponse({ data, profile, customer }));
+  } catch (error) {
+    return res.status(401).json({
+      error: 'Sesión inválida',
       details: error?.response?.data || error?.message,
     });
   }

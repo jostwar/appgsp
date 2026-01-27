@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginWoo } from '../api/backend';
+import { loginWoo, refreshWooSession } from '../api/backend';
 
 const AuthContext = createContext(null);
 const AUTH_STORAGE_KEY = 'gsp_auth';
@@ -20,9 +20,28 @@ export function AuthProvider({ children }) {
         const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
         if (!stored) return;
         const parsed = JSON.parse(stored);
-        setUser(parsed?.user || null);
-        setToken(parsed?.token || null);
-        setSessionEmail(parsed?.user?.email || null);
+        const storedUser = parsed?.user || null;
+        const storedToken = parsed?.token || null;
+        setUser(storedUser);
+        setToken(storedToken);
+        setSessionEmail(storedUser?.email || null);
+        if (storedToken && !storedUser?.cedula) {
+          try {
+            const refreshed = await refreshWooSession({ token: storedToken });
+            const nextUser = refreshed?.user || null;
+            const nextToken = refreshed?.token || storedToken;
+            if (nextUser) {
+              setUser(nextUser);
+              setToken(nextToken);
+              await AsyncStorage.setItem(
+                AUTH_STORAGE_KEY,
+                JSON.stringify({ user: nextUser, token: nextToken })
+              );
+            }
+          } catch (_error) {
+            // ignore refresh errors
+          }
+        }
       } catch (_error) {
         // ignore restore errors
       }

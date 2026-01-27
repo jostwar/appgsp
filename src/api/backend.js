@@ -40,6 +40,13 @@ export function loginWoo({ email, password }) {
   });
 }
 
+export function refreshWooSession({ token }) {
+  return request('/api/woo/session', {
+    method: 'POST',
+    body: { token },
+  });
+}
+
 export function getRewardsPoints({ cedula }) {
   return request('/api/cxc/points', {
     method: 'POST',
