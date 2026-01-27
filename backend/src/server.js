@@ -3182,18 +3182,28 @@ app.post('/api/cxc/points', async (req, res) => {
       Object.assign(callParams, buildVentasParams({ cedula, fecha }), callParams);
     }
 
-    const data = await cxc.generarInfoVentas(callParams);
-    if (debug) {
-      return res.json(data);
-    }
-    if (isCxcFunctionInactive(data?.xml)) {
-      return res.status(502).json({
-        error:
-          'CxC respondió "Función no activa" para GenerarInfoVentas. Solicita al proveedor habilitar el método.',
-      });
+    let chunkDays = 7;
+    let data = null;
+    try {
+      data = await cxc.generarInfoVentas(callParams);
+      if (debug) {
+        return res.json(data);
+      }
+      if (isCxcFunctionInactive(data?.xml)) {
+        return res.status(502).json({
+          error:
+            'CxC respondió "Función no activa" para GenerarInfoVentas. Solicita al proveedor habilitar el método.',
+        });
+      }
+    } catch (error) {
+      if (isMaxJsonError(error)) {
+        chunkDays = 1;
+      } else {
+        throw error;
+      }
     }
 
-    const payload = await fetchVentasPayload({ cedula, fecha, chunkDays: 7 });
+    const payload = await fetchVentasPayload({ cedula, fecha, chunkDays });
     const filteredPayload = filterVentasPayload(payload, cedula);
     const name = findValueByKeys(filteredPayload || payload, [
       'nombre',
