@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -74,6 +76,8 @@ export default function ProductsScreen({ route, navigation }) {
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [showBrandMenu, setShowBrandMenu] = useState(false);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
+  const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
+  const drawerAnim = useRef(new Animated.Value(0));
   const [brandOptions, setBrandOptions] = useState([
     'Todas',
     'Samsung',
@@ -99,6 +103,15 @@ export default function ProductsScreen({ route, navigation }) {
     },
     []
   );
+  const drawerWidth = 320;
+
+  useEffect(() => {
+    Animated.timing(drawerAnim.current, {
+      toValue: showFiltersDrawer ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [showFiltersDrawer]);
 
   const normalizeBrandOptions = useCallback((options) => {
     const unique = Array.from(new Set(options)).sort((a, b) =>
@@ -393,38 +406,41 @@ export default function ProductsScreen({ route, navigation }) {
 
   return (
     <View style={styles.screen}>
-      <FlatList
-        contentContainerStyle={styles.list}
-        data={displayedProducts}
-        numColumns={2}
-        columnWrapperStyle={styles.productRow}
-        removeClippedSubviews
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={7}
-        updateCellsBatchingPeriod={50}
-        refreshing={isRefreshing}
-        onRefresh={async () => {
-          setIsRefreshing(true);
-          await load(activeBrandName);
-          setIsRefreshing(false);
-        }}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.4}
-        ListHeaderComponent={
-          <View style={styles.categoriesSection}>
-            <Text style={styles.sectionTitle}>Productos</Text>
-            <View style={styles.searchBox}>
-              <TextInput
-                value={searchInput}
-                onChangeText={updateSearch}
-                placeholder="Buscar productos..."
-                placeholderTextColor={colors.textMuted}
-                style={styles.searchInput}
-                returnKeyType="search"
-              />
+      <Modal transparent visible={showFiltersDrawer} animationType="none">
+        <View style={styles.drawerContainer}>
+          <Pressable
+            style={styles.drawerOverlay}
+            onPress={() => setShowFiltersDrawer(false)}
+          />
+          <Animated.View
+            style={[
+              styles.filterDrawer,
+              {
+                width: drawerWidth,
+                transform: [
+                  {
+                    translateX: drawerAnim.current.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [drawerWidth, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle}>Filtros</Text>
+              <Pressable
+                style={styles.drawerClose}
+                onPress={() => setShowFiltersDrawer(false)}
+              >
+                <Ionicons name="close" size={18} color={colors.textMain} />
+              </Pressable>
             </View>
-            <View style={styles.filtersSection}>
+            <ScrollView
+              contentContainerStyle={styles.drawerContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.filterGroup}>
                 <Text style={styles.filterLabel}>Filtrar por</Text>
                 <View style={styles.dropdownGroup}>
@@ -620,6 +636,51 @@ export default function ProductsScreen({ route, navigation }) {
                   ))}
                 </View>
               </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+      <FlatList
+        contentContainerStyle={styles.list}
+        data={displayedProducts}
+        numColumns={2}
+        columnWrapperStyle={styles.productRow}
+        removeClippedSubviews
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        refreshing={isRefreshing}
+        onRefresh={async () => {
+          setIsRefreshing(true);
+          await load(activeBrandName);
+          setIsRefreshing(false);
+        }}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        ListHeaderComponent={
+          <View style={styles.categoriesSection}>
+            <Text style={styles.sectionTitle}>Productos</Text>
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <TextInput
+                  value={searchInput}
+                  onChangeText={updateSearch}
+                  placeholder="Buscar productos..."
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.searchInput}
+                  returnKeyType="search"
+                />
+              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.filterButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setShowFiltersDrawer(true)}
+              >
+                <Ionicons name="options-outline" size={18} color={colors.textMain} />
+              </Pressable>
             </View>
             <Text style={styles.sectionTitle}>Productos</Text>
           </View>
@@ -749,6 +810,47 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.lg,
   },
+  drawerContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  drawerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(3, 7, 18, 0.6)',
+  },
+  filterDrawer: {
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+    height: '100%',
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  drawerTitle: {
+    color: colors.textMain,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  drawerClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  drawerContent: {
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+  },
   listFooter: {
     marginTop: spacing.lg,
     alignItems: 'center',
@@ -765,11 +867,27 @@ const styles = StyleSheet.create({
   categoriesSection: {
     gap: spacing.md,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   searchBox: {
     backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flex: 1,
+  },
+  filterButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
