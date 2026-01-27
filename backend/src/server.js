@@ -2712,6 +2712,19 @@ app.post('/api/woo/login', async (req, res) => {
       customer = null;
     }
     const cedula = customer ? woo.getCustomerCedula(customer) : null;
+    const billing = customer?.billing || {};
+    const shipping = customer?.shipping || {};
+    const phone = billing.phone || shipping.phone || '';
+    const addressParts = [
+      billing.address_1,
+      billing.address_2,
+      billing.city,
+      billing.state,
+      billing.country,
+      billing.postcode,
+    ]
+      .filter(Boolean)
+      .join(', ');
     const billingFirst = customer?.billing?.first_name || '';
     const billingLast = customer?.billing?.last_name || '';
     const firstName = billingFirst || profile?.first_name || '';
@@ -2733,6 +2746,8 @@ app.post('/api/woo/login', async (req, res) => {
         nicename: data?.user_nicename,
         customerId: customer?.id || null,
         cedula: cedula || null,
+        phone,
+        address: addressParts,
       },
     });
   } catch (error) {
