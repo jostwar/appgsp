@@ -170,6 +170,33 @@ export default function ProductsScreen({ route, navigation }) {
       maximumFractionDigits: 0,
     }).format(numeric);
   };
+  const stripHtml = (value) =>
+    String(value || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const getBrandLabel = (product) => {
+    if (Array.isArray(product?.brands) && product.brands.length > 0) {
+      const brand = product.brands[0];
+      return typeof brand === 'string' ? brand : brand?.name;
+    }
+    if (product?.brand) {
+      return typeof product.brand === 'string' ? product.brand : product.brand?.name;
+    }
+    if (Array.isArray(product?.attributes)) {
+      const brandAttr = product.attributes.find((attr) =>
+        String(attr?.name || '').toLowerCase().includes('marca')
+      );
+      const option =
+        Array.isArray(brandAttr?.options) && brandAttr.options.length > 0
+          ? brandAttr.options[0]
+          : brandAttr?.option;
+      if (option) {
+        return option;
+      }
+    }
+    return '';
+  };
 
   const parsePriceInput = (value) => {
     const cleaned = String(value || '').replace(/[^\d]/g, '');
@@ -808,6 +835,8 @@ export default function ProductsScreen({ route, navigation }) {
           const productUrl = item.permalink || item.link;
           const isVariable = item.type === 'variable';
           const isExternal = item.type === 'external';
+          const brandLabel = getBrandLabel(item);
+          const description = stripHtml(item?.short_description || item?.description);
           const openProduct = () => {
             if (productUrl) {
               navigation.navigate('Checkout', { url: productUrl, forceLogin: true });
@@ -838,6 +867,16 @@ export default function ProductsScreen({ route, navigation }) {
                     {item.name}
                   </Text>
                 </Pressable>
+                {brandLabel ? (
+                  <Text style={styles.brand} numberOfLines={1} ellipsizeMode="tail">
+                    {brandLabel}
+                  </Text>
+                ) : null}
+                {description ? (
+                  <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
+                    {description}
+                  </Text>
+                ) : null}
                 <Text style={styles.price}>{formatCop(item.price)}</Text>
                 {item.sku ? <Text style={styles.sku}>{item.sku}</Text> : null}
                 <Text style={styles.stock}>
@@ -1220,6 +1259,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 20,
     minHeight: 40,
+  },
+  brand: {
+    color: colors.textSoft,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  description: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
   },
   price: {
     color: colors.textSoft,
