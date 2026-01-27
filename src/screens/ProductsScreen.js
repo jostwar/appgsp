@@ -23,10 +23,12 @@ import {
 import { useCart } from '../store/cart';
 import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProductsScreen({ route, navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
@@ -499,7 +501,12 @@ export default function ProductsScreen({ route, navigation }) {
               },
             ]}
           >
-            <View style={styles.drawerHeader}>
+            <View
+              style={[
+                styles.drawerHeader,
+                { paddingTop: Math.max(insets.top, spacing.sm) },
+              ]}
+            >
               <Text style={styles.drawerTitle}>Filtros</Text>
               <Pressable
                 style={styles.drawerClose}
