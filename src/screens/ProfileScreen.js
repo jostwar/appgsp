@@ -62,6 +62,7 @@ export default function ProfileScreen({ navigation }) {
   const [carteraState, setCarteraState] = useState('idle');
   const [levelState, setLevelState] = useState('idle');
   const [customerLevel, setCustomerLevel] = useState('Sin nivel');
+  const [companyName, setCompanyName] = useState('');
   const levelColors = {
     'Blue Partner': '#3B82F6',
     'Purple Partner': '#8B5CF6',
@@ -150,9 +151,11 @@ export default function ProfileScreen({ navigation }) {
     try {
       const data = await getRewardsPoints({ cedula: user.cedula });
       setCustomerLevel(data?.level || 'Sin nivel');
+      setCompanyName(String(data?.companyName || '').trim());
       setLevelState('ready');
     } catch (_error) {
       setCustomerLevel('Sin nivel');
+      setCompanyName('');
       setLevelState('error');
     }
   }, [user?.cedula]);
@@ -215,7 +218,7 @@ export default function ProfileScreen({ navigation }) {
     { label: 'Autorización datos personales', url: 'https://gsp.com.co/politica-de-tratamiento-de-datos-personales/' },
     { label: 'Política de garantías', url: 'https://gsp.com.co/politica-de-garantia/' },
   ];
-  const profileCompany = user?.company?.trim() || '';
+  const profileCompany = companyName || '';
   const profilePhone = user?.phone?.trim() || '—';
   return (
     <View style={styles.screen}>
