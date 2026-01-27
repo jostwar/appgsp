@@ -57,6 +57,10 @@ function MainTabs() {
           shadowOffset: { width: 0, height: 6 },
           position: 'absolute',
         },
+        tabBarHideOnKeyboard: true,
+        sceneContainerStyle: {
+          paddingBottom: 96,
+        },
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           fontSize: 9,
