@@ -661,7 +661,9 @@ export default function ProductsScreen({ route, navigation }) {
                   onPress={openProduct}
                   disabled={!productUrl}
                 >
-                  <Text style={styles.title}>{item.name}</Text>
+                  <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+                    {item.name}
+                  </Text>
                 </Pressable>
                 <Text style={styles.price}>{formatCop(item.price)}</Text>
                 {item.sku ? <Text style={styles.sku}>{item.sku}</Text> : null}
@@ -901,6 +903,8 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontSize: 16,
     fontWeight: '600',
+    lineHeight: 20,
+    minHeight: 40,
   },
   price: {
     color: colors.textSoft,
