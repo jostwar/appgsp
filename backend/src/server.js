@@ -17,6 +17,7 @@ const CXC_TOKEN = process.env.CXC_TOKEN;
 const CXC_EMPRESA = process.env.CXC_EMPRESA;
 const CXC_VENTAS_CHUNK_DAYS = Number(process.env.CXC_VENTAS_CHUNK_DAYS || 7);
 const CXC_VENTAS_START_YEAR = Number(process.env.CXC_VENTAS_START_YEAR || 2026);
+const CXC_VENTAS_MAX_MONTHS = Number(process.env.CXC_VENTAS_MAX_MONTHS || 12);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
@@ -628,8 +629,17 @@ const buildVentasMonthlySummary = async ({ cedula, startYear } = {}) => {
   if (!cedula) return [];
   const yearStart = Number.isFinite(startYear) ? startYear : CXC_VENTAS_START_YEAR;
   const now = new Date();
+  const maxMonths =
+    Number.isFinite(CXC_VENTAS_MAX_MONTHS) && CXC_VENTAS_MAX_MONTHS > 0
+      ? CXC_VENTAS_MAX_MONTHS
+      : 12;
   const startDate = new Date(yearStart, 0, 1);
   const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const maxStartDate = new Date(endDate);
+  maxStartDate.setMonth(maxStartDate.getMonth() - (maxMonths - 1));
+  if (maxStartDate > startDate) {
+    startDate.setTime(maxStartDate.getTime());
+  }
   const rows = [];
   const cursor = new Date(startDate);
 
