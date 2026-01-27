@@ -362,12 +362,21 @@ const fetchListadoClientes = async ({ pagina, vendedor }) => {
   };
 };
 
-const findClientInfo = async ({ cedula, vendedor }) => {
+const findClientInfo = async ({ cedula, vendedor, useRemoteFallback = true }) => {
   const normalized = normalizeId(cedula);
+  const cacheTotal = Object.keys(clientsCache.clients).length;
   if (normalized && clientsCache.clients[normalized]) {
     return {
       info: clientsCache.clients[normalized],
-      meta: { total: Object.keys(clientsCache.clients).length, pages: 1 },
+      meta: { total: cacheTotal, pages: 1 },
+      pagesScanned: 0,
+      vendedor: 'cache',
+    };
+  }
+  if (!useRemoteFallback) {
+    return {
+      info: null,
+      meta: { total: cacheTotal, pages: 1 },
       pagesScanned: 0,
       vendedor: 'cache',
     };
@@ -1881,6 +1890,27 @@ const ensureClientsCacheFresh = async () => {
   }
 };
 
+const getMsUntilLocalHour = (hour) => {
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hour, 0, 0, 0);
+  if (now >= target) {
+    target.setDate(target.getDate() + 1);
+  }
+  return Math.max(0, target.getTime() - now.getTime());
+};
+
+const scheduleDailyClientsRefresh = () => {
+  const delay = getMsUntilLocalHour(8);
+  setTimeout(() => {
+    refreshClientsCache().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.warn('No se pudo refrescar clients cache:', error?.message || error);
+    });
+    scheduleDailyClientsRefresh();
+  }, delay);
+};
+
 const parseBasicAuth = (header) => {
   if (!header || !header.startsWith('Basic ')) return null;
   const encoded = header.replace('Basic ', '').trim();
@@ -1945,12 +1975,7 @@ ensureClientsCacheFresh().catch((error) => {
   // eslint-disable-next-line no-console
   console.warn('No se pudo refrescar clients cache:', error?.message || error);
 });
-setInterval(() => {
-  ensureClientsCacheFresh().catch((error) => {
-    // eslint-disable-next-line no-console
-    console.warn('No se pudo refrescar clients cache:', error?.message || error);
-  });
-}, CLIENTS_CACHE_REFRESH_HOURS * 60 * 60 * 1000);
+scheduleDailyClientsRefresh();
 
 app.get('/admin', adminAuth, (_req, res) => {
   res.redirect('/admin/rewards');
@@ -1994,14 +2019,14 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
 
   const [autoSeller, initialSearch, wooSummary] = await Promise.all([
     allowFallback ? findSellerFromCartera({ cedula }) : Promise.resolve(''),
-    findClientInfo({ cedula, vendedor }),
+    findClientInfo({ cedula, vendedor, useRemoteFallback: false }),
     getWooCustomerSummary(cedula),
   ]);
   const autoSearch = autoSeller
-    ? await findClientInfo({ cedula, vendedor: autoSeller })
+    ? await findClientInfo({ cedula, vendedor: autoSeller, useRemoteFallback: false })
     : null;
   const fallbackSearch = allowFallback
-    ? await findClientInfo({ cedula, vendedor: '' })
+    ? await findClientInfo({ cedula, vendedor: '', useRemoteFallback: false })
     : null;
   const activeSearch = initialSearch?.info
     ? initialSearch
