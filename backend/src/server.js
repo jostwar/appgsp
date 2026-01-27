@@ -870,6 +870,17 @@ const renderRewardsPortal = ({
   const showCare = normalizedSection === 'gsp-care';
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
+  const gspCareSavings = [
+    { label: 'Password', value: 30_000 },
+    { label: 'Firmware', value: 40_000 },
+    { label: 'Diagnóstico cámaras PTZ', value: 95_000 },
+    { label: 'Diagnóstico cámaras y grabadores', value: 20_000 },
+    { label: 'Cambios mano a mano', value: 600_000 },
+  ];
+  const gspCareSavingsTotal = gspCareSavings.reduce(
+    (sum, item) => sum + item.value,
+    0
+  );
   const displayName = clientInfo?.name || clientName;
 
   return `<!doctype html>
@@ -1597,6 +1608,29 @@ const renderRewardsPortal = ({
         <p class="section-subtitle">
           Activa o desactiva la membresía para NITs que compren GSP Care.
         </p>
+        <div class="subcard" style="margin-top:12px;">
+          <div class="label" style="margin-bottom:8px;">
+            Ahorro anual estimado sin membresía
+          </div>
+          <div class="grid">
+            ${gspCareSavings
+              .map(
+                (item) => `<div class="item">
+                  <span>${escapeHtml(item.label)}</span>
+                  <strong>$${formatNumber(item.value)}</strong>
+                </div>`
+              )
+              .join('')}
+          </div>
+          <div class="label" style="margin-top:10px;">
+            Certificaciones y capacitaciones pagas cuando aplican.
+          </div>
+          <div class="label" style="margin-top:6px;">
+            Total ahorro anual: <strong>$${formatNumber(
+              gspCareSavingsTotal
+            )}</strong>
+          </div>
+        </div>
         <form class="form" method="post" action="/admin/gspcare/save">
           <input type="hidden" name="section" value="gsp-care" />
           <input type="text" name="cedula" placeholder="NIT o cédula" required />
