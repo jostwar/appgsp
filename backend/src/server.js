@@ -161,6 +161,22 @@ const normalizeSellerId = (value) => String(value || '').replace(/\D+/g, '').tri
 
 let commercialTeamCache = [];
 let commercialTeamMtime = 0;
+const COMMERCIAL_PHOTOS_BY_ID = {
+  '68001': 'https://gsp.com.co/wp-content/uploads/2026/01/68001.png',
+  '68002': 'https://gsp.com.co/wp-content/uploads/2026/01/68002.jpeg',
+  '20002': 'https://gsp.com.co/wp-content/uploads/2026/01/20002-scaled.jpg',
+  '11001': 'https://gsp.com.co/wp-content/uploads/2026/01/11001.jpg',
+  '08002': 'https://gsp.com.co/wp-content/uploads/2026/01/08002-scaled.jpg',
+  '01012': 'https://gsp.com.co/wp-content/uploads/2026/01/01012-scaled.jpg',
+  '01001': 'https://gsp.com.co/wp-content/uploads/2026/01/01001-scaled.jpg',
+  '11008': 'https://gsp.com.co/wp-content/uploads/2026/01/11008-scaled.jpg',
+  '05000': 'https://gsp.com.co/wp-content/uploads/2026/01/05000-scaled.jpg',
+  '76002': 'https://gsp.com.co/wp-content/uploads/2026/01/76002-scaled.jpg',
+  '05002': 'https://gsp.com.co/wp-content/uploads/2026/01/05002-scaled.jpg',
+  '11005': 'https://gsp.com.co/wp-content/uploads/2026/01/11005-scaled.jpg',
+  '11002': 'https://gsp.com.co/wp-content/uploads/2026/01/11002-scaled.jpg',
+  '66004': 'https://gsp.com.co/wp-content/uploads/2026/01/66004-scaled.jpg',
+};
 const parseCommercialTeamCsv = (raw) => {
   if (!raw) return [];
   const lines = raw.split(/\r?\n/).filter((line) => line.trim());
@@ -172,16 +188,19 @@ const parseCommercialTeamCsv = (raw) => {
       .replace(/\s+/g, ' ');
   const header = lines[0].split(';').map(sanitizeCell);
   const idx = (name) => header.findIndex((item) => normalizeField(item) === normalizeField(name));
+  const firstIndex = (names) => names.map(idx).find((i) => i >= 0) ?? -1;
   const vendorIndex = idx('VENDEDOR FOMPLUS');
   const vendorIdIndex = idx('ID VENDEDOR');
   const nameIndex = idx('NOMBRE');
   const phoneIndex = idx('CEL. CORPORATIVO');
   const emailIndex = idx('CORREO');
   const cityIndex = idx('CIUDAD');
+  const photoIndex = firstIndex(['FOTO', 'IMAGEN', 'IMAGE', 'FOTO URL', 'IMAGEN URL']);
   return lines.slice(1).reduce((acc, line) => {
     const parts = line.split(';').map(sanitizeCell);
     const vendor = parts[vendorIndex] || '';
     const vendorId = normalizeSellerId(parts[vendorIdIndex]);
+    const photo = photoIndex >= 0 ? parts[photoIndex] || '' : '';
     if (!vendor) return acc;
     acc.push({
       vendor,
@@ -192,6 +211,7 @@ const parseCommercialTeamCsv = (raw) => {
       phone: parts[phoneIndex] || '',
       email: parts[emailIndex] || '',
       city: parts[cityIndex] || '',
+      image: photo,
     });
     return acc;
   }, []);
@@ -1929,6 +1949,7 @@ const renderRewardsPortal = ({
             </form>
             <div class="muted" style="margin-top:12px;">
               Usa formato CSV con separador punto y coma (;). Encabezado requerido.
+              Campo FOTO es opcional.
             </div>
           </div>`
               : ''
@@ -3499,13 +3520,21 @@ app.get('/api/cxc/comercial', async (req, res) => {
       contacts = team.filter((item) => item.vendorKey === sellerKey);
     }
     contacts = contacts
-      .map(({ name, phone, email, city, vendor }) => ({
-        name,
-        phone,
-        email,
-        city,
-        vendor,
-      }));
+      .map(({ name, phone, email, city, vendor, image, vendorId, vendorIdKey }) => {
+        const photo =
+          image ||
+          COMMERCIAL_PHOTOS_BY_ID[vendorId] ||
+          COMMERCIAL_PHOTOS_BY_ID[vendorIdKey] ||
+          '';
+        return {
+          name,
+          phone,
+          email,
+          city,
+          vendor,
+          image: photo,
+        };
+      });
     return res.json({ seller: resolvedSeller, contacts });
   } catch (error) {
     return res.status(500).json({

@@ -4,6 +4,7 @@ import {
   Text,
   View,
   ScrollView,
+  Image,
   Pressable,
   Switch,
   Linking,
@@ -379,20 +380,25 @@ export default function ProfileScreen({ navigation }) {
           ) : (
             commercialData.contacts.map((contact, index) => (
               <View key={`${contact.email}-${index}`} style={styles.contactCard}>
-                <Text style={styles.contactName}>{contact.name || 'Comercial GSP'}</Text>
-                <Pressable
-                  onPress={() => handlePhonePress(contact.phone)}
-                  onLongPress={() => handleCopy(contact.phone, 'Celular')}
-                >
-                  <Text style={styles.contactLink}>{contact.phone || '—'}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleEmailPress(contact.email)}
-                  onLongPress={() => handleCopy(contact.email, 'Correo')}
-                >
-                  <Text style={styles.contactLink}>{contact.email || '—'}</Text>
-                </Pressable>
-                <Text style={styles.contactMeta}>{contact.city || '—'}</Text>
+                <View style={styles.contactDetails}>
+                  <Text style={styles.contactName}>{contact.name || 'Comercial GSP'}</Text>
+                  <Pressable
+                    onPress={() => handlePhonePress(contact.phone)}
+                    onLongPress={() => handleCopy(contact.phone, 'Celular')}
+                  >
+                    <Text style={styles.contactLink}>{contact.phone || '—'}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleEmailPress(contact.email)}
+                    onLongPress={() => handleCopy(contact.email, 'Correo')}
+                  >
+                    <Text style={styles.contactLink}>{contact.email || '—'}</Text>
+                  </Pressable>
+                  <Text style={styles.contactMeta}>{contact.city || '—'}</Text>
+                </View>
+                {contact.image ? (
+                  <Image source={{ uri: contact.image }} style={styles.contactPhoto} />
+                ) : null}
               </View>
             ))
           )}
@@ -668,6 +674,13 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  contactDetails: {
+    flex: 1,
     gap: 4,
   },
   contactName: {
@@ -683,6 +696,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  contactPhoto: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: colors.card,
   },
   channelRow: {
     flexDirection: 'row',
