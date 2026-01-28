@@ -157,6 +157,8 @@ const normalizeSellerName = (value) =>
     .trim()
     .replace(/\s+/g, ' ');
 
+const normalizeSellerId = (value) => String(value || '').replace(/\D+/g, '').trim();
+
 let commercialTeamCache = [];
 let commercialTeamMtime = 0;
 const parseCommercialTeamCsv = (raw) => {
@@ -171,6 +173,7 @@ const parseCommercialTeamCsv = (raw) => {
   const header = lines[0].split(';').map(sanitizeCell);
   const idx = (name) => header.findIndex((item) => normalizeField(item) === normalizeField(name));
   const vendorIndex = idx('VENDEDOR FOMPLUS');
+  const vendorIdIndex = idx('ID VENDEDOR');
   const nameIndex = idx('NOMBRE');
   const phoneIndex = idx('CEL. CORPORATIVO');
   const emailIndex = idx('CORREO');
@@ -178,9 +181,12 @@ const parseCommercialTeamCsv = (raw) => {
   return lines.slice(1).reduce((acc, line) => {
     const parts = line.split(';').map(sanitizeCell);
     const vendor = parts[vendorIndex] || '';
+    const vendorId = normalizeSellerId(parts[vendorIdIndex]);
     if (!vendor) return acc;
     acc.push({
       vendor,
+      vendorId,
+      vendorIdKey: vendorId ? stripLeadingZeros(vendorId) : '',
       vendorKey: normalizeSellerName(vendor),
       name: parts[nameIndex] || '',
       phone: parts[phoneIndex] || '',
@@ -1916,7 +1922,7 @@ const renderRewardsPortal = ({
               <input type="hidden" name="section" value="comercial" />
               <textarea
                 name="csv"
-                placeholder="VENDEDOR FOMPLUS;NOMBRE;CEL. CORPORATIVO;CORREO;CIUDAD"
+                placeholder="VENDEDOR FOMPLUS;ID VENDEDOR;NOMBRE;CEL. CORPORATIVO;CORREO;CIUDAD"
                 style="min-height:240px;"
               >${escapeHtml(commercialTeamRaw)}</textarea>
               <button type="submit">Guardar listado</button>
@@ -3480,9 +3486,19 @@ app.get('/api/cxc/comercial', async (req, res) => {
       return res.json({ seller: '', contacts: [] });
     }
     const team = loadCommercialTeam();
+    const sellerId = normalizeSellerId(resolvedSeller);
+    const sellerIdKey = sellerId ? stripLeadingZeros(sellerId) : '';
     const sellerKey = normalizeSellerName(resolvedSeller);
-    const contacts = team
-      .filter((item) => item.vendorKey === sellerKey)
+    let contacts = team;
+    if (sellerId) {
+      contacts = contacts.filter(
+        (item) => item.vendorId === sellerId || item.vendorIdKey === sellerIdKey
+      );
+    }
+    if (!contacts.length && sellerKey) {
+      contacts = team.filter((item) => item.vendorKey === sellerKey);
+    }
+    contacts = contacts
       .map(({ name, phone, email, city, vendor }) => ({
         name,
         phone,
