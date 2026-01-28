@@ -6,10 +6,22 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_WC_URL": "https://gsp.com.co",
+        "EXPO_PUBLIC_WC_KEY": "ck_889e61a2233a703eee4087319ba77e112c520fd1",
+        "EXPO_PUBLIC_WC_SECRET": "cs_69594ff0271681d9041aeff38e4f17f50cdfa12d",
+        "EXPO_PUBLIC_BACKEND_URL": "http://3.145.91.120:4000"
+      }
     },
     "apk": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_WC_URL": "https://gsp.com.co",
+        "EXPO_PUBLIC_WC_KEY": "ck_889e61a2233a703eee4087319ba77e112c520fd1",
+        "EXPO_PUBLIC_WC_SECRET": "cs_69594ff0271681d9041aeff38e4f17f50cdfa12d",
+        "EXPO_PUBLIC_BACKEND_URL": "http://3.145.91.120:4000"
+      },
       "android": {
         "buildType": "apk"
       }
