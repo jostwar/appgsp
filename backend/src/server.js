@@ -27,6 +27,7 @@ const offersPath = path.resolve(__dirname, '../data', 'offers.json');
 const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
+const commercialTeamPath = path.resolve(__dirname, '../data', 'commercial-team.csv');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
   process.env.CXC_CLIENTS_REFRESH_HOURS || 24
 );
@@ -145,6 +146,88 @@ const parseJsonish = (value) => {
     if (parsed !== null) return parsed;
   }
   return value;
+};
+
+const normalizeSellerName = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+
+let commercialTeamCache = [];
+let commercialTeamMtime = 0;
+const parseCommercialTeamCsv = (raw) => {
+  if (!raw) return [];
+  const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length === 0) return [];
+  const sanitizeCell = (cell) =>
+    String(cell || '')
+      .trim()
+      .replace(/^"+|"+$/g, '')
+      .replace(/\s+/g, ' ');
+  const header = lines[0].split(';').map(sanitizeCell);
+  const idx = (name) => header.findIndex((item) => normalizeField(item) === normalizeField(name));
+  const vendorIndex = idx('VENDEDOR FOMPLUS');
+  const nameIndex = idx('NOMBRE');
+  const phoneIndex = idx('CEL. CORPORATIVO');
+  const emailIndex = idx('CORREO');
+  const cityIndex = idx('CIUDAD');
+  return lines.slice(1).reduce((acc, line) => {
+    const parts = line.split(';').map(sanitizeCell);
+    const vendor = parts[vendorIndex] || '';
+    if (!vendor) return acc;
+    acc.push({
+      vendor,
+      vendorKey: normalizeSellerName(vendor),
+      name: parts[nameIndex] || '',
+      phone: parts[phoneIndex] || '',
+      email: parts[emailIndex] || '',
+      city: parts[cityIndex] || '',
+    });
+    return acc;
+  }, []);
+};
+
+const loadCommercialTeam = () => {
+  try {
+    const stats = fs.statSync(commercialTeamPath);
+    const mtime = stats.mtimeMs || 0;
+    if (commercialTeamCache.length > 0 && commercialTeamMtime === mtime) {
+      return commercialTeamCache;
+    }
+    const raw = fs.readFileSync(commercialTeamPath, 'utf-8');
+    commercialTeamCache = parseCommercialTeamCsv(raw);
+    commercialTeamMtime = mtime;
+    return commercialTeamCache;
+  } catch (_error) {
+    commercialTeamCache = [];
+    commercialTeamMtime = 0;
+    return [];
+  }
+};
+
+const loadCommercialRaw = () => {
+  try {
+    return fs.readFileSync(commercialTeamPath, 'utf-8');
+  } catch (_error) {
+    return '';
+  }
+};
+
+const saveCommercialRaw = (raw) => {
+  try {
+    fs.mkdirSync(path.dirname(commercialTeamPath), { recursive: true });
+    fs.writeFileSync(commercialTeamPath, String(raw || '').trim());
+    commercialTeamCache = [];
+    commercialTeamMtime = 0;
+    return true;
+  } catch (error) {
+    console.error('No se pudo guardar commercial-team.csv:', error?.message || error);
+    return false;
+  }
 };
 
 const extractJsonPrefix = (xml) => {
@@ -942,6 +1025,8 @@ const renderRewardsPortal = ({
   gspCareList = [],
   offers = [],
   weeklyProduct = null,
+  commercialTeamRaw = '',
+  commercialTeamCount = 0,
   section = 'inicio',
   refreshStatus = '',
   notificationStatus = '',
@@ -1011,6 +1096,7 @@ const renderRewardsPortal = ({
   const showNotifications = normalizedSection === 'notificaciones';
   const showOfertas = normalizedSection === 'ofertas';
   const showWeekly = normalizedSection === 'producto-semana';
+  const showComercial = normalizedSection === 'comercial';
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
   const gspCareSavings = [
@@ -1327,6 +1413,7 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=ofertas">Ofertas</a>
           <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
+          <a href="/admin/rewards?section=comercial">Comercial</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </nav>
       </div>
@@ -1342,6 +1429,7 @@ const renderRewardsPortal = ({
           <a href="/admin/rewards?section=ofertas">Ofertas</a>
           <a href="/admin/rewards?section=producto-semana">Producto semana</a>
           <a href="/admin/rewards?section=gsp-care">GSP Care</a>
+          <a href="/admin/rewards?section=comercial">Comercial</a>
           <a href="/admin/logout">Cerrar sesión</a>
         </aside>
 
@@ -1812,6 +1900,30 @@ const renderRewardsPortal = ({
                   </div>`
                 : '<div class="alert">No hay producto configurado.</div>'
             }
+          </div>`
+              : ''
+          }
+
+          ${
+            showComercial
+              ? `<div id="comercial" class="card">
+            <h2 class="section-title">Equipo comercial</h2>
+            <p class="section-subtitle">
+              Actualiza el listado de comerciales que se muestra en la app.
+            </p>
+            <div class="label">Contactos cargados: <strong>${commercialTeamCount}</strong></div>
+            <form class="form-grid" method="post" action="/admin/comercial/save">
+              <input type="hidden" name="section" value="comercial" />
+              <textarea
+                name="csv"
+                placeholder="VENDEDOR FOMPLUS;NOMBRE;CEL. CORPORATIVO;CORREO;CIUDAD"
+                style="min-height:240px;"
+              >${escapeHtml(commercialTeamRaw)}</textarea>
+              <button type="submit">Guardar listado</button>
+            </form>
+            <div class="muted" style="margin-top:12px;">
+              Usa formato CSV con separador punto y coma (;). Encabezado requerido.
+            </div>
           </div>`
               : ''
           }
@@ -2468,6 +2580,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const rewards = loadRewards();
   const offers = loadOffers();
   const weeklyProduct = loadWeeklyProduct();
+  const commercialTeamRaw = loadCommercialRaw();
+  const commercialTeamCount = loadCommercialTeam().length;
   const gspCareList = loadGspCare();
   const pushTokensCount = loadPushTokens().length;
   const gspCareActive = cedula
@@ -2482,6 +2596,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         rewards,
         offers,
         weeklyProduct,
+        commercialTeamRaw,
+        commercialTeamCount,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2552,6 +2668,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         rewards,
         offers,
         weeklyProduct,
+        commercialTeamRaw,
+        commercialTeamCount,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2572,6 +2690,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         rewards,
         offers,
         weeklyProduct,
+        commercialTeamRaw,
+        commercialTeamCount,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2708,6 +2828,15 @@ app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
   saveGspCare(filtered);
   const targetSection = section || 'gsp-care';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
+});
+
+app.post('/admin/comercial/save', adminAuth, (req, res) => {
+  const section = String(req.body?.section || 'comercial').trim() || 'comercial';
+  const csv = String(req.body?.csv || '').trim();
+  if (!saveCommercialRaw(csv)) {
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&save=error`);
+  }
+  return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&save=ok`);
 });
 
 app.post('/admin/offers/save', adminAuth, (req, res) => {
@@ -3334,6 +3463,38 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     return res.status(500).json({
       error: 'No se pudo consultar estado de cartera',
       details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/cxc/comercial', async (req, res) => {
+  try {
+    const { cedula, vendedor } = req.query;
+    if (!cedula && !vendedor) {
+      return res.status(400).json({ error: 'cedula o vendedor es requerido' });
+    }
+    const resolvedSeller = String(
+      vendedor || (cedula ? await resolveSellerFromClients(cedula) : '') || ''
+    ).trim();
+    if (!resolvedSeller) {
+      return res.json({ seller: '', contacts: [] });
+    }
+    const team = loadCommercialTeam();
+    const sellerKey = normalizeSellerName(resolvedSeller);
+    const contacts = team
+      .filter((item) => item.vendorKey === sellerKey)
+      .map(({ name, phone, email, city, vendor }) => ({
+        name,
+        phone,
+        email,
+        city,
+        vendor,
+      }));
+    return res.json({ seller: resolvedSeller, contacts });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar comercial asignado',
+      details: error?.message,
     });
   }
 });

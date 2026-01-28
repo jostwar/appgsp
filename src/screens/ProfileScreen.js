@@ -8,13 +8,20 @@ import {
   Switch,
   Linking,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
 import { colors, spacing } from '../theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../store/auth';
-import { getCarteraSummary, getRewardsPoints, getWooOrders } from '../api/backend';
+import {
+  getCarteraSummary,
+  getCommercialContact,
+  getRewardsPoints,
+  getWooOrders,
+} from '../api/backend';
 
 export default function ProfileScreen({ navigation }) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -60,6 +67,8 @@ export default function ProfileScreen({ navigation }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [carteraStatus, setCarteraStatus] = useState(null);
   const [carteraState, setCarteraState] = useState('idle');
+  const [commercialState, setCommercialState] = useState('idle');
+  const [commercialData, setCommercialData] = useState({ seller: '', contacts: [] });
   const [levelState, setLevelState] = useState('idle');
   const [customerLevel, setCustomerLevel] = useState('Sin nivel');
   const [companyName, setCompanyName] = useState('');
@@ -160,6 +169,26 @@ export default function ProfileScreen({ navigation }) {
     }
   }, [user?.cedula]);
 
+  const fetchCommercial = useCallback(async () => {
+    if (!user?.cedula) {
+      setCommercialData({ seller: '', contacts: [] });
+      setCommercialState('missing');
+      return;
+    }
+    setCommercialState('loading');
+    try {
+      const data = await getCommercialContact({ cedula: user?.cedula });
+      setCommercialData({
+        seller: String(data?.seller || '').trim(),
+        contacts: Array.isArray(data?.contacts) ? data.contacts : [],
+      });
+      setCommercialState('ready');
+    } catch (_error) {
+      setCommercialData({ seller: '', contacts: [] });
+      setCommercialState('error');
+    }
+  }, [user?.cedula]);
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
@@ -172,11 +201,21 @@ export default function ProfileScreen({ navigation }) {
     fetchLevel();
   }, [fetchLevel]);
 
+  useEffect(() => {
+    fetchCommercial();
+  }, [fetchCommercial]);
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([loadPrefs(), fetchOrders(), fetchCartera(), fetchLevel()]);
+    await Promise.all([
+      loadPrefs(),
+      fetchOrders(),
+      fetchCartera(),
+      fetchLevel(),
+      fetchCommercial(),
+    ]);
     setIsRefreshing(false);
-  }, [loadPrefs, fetchOrders, fetchCartera, fetchLevel]);
+  }, [loadPrefs, fetchOrders, fetchCartera, fetchLevel, fetchCommercial]);
 
   const orderItems = useMemo(
     () =>
@@ -209,6 +248,26 @@ export default function ProfileScreen({ navigation }) {
       maximumFractionDigits: 0,
     }).format(Number.isNaN(numeric) ? 0 : numeric);
   };
+  const normalizePhone = (value) =>
+    String(value || '')
+      .replace(/[^\d+]/g, '')
+      .trim();
+  const handleCopy = useCallback(async (value, label) => {
+    const text = String(value || '').trim();
+    if (!text) return;
+    await Clipboard.setStringAsync(text);
+    Alert.alert('Copiado', `${label} copiado al portapapeles.`);
+  }, []);
+  const handlePhonePress = useCallback((value) => {
+    const phone = normalizePhone(value);
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() => null);
+  }, []);
+  const handleEmailPress = useCallback((value) => {
+    const email = String(value || '').trim();
+    if (!email) return;
+    Linking.openURL(`mailto:${email}`).catch(() => null);
+  }, []);
   const helpLinks = [
     { label: 'Preguntas frecuentes', url: 'https://gsp.com.co/preguntas-frecuentes/' },
     { label: 'Contáctanos', url: 'https://gsp.com.co/contacto/' },
@@ -305,6 +364,38 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
           ) : null}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tu comercial asignado</Text>
+          {commercialState === 'loading' ? (
+            <Text style={styles.sectionHint}>Cargando comercial asignado...</Text>
+          ) : commercialState === 'error' ? (
+            <Text style={styles.sectionHint}>No se pudo consultar el comercial.</Text>
+          ) : commercialState === 'missing' ? (
+            <Text style={styles.sectionHint}>No hay cédula asociada.</Text>
+          ) : commercialData.contacts.length === 0 ? (
+            <Text style={styles.sectionHint}>No hay comercial asignado.</Text>
+          ) : (
+            commercialData.contacts.map((contact, index) => (
+              <View key={`${contact.email}-${index}`} style={styles.contactCard}>
+                <Text style={styles.contactName}>{contact.name || 'Comercial GSP'}</Text>
+                <Pressable
+                  onPress={() => handlePhonePress(contact.phone)}
+                  onLongPress={() => handleCopy(contact.phone, 'Celular')}
+                >
+                  <Text style={styles.contactLink}>{contact.phone || '—'}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleEmailPress(contact.email)}
+                  onLongPress={() => handleCopy(contact.email, 'Correo')}
+                >
+                  <Text style={styles.contactLink}>{contact.email || '—'}</Text>
+                </Pressable>
+                <Text style={styles.contactMeta}>{contact.city || '—'}</Text>
+              </View>
+            ))
+          )}
         </View>
 
         <View style={styles.section}>
@@ -570,6 +661,28 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontWeight: '700',
     fontSize: 14,
+  },
+  contactCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  contactName: {
+    color: colors.textMain,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  contactMeta: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  contactLink: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   channelRow: {
     flexDirection: 'row',

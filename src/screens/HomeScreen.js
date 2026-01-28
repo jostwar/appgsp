@@ -21,12 +21,11 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 import { searchProducts } from '../api/woocommerce';
 import { getHomeOffers, getWeeklyProduct, registerPushToken } from '../api/backend';
 import { useAuth } from '../store/auth';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -68,19 +67,6 @@ export default function HomeScreen() {
       // ignore
     }
   }, []);
-  const registerForPushNotificationsAsync = async () => {
-    if (!Device.isDevice) return null;
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return null;
-    const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
-    return tokenResponse?.data || null;
-  };
   const handleNotificationsPress = useCallback(async () => {
     try {
       const token = await registerForPushNotificationsAsync();

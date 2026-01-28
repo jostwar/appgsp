@@ -84,3 +84,9 @@ export function getCarteraSummary({ cedula, vendedor } = {}) {
     params: { cedula, vendedor },
   });
 }
+
+export function getCommercialContact({ cedula, vendedor } = {}) {
+  return request('/api/cxc/comercial', {
+    params: { cedula, vendedor },
+  });
+}
