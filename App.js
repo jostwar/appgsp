@@ -129,7 +129,14 @@ function MainTabs() {
           const iconName = icons[route.name] || 'ellipse';
           if (route.name === 'Carrito') {
             return (
-              <View style={{ width: size + 10, height: size + 10 }}>
+              <View
+                style={{
+                  width: size + 10,
+                  height: size + 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
                 <Ionicons name={iconName} size={size} color={color} />
                 {cartCount > 0 ? (
                   <View
@@ -166,11 +173,6 @@ function MainTabs() {
     >
       <Tab.Screen name="Inicio" component={HomeScreen} />
       <Tab.Screen
-        name="Recompensas"
-        component={RewardsScreen}
-        options={{ tabBarLabel: 'Rewards' }}
-      />
-      <Tab.Screen
         name="Portafolio"
         component={PortfolioScreen}
         options={{ tabBarLabel: 'Portafolio' }}
@@ -184,6 +186,11 @@ function MainTabs() {
         name="Membresia"
         component={MembershipScreen}
         options={{ tabBarLabel: 'GSP Care' }}
+      />
+      <Tab.Screen
+        name="Recompensas"
+        component={RewardsScreen}
+        options={{ tabBarLabel: 'Rewards' }}
       />
       <Tab.Screen
         name="Carrito"
