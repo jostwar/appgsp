@@ -28,6 +28,7 @@ const offersPath = path.resolve(__dirname, '../data', 'offers.json');
 const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
+const pushHistoryPath = path.resolve(__dirname, '../data', 'push-history.json');
 const commercialTeamPath = path.resolve(__dirname, '../data', 'commercial-team.csv');
 const adminUsersPath = path.resolve(__dirname, '../data', 'admin-users.json');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
@@ -285,6 +286,33 @@ const saveCommercialRaw = (raw) => {
     console.error('No se pudo guardar commercial-team.csv:', error?.message || error);
     return false;
   }
+};
+
+const loadPushHistory = () => {
+  try {
+    const raw = fs.readFileSync(pushHistoryPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+};
+
+const savePushHistory = (items) => {
+  try {
+    fs.mkdirSync(path.dirname(pushHistoryPath), { recursive: true });
+    fs.writeFileSync(pushHistoryPath, JSON.stringify(items, null, 2));
+    return true;
+  } catch (error) {
+    console.error('No se pudo guardar push-history.json:', error?.message || error);
+    return false;
+  }
+};
+
+const recordPushHistory = (entry) => {
+  const current = loadPushHistory();
+  current.unshift(entry);
+  return savePushHistory(current.slice(0, 200));
 };
 
 const defaultAdminRoles = () => [
@@ -1147,6 +1175,7 @@ const renderRewardsPortal = ({
   adminUsers = [],
   editRole = null,
   editUser = null,
+  pushHistory = [],
   allowedSections = ADMIN_SECTIONS,
   section = 'inicio',
   refreshStatus = '',
@@ -1282,6 +1311,18 @@ const renderRewardsPortal = ({
             <button type="submit" class="btn-secondary">Eliminar</button>
           </form>
         </div>
+      </div>`
+    )
+    .join('');
+  const pushHistoryRows = pushHistory
+    .map(
+      (item) => `<div class="subcard">
+        <div class="label"><strong>${escapeHtml(item.title || '')}</strong></div>
+        <div class="label">${escapeHtml(item.body || '')}</div>
+        <div class="label">Enviado por: ${escapeHtml(item.sentBy || '—')}</div>
+        <div class="label">Fecha: ${escapeHtml(item.sentAt || '—')}</div>
+        <div class="label">Estado: ${escapeHtml(item.status || '—')}</div>
+        <div class="label">Resultados: ${item.sent || 0}/${item.total || 0} ok</div>
       </div>`
     )
     .join('');
@@ -1987,6 +2028,10 @@ const renderRewardsPortal = ({
               <input type="text" name="url" placeholder="URL opcional (ej. https://gsp.com.co)" />
               <button type="submit">Enviar notificación</button>
             </form>
+            <h3 class="section-title" style="font-size:16px; margin-top:16px;">Historial</h3>
+            <div class="grid" style="margin-top:12px;">
+              ${pushHistoryRows || '<div class="alert">No hay notificaciones enviadas.</div>'}
+            </div>
           </div>`
               : ''
           }
@@ -2562,6 +2607,7 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
   const chunks = chunkArray(tokens, 100);
   let sent = 0;
   let failed = 0;
+  const receipts = [];
   for (const chunk of chunks) {
     const messages = chunk.map((token) => ({
       to: token,
@@ -2576,15 +2622,18 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
       results.forEach((result) => {
         if (result?.status === 'ok') {
           sent += 1;
+          receipts.push({ status: 'ok', id: result?.id || null });
         } else {
           failed += 1;
+          receipts.push({ status: 'error', message: result?.message || 'Error' });
         }
       });
     } catch (_error) {
       failed += messages.length;
+      receipts.push({ status: 'error', message: 'Error enviando notificación' });
     }
   }
-  return { total: tokens.length, sent, failed };
+  return { total: tokens.length, sent, failed, receipts };
 };
 
 const clientsCache = {
@@ -2857,6 +2906,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const commercialTeamRaw = loadCommercialRaw();
   const commercialTeamCount = loadCommercialTeam().length;
   const { users: adminUsers, roles: adminRoles } = loadAdminUsers();
+  const pushHistory = loadPushHistory();
   const allowedSections = allowedSectionsFor(req.adminUser?.permissions || []);
   if (!allowedSections.length) {
     return res.status(403).send('Acceso restringido.');
@@ -2893,6 +2943,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         adminRoles,
         editRole,
         editUser,
+        pushHistory,
         allowedSections,
         editReward,
         gspCareList,
@@ -2970,6 +3021,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         adminRoles,
         editRole,
         editUser,
+        pushHistory,
         allowedSections,
         editReward,
         gspCareList,
@@ -2997,6 +3049,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         adminRoles,
         editRole,
         editUser,
+        pushHistory,
         allowedSections,
         editReward,
         gspCareList,
@@ -3051,13 +3104,35 @@ app.post(
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
   }
   try {
-    await sendPushNotifications({
+    const result = await sendPushNotifications({
       title,
       body,
       data: url ? { url } : {},
     });
+    const status =
+      result.failed === 0 ? 'enviado' : result.sent > 0 ? 'parcial' : 'fallido';
+    recordPushHistory({
+      title,
+      body,
+      sentBy: req.adminUser?.username || 'admin',
+      sentAt: new Date().toISOString(),
+      status,
+      total: result.total,
+      sent: result.sent,
+      failed: result.failed,
+    });
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=ok`);
   } catch (_error) {
+    recordPushHistory({
+      title,
+      body,
+      sentBy: req.adminUser?.username || 'admin',
+      sentAt: new Date().toISOString(),
+      status: 'fallido',
+      total: 0,
+      sent: 0,
+      failed: 0,
+    });
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
   }
   }
