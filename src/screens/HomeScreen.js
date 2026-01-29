@@ -449,28 +449,29 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [sliderImages.length]);
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadHomeData = async () => {
-      try {
-        const [offersData, weeklyData] = await Promise.all([
-          getHomeOffers().catch(() => ({ offers: [] })),
-          getWeeklyProduct().catch(() => ({ product: null })),
-        ]);
-        if (!isMounted) return;
-        setHomeOffers(Array.isArray(offersData?.offers) ? offersData.offers : []);
-        setWeeklyProduct(weeklyData?.product || null);
-      } catch (_error) {
-        if (!isMounted) return;
-        setHomeOffers([]);
-        setWeeklyProduct(null);
-      }
-    };
-    loadHomeData();
-    return () => {
-      isMounted = false;
-    };
+  const loadHomeData = useCallback(async (isMountedRef) => {
+    try {
+      const [offersData, weeklyData] = await Promise.all([
+        getHomeOffers().catch(() => ({ offers: [] })),
+        getWeeklyProduct().catch(() => ({ product: null })),
+      ]);
+      if (isMountedRef && !isMountedRef.current) return;
+      setHomeOffers(Array.isArray(offersData?.offers) ? offersData.offers : []);
+      setWeeklyProduct(weeklyData?.product || null);
+    } catch (_error) {
+      if (isMountedRef && !isMountedRef.current) return;
+      setHomeOffers([]);
+      setWeeklyProduct(null);
+    }
   }, []);
+
+  useEffect(() => {
+    const isMountedRef = { current: true };
+    loadHomeData(isMountedRef);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadHomeData]);
 
   const formatCop = (value) => {
     if (!value) return '';
@@ -527,6 +528,7 @@ export default function HomeScreen() {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await loadLocation();
+    await loadHomeData();
     const query = searchQuery.trim();
     if (query.length >= 2) {
       setSearchStatus('loading');
