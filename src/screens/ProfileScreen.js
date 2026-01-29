@@ -369,6 +369,9 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tu comercial asignado</Text>
+          <Text style={styles.sectionHint}>
+            Toca el teléfono o correo para contactar. Mantén presionado para copiar.
+          </Text>
           {commercialState === 'loading' ? (
             <Text style={styles.sectionHint}>Cargando comercial asignado...</Text>
           ) : commercialState === 'error' ? (
@@ -397,7 +400,13 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={styles.contactMeta}>{contact.city || '—'}</Text>
                 </View>
                 {contact.image ? (
-                  <Image source={{ uri: contact.image }} style={styles.contactPhoto} />
+                  <View style={styles.contactPhotoWrapper}>
+                    <Image
+                      source={{ uri: contact.image }}
+                      style={styles.contactPhoto}
+                      resizeMode="cover"
+                    />
+                  </View>
                 ) : null}
               </View>
             ))
@@ -697,11 +706,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  contactPhoto: {
+  contactPhotoWrapper: {
     width: 64,
     height: 64,
     borderRadius: 12,
+    overflow: 'hidden',
     backgroundColor: colors.card,
+  },
+  contactPhoto: {
+    width: '100%',
+    height: '100%',
   },
   channelRow: {
     flexDirection: 'row',
