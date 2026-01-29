@@ -1143,7 +1143,7 @@ const renderRewardsPortal = ({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GSPRewards - Portal</title>
+    <title>GSP Pro - Portal</title>
     <style>
       :root {
         color-scheme: dark;
@@ -1463,7 +1463,7 @@ const renderRewardsPortal = ({
           ${
             showDashboard
               ? `<div id="inicio" class="card">
-            <h1>Dashboard GSPRewards</h1>
+            <h1>Dashboard GSP Pro</h1>
             <p class="section-subtitle">
               Consulta puntos por cliente y administra premios disponibles.
             </p>
@@ -1958,7 +1958,7 @@ const renderRewardsPortal = ({
       ${
         showDashboard
           ? `<div class="card">
-        <h2>¿Cómo funciona GSPRewards?</h2>
+        <h2>¿Cómo funciona GSP Pro?</h2>
         <div class="grid">
           ${steps
             .map(
@@ -2360,7 +2360,7 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
   for (const chunk of chunks) {
     const messages = chunk.map((token) => ({
       to: token,
-      title: title || 'GSPRewards',
+      title: title || 'GSP Pro',
       body: body || '',
       sound: 'default',
       data: data || {},
