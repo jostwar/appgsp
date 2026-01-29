@@ -82,7 +82,8 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: 'transparent',
-          height: 70,
+          height: 74,
+          paddingTop: 6,
           paddingBottom: 6,
           justifyContent: 'space-around',
           marginHorizontal: 16,
@@ -100,12 +101,14 @@ function MainTabs() {
           paddingBottom: 96,
         },
         tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontSize: 9,
+        tabBarIconStyle: {
           marginTop: 2,
         },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          marginBottom: 2,
+        },
         tabBarItemStyle: {
-          paddingVertical: 6,
           alignItems: 'center',
           justifyContent: 'center',
           flex: 1,
