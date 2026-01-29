@@ -102,11 +102,11 @@ function MainTabs() {
         },
         tabBarShowLabel: true,
         tabBarIconStyle: {
-          marginTop: 2,
+          marginTop: 0,
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          marginBottom: 2,
+          marginTop: 2,
         },
         tabBarItemStyle: {
           alignItems: 'center',
@@ -181,14 +181,14 @@ function MainTabs() {
         options={{ tabBarLabel: 'Productos' }}
       />
       <Tab.Screen
-        name="Carrito"
-        component={CartScreen}
-        options={{ tabBarLabel: 'Carrito' }}
-      />
-      <Tab.Screen
         name="Membresia"
         component={MembershipScreen}
         options={{ tabBarLabel: 'GSP Care' }}
+      />
+      <Tab.Screen
+        name="Carrito"
+        component={CartScreen}
+        options={{ tabBarLabel: 'Carrito' }}
       />
       <Tab.Screen
         name="Checkout"
