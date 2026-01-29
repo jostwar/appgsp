@@ -39,6 +39,14 @@ const CLIENTS_CACHE_MAX_PAGES = Number(process.env.CXC_CLIENTS_MAX_PAGES || 50);
 const normalizeKey = (value) => String(value || '').toLowerCase();
 const normalizeId = (value) => String(value || '').replace(/\D+/g, '').trim();
 const stripLeadingZeros = (value) => String(value || '').replace(/^0+/, '');
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
 const normalizeMetaList = (meta) => {
   if (Array.isArray(meta)) return meta;
   if (!meta || typeof meta !== 'object') return [];
@@ -4104,18 +4112,34 @@ app.get('/api/cxc/clientes/suggest', async (req, res) => {
       return res.json([]);
     }
     await ensureClientsCacheFresh();
-    const normalized = normalizeId(query);
-    if (!normalized) {
+    const normalizedId = normalizeId(query);
+    const normalizedText = normalizeSearchText(query);
+    if (!normalizedId && !normalizedText) {
       return res.json([]);
     }
     const results = [];
-    for (const [cedula, info] of Object.entries(clientsCache.clients)) {
-      if (!cedula.startsWith(normalized)) continue;
-      results.push({
-        cedula,
-        name: info?.name || '',
-      });
-      if (results.length >= 8) break;
+    const seen = new Set();
+    if (normalizedId) {
+      for (const [cedula, info] of Object.entries(clientsCache.clients)) {
+        if (!cedula.startsWith(normalizedId)) continue;
+        results.push({
+          cedula,
+          name: info?.name || '',
+        });
+        seen.add(cedula);
+        if (results.length >= 8) break;
+      }
+    }
+    if (normalizedText && results.length < 8) {
+      for (const [cedula, info] of Object.entries(clientsCache.clients)) {
+        if (results.length >= 8) break;
+        if (seen.has(cedula)) continue;
+        const name = String(info?.name || '').trim();
+        if (!name) continue;
+        if (!normalizeSearchText(name).includes(normalizedText)) continue;
+        results.push({ cedula, name });
+        seen.add(cedula);
+      }
     }
     return res.json(results);
   } catch (error) {
