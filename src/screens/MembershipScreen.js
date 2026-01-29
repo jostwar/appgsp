@@ -42,9 +42,57 @@ export default function MembershipScreen() {
   const validUntil = '31 dic 2026';
   const plans = useMemo(
     () => [
-      { id: 'annual', label: 'Pago anual', value: '$399.000' },
-      { id: 'semi', label: 'Pago semestral', value: '2 pagos de $249.500' },
-      { id: 'quarter', label: 'Pago trimestral', value: '4 pagos de $150.000' },
+      {
+        id: 'annual',
+        label: 'Anual',
+        value: '$399.000',
+        description: 'Plan full con todos los servicios.',
+        background: '#0B0B0B',
+        border: '#1F1F1F',
+        highlight: 'Top',
+        services: [
+          { label: 'Password', qty: 10 },
+          { label: 'Firmware', qty: 10 },
+          { label: 'Diagnóstico cámaras PTZ', qty: 10 },
+          { label: 'Diagnóstico cámaras y grabadores', qty: 10 },
+          { label: 'Cambios mano a mano', qty: 2 },
+          { label: 'Capacitaciones/certificaciones', qty: 4 },
+        ],
+      },
+      {
+        id: 'semi',
+        label: 'Semestral',
+        value: '2 pagos de $249.500',
+        description: 'Cobertura intermedia para tu equipo.',
+        background: '#0B2B4E',
+        border: '#144A7A',
+        highlight: 'Azul',
+        services: [
+          { label: 'Password', qty: 6 },
+          { label: 'Firmware', qty: 6 },
+          { label: 'Diagnóstico cámaras PTZ', qty: 6 },
+          { label: 'Diagnóstico cámaras y grabadores', qty: 6 },
+          { label: 'Cambios mano a mano', qty: 1 },
+          { label: 'Capacitaciones/certificaciones', qty: 2 },
+        ],
+      },
+      {
+        id: 'quarter',
+        label: 'Trimestral',
+        value: '4 pagos de $150.000',
+        description: 'Ideal para necesidades puntuales.',
+        background: '#2C2F36',
+        border: '#3D434D',
+        highlight: 'Gris',
+        services: [
+          { label: 'Password', qty: 3 },
+          { label: 'Firmware', qty: 3 },
+          { label: 'Diagnóstico cámaras PTZ', qty: 3 },
+          { label: 'Diagnóstico cámaras y grabadores', qty: 3 },
+          { label: 'Cambios mano a mano', qty: 0 },
+          { label: 'Capacitaciones/certificaciones', qty: 1 },
+        ],
+      },
     ],
     []
   );
@@ -151,12 +199,34 @@ export default function MembershipScreen() {
         </View>
 
         <View style={styles.card}>
-          {plans.map((plan) => (
-            <View key={plan.id} style={styles.row}>
-              <Text style={styles.label}>{plan.label}</Text>
-              <Text style={styles.value}>{plan.value}</Text>
-            </View>
-          ))}
+          <Text style={styles.sectionTitle}>Planes de membresía</Text>
+          <Text style={styles.subtitle}>Son tipos de membresía, no formas de pago.</Text>
+          <View style={styles.planGrid}>
+            {plans.map((plan) => (
+              <View
+                key={plan.id}
+                style={[
+                  styles.planCard,
+                  { backgroundColor: plan.background, borderColor: plan.border },
+                ]}
+              >
+                <View style={styles.planHeader}>
+                  <Text style={styles.planTitle}>{plan.label}</Text>
+                  <Text style={styles.planBadge}>{plan.highlight}</Text>
+                </View>
+                <Text style={styles.planPrice}>{plan.value}</Text>
+                <Text style={styles.planDescription}>{plan.description}</Text>
+                <View style={styles.planServices}>
+                  {plan.services.map((service) => (
+                    <View key={`${plan.id}-${service.label}`} style={styles.planServiceRow}>
+                      <Text style={styles.planServiceLabel}>{service.label}</Text>
+                      <Text style={styles.planServiceQty}>x{service.qty}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
           <Text style={styles.subtitle}>Costos IVA incluido</Text>
         </View>
 
@@ -345,6 +415,61 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: spacing.lg,
     gap: spacing.sm,
+  },
+  planGrid: {
+    gap: spacing.md,
+  },
+  planCard: {
+    borderRadius: 16,
+    padding: spacing.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  planTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  planBadge: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  planPrice: {
+    color: '#F8FAFC',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  planDescription: {
+    color: '#E2E8F0',
+    fontSize: 12,
+  },
+  planServices: {
+    gap: 6,
+  },
+  planServiceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  planServiceLabel: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    flex: 1,
+  },
+  planServiceQty: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '700',
   },
   sectionTitle: {
     color: colors.textMain,
