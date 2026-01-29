@@ -330,6 +330,24 @@ const defaultAdminRoles = () => [
   { id: 'comercial', name: 'Comercial', permissions: ['inicio', 'comercial', 'clientes'] },
 ];
 
+const ensureJsonFile = (targetPath, fallbackValue) => {
+  try {
+    if (fs.existsSync(targetPath)) return;
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, JSON.stringify(fallbackValue, null, 2));
+  } catch (error) {
+    console.error('No se pudo crear archivo base:', error?.message || error);
+  }
+};
+
+const ensureDataFiles = () => {
+  ensureJsonFile(offersPath, []);
+  ensureJsonFile(weeklyProductPath, null);
+  ensureJsonFile(gspCarePath, []);
+  ensureJsonFile(pushHistoryPath, []);
+  ensureJsonFile(adminUsersPath, { users: [], roles: defaultAdminRoles() });
+};
+
 const loadAdminUsers = () => {
   try {
     const raw = fs.readFileSync(adminUsersPath, 'utf-8');
@@ -2847,8 +2865,8 @@ const adminAuth = async (req, res, next) => {
     });
     const token = login?.token;
     const profile = await woo.getWpUserMe(token);
-    const roles = Array.isArray(profile?.roles) ? profile.roles : [];
-    if (!roles.includes('administrator')) {
+    const wpRoles = Array.isArray(profile?.roles) ? profile.roles : [];
+    if (!wpRoles.includes('administrator')) {
       res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
       return res.status(403).send('Acceso restringido.');
     }
@@ -2880,6 +2898,7 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+ensureDataFiles();
 loadClientsCache();
 ensureClientsCacheFresh().catch((error) => {
   // eslint-disable-next-line no-console
