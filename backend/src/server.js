@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { cxc } from './cxcClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
@@ -28,6 +29,7 @@ const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.jso
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
 const commercialTeamPath = path.resolve(__dirname, '../data', 'commercial-team.csv');
+const adminUsersPath = path.resolve(__dirname, '../data', 'admin-users.json');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
   process.env.CXC_CLIENTS_REFRESH_HOURS || 24
 );
@@ -159,6 +161,35 @@ const normalizeSellerName = (value) =>
 
 const normalizeSellerId = (value) => String(value || '').replace(/\D+/g, '').trim();
 
+const ADMIN_SECTIONS = [
+  'inicio',
+  'clientes',
+  'premios',
+  'notificaciones',
+  'ofertas',
+  'producto-semana',
+  'gsp-care',
+  'comercial',
+  'usuarios',
+];
+const ADMIN_SECTION_LABELS = {
+  inicio: 'Inicio',
+  clientes: 'Buscar cliente',
+  premios: 'Premios',
+  notificaciones: 'Notificaciones',
+  ofertas: 'Ofertas',
+  'producto-semana': 'Producto semana',
+  'gsp-care': 'GSP Care',
+  comercial: 'Comercial',
+  usuarios: 'Usuarios',
+};
+const ADMIN_PASSWORD_SALT = String(process.env.ADMIN_PORTAL_SALT || 'gsp_portal_salt');
+const hashAdminPassword = (password) =>
+  crypto
+    .createHash('sha256')
+    .update(`${ADMIN_PASSWORD_SALT}:${password}`)
+    .digest('hex');
+
 let commercialTeamCache = [];
 let commercialTeamMtime = 0;
 const COMMERCIAL_PHOTOS_BY_ID = {
@@ -255,6 +286,65 @@ const saveCommercialRaw = (raw) => {
     return false;
   }
 };
+
+const defaultAdminRoles = () => [
+  { id: 'admin', name: 'Administrador', permissions: [...ADMIN_SECTIONS] },
+  { id: 'operaciones', name: 'Operaciones', permissions: ['inicio', 'clientes', 'premios'] },
+  { id: 'marketing', name: 'Marketing', permissions: ['inicio', 'notificaciones', 'ofertas'] },
+  { id: 'comercial', name: 'Comercial', permissions: ['inicio', 'comercial', 'clientes'] },
+];
+
+const loadAdminUsers = () => {
+  try {
+    const raw = fs.readFileSync(adminUsersPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const users = Array.isArray(parsed?.users) ? parsed.users : [];
+    const roles = Array.isArray(parsed?.roles) ? parsed.roles : defaultAdminRoles();
+    return { users, roles };
+  } catch (_error) {
+    return { users: [], roles: defaultAdminRoles() };
+  }
+};
+
+const saveAdminUsers = ({ users = [], roles = [] } = {}) => {
+  try {
+    fs.mkdirSync(path.dirname(adminUsersPath), { recursive: true });
+    fs.writeFileSync(
+      adminUsersPath,
+      JSON.stringify({ users, roles, updatedAt: new Date().toISOString() }, null, 2)
+    );
+    return true;
+  } catch (error) {
+    console.error('No se pudo guardar admin-users.json:', error?.message || error);
+    return false;
+  }
+};
+
+const resolveRolePermissions = ({ roleId, roles }) => {
+  if (!roleId) return [];
+  if (roleId === 'admin') return [...ADMIN_SECTIONS];
+  const match = roles.find((role) => role.id === roleId);
+  return Array.isArray(match?.permissions) ? match.permissions : [];
+};
+
+const buildAdminSession = ({ username, roleId, roles, source }) => {
+  const permissions = resolveRolePermissions({ roleId, roles });
+  return {
+    username,
+    roleId,
+    permissions,
+    source,
+  };
+};
+
+const canAccessSection = (section, permissions = []) => {
+  if (!section) return false;
+  if (permissions.includes('admin')) return true;
+  return permissions.includes(section);
+};
+
+const allowedSectionsFor = (permissions = []) =>
+  ADMIN_SECTIONS.filter((section) => canAccessSection(section, permissions));
 
 const extractJsonPrefix = (xml) => {
   if (typeof xml !== 'string') return null;
@@ -1053,6 +1143,11 @@ const renderRewardsPortal = ({
   weeklyProduct = null,
   commercialTeamRaw = '',
   commercialTeamCount = 0,
+  adminRoles = [],
+  adminUsers = [],
+  editRole = null,
+  editUser = null,
+  allowedSections = ADMIN_SECTIONS,
   section = 'inicio',
   refreshStatus = '',
   notificationStatus = '',
@@ -1123,6 +1218,73 @@ const renderRewardsPortal = ({
   const showOfertas = normalizedSection === 'ofertas';
   const showWeekly = normalizedSection === 'producto-semana';
   const showComercial = normalizedSection === 'comercial';
+  const showUsuarios = normalizedSection === 'usuarios';
+  const navLinks = allowedSections
+    .filter((key) => ADMIN_SECTION_LABELS[key])
+    .map(
+      (key) =>
+        `<a href="/admin/rewards?section=${encodeURIComponent(key)}">${escapeHtml(
+          ADMIN_SECTION_LABELS[key]
+        )}</a>`
+    )
+    .join('');
+  const roleLabelById = adminRoles.reduce((acc, role) => {
+    acc[role.id] = role.name;
+    return acc;
+  }, {});
+  const roleOptions = adminRoles
+    .map(
+      (role) =>
+        `<option value="${escapeHtml(role.id)}" ${
+          editUser?.roleId === role.id ? 'selected' : ''
+        }>${escapeHtml(role.name)}</option>`
+    )
+    .join('');
+  const rolePermissions = editRole?.permissions || [];
+  const permissionCheckboxes = ADMIN_SECTIONS.map((section) => {
+    const checked = rolePermissions.includes(section) ? 'checked' : '';
+    return `<label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+      <input type="checkbox" name="permissions" value="${escapeHtml(section)}" ${checked} />
+      ${escapeHtml(ADMIN_SECTION_LABELS[section] || section)}
+    </label>`;
+  }).join('');
+  const rolesList = adminRoles
+    .map(
+      (role) => `<div class="subcard">
+        <h3>${escapeHtml(role.name)}</h3>
+        <div class="label">Permisos: ${role.permissions?.length || 0}</div>
+        <div class="reward-actions">
+          <a href="/admin/rewards?section=usuarios&roleId=${escapeHtml(
+            role.id
+          )}" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 12px;">Editar</a>
+          <form method="post" action="/admin/roles/delete">
+            <input type="hidden" name="section" value="usuarios" />
+            <input type="hidden" name="id" value="${escapeHtml(role.id)}" />
+            <button type="submit" class="btn-secondary">Eliminar</button>
+          </form>
+        </div>
+      </div>`
+    )
+    .join('');
+  const usersList = adminUsers
+    .map(
+      (user) => `<div class="subcard">
+        <h3>${escapeHtml(user.username)}</h3>
+        <div class="label">Rol: ${escapeHtml(roleLabelById[user.roleId] || '—')}</div>
+        <div class="label">Estado: ${user.active ? 'Activo' : 'Inactivo'}</div>
+        <div class="reward-actions">
+          <a href="/admin/rewards?section=usuarios&userId=${escapeHtml(
+            user.id
+          )}" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:8px 12px;">Editar</a>
+          <form method="post" action="/admin/users/delete">
+            <input type="hidden" name="section" value="usuarios" />
+            <input type="hidden" name="id" value="${escapeHtml(user.id)}" />
+            <button type="submit" class="btn-secondary">Eliminar</button>
+          </form>
+        </div>
+      </div>`
+    )
+    .join('');
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
   const gspCareSavings = [
@@ -1432,14 +1594,7 @@ const renderRewardsPortal = ({
           <img src="https://gsp.com.co/wp-content/uploads/2026/01/Identificador-GSP_LOGO_3.png" alt="GSP" />
         </div>
         <nav class="nav">
-          <a href="/admin/rewards?section=inicio">Inicio</a>
-          <a href="/admin/rewards?section=clientes">Buscar cliente</a>
-          <a href="/admin/rewards?section=premios">Premios</a>
-          <a href="/admin/rewards?section=notificaciones">Notificaciones</a>
-          <a href="/admin/rewards?section=ofertas">Ofertas</a>
-          <a href="/admin/rewards?section=producto-semana">Producto semana</a>
-          <a href="/admin/rewards?section=gsp-care">GSP Care</a>
-          <a href="/admin/rewards?section=comercial">Comercial</a>
+          ${navLinks}
           <a href="/admin/logout">Cerrar sesión</a>
         </nav>
       </div>
@@ -1448,14 +1603,7 @@ const renderRewardsPortal = ({
       <div class="layout">
         <aside class="sidebar">
           <strong>Menú</strong>
-          <a href="/admin/rewards?section=inicio">Dashboard</a>
-          <a href="/admin/rewards?section=clientes">Buscar cliente</a>
-          <a href="/admin/rewards?section=premios">Premios</a>
-          <a href="/admin/rewards?section=notificaciones">Notificaciones</a>
-          <a href="/admin/rewards?section=ofertas">Ofertas</a>
-          <a href="/admin/rewards?section=producto-semana">Producto semana</a>
-          <a href="/admin/rewards?section=gsp-care">GSP Care</a>
-          <a href="/admin/rewards?section=comercial">Comercial</a>
+          ${navLinks}
           <a href="/admin/logout">Cerrar sesión</a>
         </aside>
 
@@ -1950,6 +2098,63 @@ const renderRewardsPortal = ({
             <div class="muted" style="margin-top:12px;">
               Usa formato CSV con separador punto y coma (;). Encabezado requerido.
               Campo FOTO es opcional.
+            </div>
+          </div>`
+              : ''
+          }
+
+          ${
+            showUsuarios
+              ? `<div id="usuarios" class="card">
+            <h2 class="section-title">Usuarios y roles</h2>
+            <p class="section-subtitle">
+              Crea usuarios para el portal y asigna permisos por sección.
+            </p>
+            <div class="row" style="gap:24px;">
+              <div style="flex:1; min-width:280px;">
+                <h3 class="section-title" style="font-size:16px;">Roles</h3>
+                <form class="form-grid" method="post" action="/admin/roles/save">
+                  <input type="hidden" name="section" value="usuarios" />
+                  <input type="hidden" name="id" value="${escapeHtml(editRole?.id || '')}" />
+                  <input type="text" name="name" placeholder="Nombre del rol" value="${escapeHtml(
+                    editRole?.name || ''
+                  )}" required />
+                  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                    ${permissionCheckboxes}
+                  </div>
+                  <button type="submit">${editRole?.id ? 'Guardar rol' : 'Crear rol'}</button>
+                </form>
+                <div class="grid" style="margin-top:16px;">
+                  ${rolesList || '<div class="alert">No hay roles configurados.</div>'}
+                </div>
+              </div>
+              <div style="flex:1; min-width:280px;">
+                <h3 class="section-title" style="font-size:16px;">Usuarios</h3>
+                <form class="form-grid" method="post" action="/admin/users/save">
+                  <input type="hidden" name="section" value="usuarios" />
+                  <input type="hidden" name="id" value="${escapeHtml(editUser?.id || '')}" />
+                  <input type="text" name="username" placeholder="Usuario" value="${escapeHtml(
+                    editUser?.username || ''
+                  )}" required />
+                  <input type="password" name="password" placeholder="${
+                    editUser?.id ? 'Nueva contraseña (opcional)' : 'Contraseña'
+                  }" ${editUser?.id ? '' : 'required'} />
+                  <select name="roleId" required>
+                    <option value="">Selecciona un rol</option>
+                    ${roleOptions}
+                  </select>
+                  <label style="display:flex; gap:8px; align-items:center;">
+                    <input type="checkbox" name="active" ${
+                      editUser?.active === false ? '' : 'checked'
+                    } />
+                    Activo
+                  </label>
+                  <button type="submit">${editUser?.id ? 'Guardar usuario' : 'Crear usuario'}</button>
+                </form>
+                <div class="grid" style="margin-top:16px;">
+                  ${usersList || '<div class="alert">No hay usuarios creados.</div>'}
+                </div>
+              </div>
             </div>
           </div>`
               : ''
@@ -2548,10 +2753,35 @@ const adminAuth = async (req, res, next) => {
         credentials.username === fixedUser &&
         credentials.password === fixedPass
       ) {
+        const { roles } = loadAdminUsers();
+        req.adminUser = buildAdminSession({
+          username: fixedUser,
+          roleId: 'admin',
+          roles,
+          source: 'env',
+        });
         return next();
       }
       res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
       return res.status(401).send('Credenciales inválidas.');
+    }
+
+    const { users, roles } = loadAdminUsers();
+    const normalizedUsername = String(credentials.username || '').trim().toLowerCase();
+    const matchedUser = users.find(
+      (user) => String(user.username || '').trim().toLowerCase() === normalizedUsername
+    );
+    if (matchedUser?.active) {
+      const hashed = hashAdminPassword(credentials.password || '');
+      if (hashed === matchedUser.passwordHash) {
+        req.adminUser = buildAdminSession({
+          username: matchedUser.username,
+          roleId: matchedUser.roleId,
+          roles,
+          source: 'local',
+        });
+        return next();
+      }
     }
 
     const login = await woo.login({
@@ -2566,12 +2796,27 @@ const adminAuth = async (req, res, next) => {
       return res.status(403).send('Acceso restringido.');
     }
 
-    req.adminUser = profile;
+    req.adminUser = buildAdminSession({
+      username: credentials.username,
+      roleId: 'admin',
+      roles: loadAdminUsers().roles,
+      source: 'wp',
+    });
     return next();
   } catch (_error) {
     res.setHeader('WWW-Authenticate', 'Basic realm="GSP Admin"');
     return res.status(401).send('Credenciales inválidas.');
   }
+};
+
+const requireSectionPermission = (section) => (req, res, next) => {
+  if (!req.adminUser) {
+    return res.status(401).send('Autenticación requerida.');
+  }
+  if (canAccessSection(section, req.adminUser.permissions || [])) {
+    return next();
+  }
+  return res.status(403).send('Acceso restringido.');
 };
 
 app.get('/health', (_req, res) => {
@@ -2597,6 +2842,8 @@ app.get('/admin/logout', (_req, res) => {
 app.get('/admin/rewards', adminAuth, async (req, res) => {
   const cedula = String(req.query.cedula || '').trim();
   const editId = String(req.query.editId || '').trim();
+  const roleId = String(req.query.roleId || '').trim();
+  const userId = String(req.query.userId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
   const refreshStatus = String(req.query.refresh || '').trim();
   const notificationStatus = String(req.query.notify || '').trim();
@@ -2609,6 +2856,17 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const weeklyProduct = loadWeeklyProduct();
   const commercialTeamRaw = loadCommercialRaw();
   const commercialTeamCount = loadCommercialTeam().length;
+  const { users: adminUsers, roles: adminRoles } = loadAdminUsers();
+  const allowedSections = allowedSectionsFor(req.adminUser?.permissions || []);
+  if (!allowedSections.length) {
+    return res.status(403).send('Acceso restringido.');
+  }
+  const safeSection = allowedSections.includes(section)
+    ? section
+    : allowedSections[0] || 'inicio';
+  if (safeSection !== section) {
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(safeSection)}`);
+  }
   const gspCareList = loadGspCare();
   const pushTokensCount = loadPushTokens().length;
   const gspCareActive = cedula
@@ -2616,6 +2874,12 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
     : false;
   const editReward = editId
     ? rewards.find((reward) => String(reward.id) === editId) || null
+    : null;
+  const editRole = roleId
+    ? adminRoles.find((role) => String(role.id) === roleId) || null
+    : null;
+  const editUser = userId
+    ? adminUsers.find((user) => String(user.id) === userId) || null
     : null;
   if (!cedula) {
     return res.send(
@@ -2625,13 +2889,18 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         weeklyProduct,
         commercialTeamRaw,
         commercialTeamCount,
+        adminUsers,
+        adminRoles,
+        editRole,
+        editUser,
+        allowedSections,
         editReward,
         gspCareList,
         gspCareActive,
         vendedor,
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
-        section,
+        section: safeSection,
         refreshStatus,
         notificationStatus,
         pushTokensCount,
@@ -2697,13 +2966,18 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         weeklyProduct,
         commercialTeamRaw,
         commercialTeamCount,
+        adminUsers,
+        adminRoles,
+        editRole,
+        editUser,
+        allowedSections,
         editReward,
         gspCareList,
         gspCareActive,
         vendedor,
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
-        section,
+        section: safeSection,
         refreshStatus,
         notificationStatus,
         pushTokensCount,
@@ -2719,6 +2993,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         weeklyProduct,
         commercialTeamRaw,
         commercialTeamCount,
+        adminUsers,
+        adminRoles,
+        editRole,
+        editUser,
+        allowedSections,
         editReward,
         gspCareList,
         gspCareActive,
@@ -2728,7 +3007,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedor,
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
-        section,
+        section: safeSection,
         timings: {
           search: searchTimings,
         },
@@ -2740,7 +3019,11 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   }
 });
 
-app.post('/admin/rewards/refresh-clients', adminAuth, async (req, res) => {
+app.post(
+  '/admin/rewards/refresh-clients',
+  adminAuth,
+  requireSectionPermission('clientes'),
+  async (req, res) => {
   const section = String(req.body?.section || 'clientes').trim() || 'clientes';
   try {
     await refreshClientsCache();
@@ -2752,9 +3035,14 @@ app.post('/admin/rewards/refresh-clients', adminAuth, async (req, res) => {
       `/admin/rewards?section=${encodeURIComponent(section)}&refresh=error`
     );
   }
-});
+  }
+);
 
-app.post('/admin/notifications/send', adminAuth, async (req, res) => {
+app.post(
+  '/admin/notifications/send',
+  adminAuth,
+  requireSectionPermission('notificaciones'),
+  async (req, res) => {
   const section = String(req.body?.section || 'notificaciones').trim() || 'notificaciones';
   const title = String(req.body?.title || '').trim();
   const body = String(req.body?.body || '').trim();
@@ -2772,9 +3060,14 @@ app.post('/admin/notifications/send', adminAuth, async (req, res) => {
   } catch (_error) {
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
   }
-});
+  }
+);
 
-app.post('/admin/rewards/save', adminAuth, (req, res) => {
+app.post(
+  '/admin/rewards/save',
+  adminAuth,
+  requireSectionPermission('premios'),
+  (req, res) => {
   const { id, title, description, points, value, image, section } =
     req.body || {};
   if (!title || !points) {
@@ -2801,9 +3094,14 @@ app.post('/admin/rewards/save', adminAuth, (req, res) => {
   saveRewards(rewards);
   const targetSection = section || 'premios';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/rewards/delete', adminAuth, (req, res) => {
+app.post(
+  '/admin/rewards/delete',
+  adminAuth,
+  requireSectionPermission('premios'),
+  (req, res) => {
   const { id, section } = req.body || {};
   if (!id) {
     return res.redirect('/admin/rewards?section=premios');
@@ -2813,9 +3111,14 @@ app.post('/admin/rewards/delete', adminAuth, (req, res) => {
   saveRewards(filtered);
   const targetSection = section || 'premios';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/gspcare/save', adminAuth, (req, res) => {
+app.post(
+  '/admin/gspcare/save',
+  adminAuth,
+  requireSectionPermission('gsp-care'),
+  (req, res) => {
   const { cedula, fecha, section, plan } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
@@ -2842,9 +3145,14 @@ app.post('/admin/gspcare/save', adminAuth, (req, res) => {
   saveGspCare(current);
   const targetSection = section || 'gsp-care';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
+app.post(
+  '/admin/gspcare/delete',
+  adminAuth,
+  requireSectionPermission('gsp-care'),
+  (req, res) => {
   const { cedula, section } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
@@ -2855,18 +3163,157 @@ app.post('/admin/gspcare/delete', adminAuth, (req, res) => {
   saveGspCare(filtered);
   const targetSection = section || 'gsp-care';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/comercial/save', adminAuth, (req, res) => {
+app.post(
+  '/admin/comercial/save',
+  adminAuth,
+  requireSectionPermission('comercial'),
+  (req, res) => {
   const section = String(req.body?.section || 'comercial').trim() || 'comercial';
   const csv = String(req.body?.csv || '').trim();
   if (!saveCommercialRaw(csv)) {
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&save=error`);
   }
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&save=ok`);
-});
+  }
+);
 
-app.post('/admin/offers/save', adminAuth, (req, res) => {
+app.post(
+  '/admin/roles/save',
+  adminAuth,
+  requireSectionPermission('usuarios'),
+  (req, res) => {
+    const section = String(req.body?.section || 'usuarios').trim() || 'usuarios';
+    const id = String(req.body?.id || '').trim();
+    const name = String(req.body?.name || '').trim();
+    const permissionsRaw = req.body?.permissions;
+    const permissionsList = Array.isArray(permissionsRaw)
+      ? permissionsRaw
+      : permissionsRaw
+        ? [permissionsRaw]
+        : [];
+    const permissions = permissionsList.filter((item) => ADMIN_SECTIONS.includes(item));
+    if (!name) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+    }
+    const state = loadAdminUsers();
+    const roleId =
+      id ||
+      normalizeField(name).slice(0, 24) ||
+      `role-${Date.now().toString(36)}`;
+    const existingIndex = state.roles.findIndex((role) => role.id === roleId);
+    if (roleId === 'admin') {
+      state.roles = state.roles.map((role) =>
+        role.id === 'admin' ? { ...role, name: 'Administrador', permissions } : role
+      );
+    } else if (existingIndex >= 0) {
+      state.roles[existingIndex] = {
+        ...state.roles[existingIndex],
+        name,
+        permissions,
+      };
+    } else {
+      state.roles.push({ id: roleId, name, permissions });
+    }
+    saveAdminUsers(state);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+  }
+);
+
+app.post(
+  '/admin/roles/delete',
+  adminAuth,
+  requireSectionPermission('usuarios'),
+  (req, res) => {
+    const section = String(req.body?.section || 'usuarios').trim() || 'usuarios';
+    const id = String(req.body?.id || '').trim();
+    if (!id || id === 'admin') {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+    }
+    const state = loadAdminUsers();
+    state.roles = state.roles.filter((role) => role.id !== id);
+    state.users = state.users.map((user) =>
+      user.roleId === id ? { ...user, roleId: 'admin' } : user
+    );
+    saveAdminUsers(state);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+  }
+);
+
+app.post(
+  '/admin/users/save',
+  adminAuth,
+  requireSectionPermission('usuarios'),
+  (req, res) => {
+    const section = String(req.body?.section || 'usuarios').trim() || 'usuarios';
+    const id = String(req.body?.id || '').trim();
+    const username = String(req.body?.username || '').trim();
+    const roleId = String(req.body?.roleId || '').trim();
+    const password = String(req.body?.password || '').trim();
+    const active = Boolean(req.body?.active);
+    if (!username || !roleId) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+    }
+    const state = loadAdminUsers();
+    const normalizedUsername = username.toLowerCase();
+    const existingUser = state.users.find(
+      (user) => String(user.username || '').trim().toLowerCase() === normalizedUsername
+    );
+    if (!id && existingUser) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&user=exists`);
+    }
+    if (id) {
+      const index = state.users.findIndex((user) => user.id === id);
+      if (index >= 0) {
+        state.users[index] = {
+          ...state.users[index],
+          username,
+          roleId,
+          active,
+          passwordHash: password ? hashAdminPassword(password) : state.users[index].passwordHash,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    } else {
+      state.users.push({
+        id: `user-${Date.now().toString(36)}`,
+        username,
+        roleId,
+        active,
+        passwordHash: hashAdminPassword(password),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    saveAdminUsers(state);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+  }
+);
+
+app.post(
+  '/admin/users/delete',
+  adminAuth,
+  requireSectionPermission('usuarios'),
+  (req, res) => {
+    const section = String(req.body?.section || 'usuarios').trim() || 'usuarios';
+    const id = String(req.body?.id || '').trim();
+    if (!id) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+    }
+    const state = loadAdminUsers();
+    state.users = state.users.filter((user) => user.id !== id);
+    saveAdminUsers(state);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}`);
+  }
+);
+
+app.post(
+  '/admin/offers/save',
+  adminAuth,
+  requireSectionPermission('ofertas'),
+  (req, res) => {
   const { title, subtitle, price, image, searchQuery, cta, section } = req.body || {};
   if (!title) {
     return res.redirect('/admin/rewards?section=ofertas');
@@ -2884,9 +3331,14 @@ app.post('/admin/offers/save', adminAuth, (req, res) => {
   saveOffers(offers);
   const targetSection = section || 'ofertas';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/offers/delete', adminAuth, (req, res) => {
+app.post(
+  '/admin/offers/delete',
+  adminAuth,
+  requireSectionPermission('ofertas'),
+  (req, res) => {
   const { id, section } = req.body || {};
   if (!id) {
     return res.redirect('/admin/rewards?section=ofertas');
@@ -2895,9 +3347,14 @@ app.post('/admin/offers/delete', adminAuth, (req, res) => {
   saveOffers(offers);
   const targetSection = section || 'ofertas';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
-app.post('/admin/weekly/save', adminAuth, (req, res) => {
+app.post(
+  '/admin/weekly/save',
+  adminAuth,
+  requireSectionPermission('producto-semana'),
+  (req, res) => {
   const { title, subtitle, price, image, searchQuery, cta, section } = req.body || {};
   if (!title) {
     return res.redirect('/admin/rewards?section=producto-semana');
@@ -2913,7 +3370,8 @@ app.post('/admin/weekly/save', adminAuth, (req, res) => {
   saveWeeklyProduct(payload);
   const targetSection = section || 'producto-semana';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
-});
+  }
+);
 
 app.get('/api/rewards', (_req, res) => {
   const rewards = loadRewards();
