@@ -1355,11 +1355,9 @@ const renderRewardsPortal = ({
   const rewardsCount = rewardsList.length;
   const careCount = gspCareList.length;
   const gspCareSavings = [
-    { label: 'Password', value: 30_000 },
-    { label: 'Firmware', value: 40_000 },
-    { label: 'Diagnóstico cámaras PTZ', value: 95_000 },
-    { label: 'Diagnóstico cámaras y grabadores', value: 20_000 },
-    { label: 'Cambios mano a mano', value: 600_000 },
+    { label: 'Basic (3 Meses)', value: 328900 },
+    { label: 'Professional (6 Meses)', value: 491900 },
+    { label: 'Premium (1 Año)', value: 1055000 },
   ];
   const gspCareSavingsTotal = gspCareSavings.reduce(
     (sum, item) => sum + item.value,
@@ -2286,7 +2284,7 @@ const renderRewardsPortal = ({
         </p>
         <div class="subcard" style="margin-top:12px;">
           <div class="label" style="margin-bottom:8px;">
-            Ahorro anual estimado sin membresía
+            Lo que ahorraría el cliente (pagando cada servicio a valor unitario)
           </div>
           <div class="grid">
             ${gspCareSavings
@@ -2298,13 +2296,8 @@ const renderRewardsPortal = ({
               )
               .join('')}
           </div>
-          <div class="label" style="margin-top:10px;">
-            Certificaciones y capacitaciones pagas cuando aplican.
-          </div>
           <div class="label" style="margin-top:6px;">
-            Total ahorro anual: <strong>$${formatNumber(
-              gspCareSavingsTotal
-            )}</strong>
+            Precios IVA incluido: Basic $299.900 · Professional $449.900 · Premium $699.900
           </div>
         </div>
         <form class="form" method="post" action="/admin/gspcare/save">
@@ -2313,9 +2306,9 @@ const renderRewardsPortal = ({
           <input type="text" name="fecha" placeholder="Fecha activación (YYYY-MM-DD)" />
           <select name="plan" required>
             <option value="">Selecciona tipo de membresía</option>
-            <option value="GSP Care 1">GSP Care 1</option>
-            <option value="GSP Care 2">GSP Care 2</option>
-            <option value="GSP Care 3">GSP Care 3</option>
+            <option value="Basic">Basic (3 Meses)</option>
+            <option value="Professional">Professional (6 Meses)</option>
+            <option value="Premium">Premium (1 Año)</option>
           </select>
           <button type="submit">Activar</button>
         </form>

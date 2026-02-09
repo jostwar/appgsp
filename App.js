@@ -19,6 +19,7 @@ import CheckoutScreen from './src/screens/CheckoutScreen';
 import MembershipScreen from './src/screens/MembershipScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import IntroScreen from './src/screens/IntroScreen';
+import SearchScreen from './src/screens/SearchScreen';
 import { AuthProvider, useAuth } from './src/store/auth';
 
 const Tab = createBottomTabNavigator();
@@ -125,6 +126,7 @@ function MainTabs() {
             Membresia: 'shield',
             Checkout: 'card',
             Perfil: 'person',
+            Buscar: 'search',
           };
           const iconName = icons[route.name] || 'ellipse';
           if (route.name === 'Carrito') {
@@ -200,6 +202,14 @@ function MainTabs() {
       <Tab.Screen
         name="Checkout"
         component={CheckoutScreen}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
+      <Tab.Screen
+        name="Buscar"
+        component={SearchScreen}
         options={{
           tabBarButton: () => null,
           tabBarItemStyle: { display: 'none' },

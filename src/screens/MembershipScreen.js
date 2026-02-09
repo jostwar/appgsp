@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View, ScrollView, Pressable, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
@@ -40,107 +39,67 @@ export default function MembershipScreen() {
     return 'Cliente GSP';
   })();
   const validUntil = '31 dic 2026';
-  const plans = useMemo(
+  const memberships = useMemo(
     () => [
       {
-        id: 'annual',
-        label: 'Anual',
-        value: '$399.000',
-        description: 'Plan full con todos los servicios.',
-        background: '#0B0B0B',
-        border: '#1F1F1F',
-        highlight: 'Top',
-        services: [
-          { label: 'Password', qty: 10 },
-          { label: 'Firmware', qty: 10 },
-          { label: 'Diagnóstico cámaras PTZ', qty: 10 },
-          { label: 'Diagnóstico cámaras y grabadores', qty: 10 },
-          { label: 'Cambios mano a mano', qty: 2 },
-          { label: 'Capacitaciones/certificaciones', qty: 4 },
-        ],
-      },
-      {
-        id: 'semi',
-        label: 'Semestral',
-        value: '2 pagos de $249.500',
-        description: 'Cobertura intermedia para tu equipo.',
-        background: '#0B2B4E',
-        border: '#144A7A',
-        highlight: 'Azul',
-        services: [
-          { label: 'Password', qty: 6 },
-          { label: 'Firmware', qty: 6 },
-          { label: 'Diagnóstico cámaras PTZ', qty: 6 },
-          { label: 'Diagnóstico cámaras y grabadores', qty: 6 },
-          { label: 'Cambios mano a mano', qty: 1 },
-          { label: 'Capacitaciones/certificaciones', qty: 2 },
-        ],
-      },
-      {
-        id: 'quarter',
-        label: 'Trimestral',
-        value: '4 pagos de $150.000',
-        description: 'Ideal para necesidades puntuales.',
+        id: 'basic',
+        label: 'Basic',
+        duration: '3 Meses',
+        value: '$299.900',
+        price: 299900,
+        description: 'Membresía 3 meses.',
         background: '#2C2F36',
         border: '#3D434D',
-        highlight: 'Gris',
-        services: [
-          { label: 'Password', qty: 3 },
-          { label: 'Firmware', qty: 3 },
-          { label: 'Diagnóstico cámaras PTZ', qty: 3 },
-          { label: 'Diagnóstico cámaras y grabadores', qty: 3 },
-          { label: 'Cambios mano a mano', qty: 0 },
-          { label: 'Capacitaciones/certificaciones', qty: 1 },
-        ],
+        highlight: '3 Meses',
+      },
+      {
+        id: 'professional',
+        label: 'Professional',
+        duration: '6 Meses',
+        value: '$449.900',
+        price: 449900,
+        description: 'Membresía 6 meses.',
+        background: '#0B2B4E',
+        border: '#144A7A',
+        highlight: '6 Meses',
+      },
+      {
+        id: 'premium',
+        label: 'Premium',
+        duration: '1 Año',
+        value: '$699.900',
+        price: 699900,
+        description: 'Membresía 1 año.',
+        background: '#0B0B0B',
+        border: '#1F1F1F',
+        highlight: '1 Año',
       },
     ],
     []
   );
-  const savingsItems = useMemo(
+  const tableRows = useMemo(
     () => [
-      { id: 'password', label: 'Password', qty: 10, normal: 30_000, member: 0 },
-      { id: 'firmware', label: 'Firmware', qty: 10, normal: 40_000, member: 0 },
-      {
-        id: 'diag-ptz',
-        label: 'Diagnóstico cámaras PTZ',
-        qty: 10,
-        normal: 95_000,
-        member: 0,
-      },
-      {
-        id: 'diag-cctv',
-        label: 'Diagnóstico cámaras y grabadores',
-        qty: 10,
-        normal: 20_000,
-        member: 0,
-      },
-      { id: 'mano', label: 'Cambios mano a mano', qty: 2, normal: 600_000, member: 0 },
+      { description: 'Reset contraseña equipo hikvision/hiklook', basic: null, professional: null, premium: null },
+      { description: 'Servicio flasheo Hikvision', basic: null, professional: null, premium: null },
+      { description: 'Desvinculacion cuenta HIK-CONNECT', basic: null, professional: null, premium: null },
+      { description: 'Actualizacion firmware equipo Hikvision /Hilook', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico (no incluye PTZ) – incluye grabador – camaras fuera de garantia', basic: 10, professional: 16, premium: 32 },
+      { description: 'Reset contraseña servidores software zkteco Biotime -Zkbiocvsecurity -Zkbiocvacces', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico Remoto Equipo fuera de Garantia (Servidores Zkbiocvacces Zkbiocvsecurity Biotime)', basic: 2, professional: 2, premium: 3 },
+      { description: 'Parametrizacion Lector Honeywell lectura codigo de barras software Zkbiocvsecurity en modulo visitantes', basic: null, professional: null, premium: null },
+      { description: 'Desvinculacion de equipo DSC plataforma Comunicadores', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico equipos marca DSC fuera de garantia', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico equipos marca UHF fuera de garantia', basic: null, professional: null, premium: null },
+      { description: 'Diagnostico equipo marca CAME en sede fuera de garantia', basic: 1, professional: 2, premium: 3 },
     ],
     []
   );
-  const savingsTotal = useMemo(
-    () =>
-      savingsItems.reduce(
-        (sum, item) =>
-          sum + Math.max(0, (item.normal - item.member) * item.qty),
-        0
-      ),
-    [savingsItems]
-  );
-  const annualMembershipValue = 399_000;
-  const netSavings = Math.max(0, savingsTotal - annualMembershipValue);
-
-  const benefits = useMemo(
+  const savingsByMembership = useMemo(
     () => [
-      { icon: 'key', label: '10 servicios de reset de password' },
-      { icon: 'hardware-chip', label: '10 servicios de firmware' },
-      { icon: 'build', label: '10 revisiones de equipos' },
-      {
-        icon: 'swap-horizontal',
-        label:
-          '2 cambios al año mano a mano a equipos no mayor de $300.000 (IVA incluido). Aplica para equipos adquiridos en el año corriente o mínimo 2 meses antes de fin de año anterior (quemados, partidos, etc).',
-      },
-      { icon: 'school', label: '2 a 4 capacitaciones o certificaciones gratis al año' },
+      { id: 'basic', label: 'Basic (3 Meses)', amount: 328900 },
+      { id: 'professional', label: 'Professional (6 Meses)', amount: 491900 },
+      { id: 'premium', label: 'Premium (1 Año)', amount: 1055000 },
     ],
     []
   );
@@ -199,10 +158,10 @@ export default function MembershipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Planes de membresía</Text>
-          <Text style={styles.subtitle}>Son tipos de membresía, no formas de pago.</Text>
+          <Text style={styles.sectionTitle}>Tipos de membresía</Text>
+          <Text style={styles.subtitle}>Basic (3 Meses), Professional (6 Meses), Premium (1 Año). IVA incluido.</Text>
           <View style={styles.planGrid}>
-            {plans.map((plan) => (
+            {memberships.map((plan) => (
               <View
                 key={plan.id}
                 style={[
@@ -216,78 +175,40 @@ export default function MembershipScreen() {
                 </View>
                 <Text style={styles.planPrice}>{plan.value}</Text>
                 <Text style={styles.planDescription}>{plan.description}</Text>
-                <View style={styles.planServices}>
-                  {plan.services.map((service) => (
-                    <View key={`${plan.id}-${service.label}`} style={styles.planServiceRow}>
-                      <Text style={styles.planServiceLabel}>{service.label}</Text>
-                      <Text style={styles.planServiceQty}>x{service.qty}</Text>
-                    </View>
-                  ))}
-                </View>
               </View>
             ))}
           </View>
-          <Text style={styles.subtitle}>Costos IVA incluido</Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Ahorro anual estimado</Text>
-          <View style={styles.savingsHeader}>
-            <Text style={styles.savingsHeaderLabel}>Servicio</Text>
-            <Text style={styles.savingsHeaderValue}>Cant.</Text>
-          </View>
-          {savingsItems.map((item) => {
-            const normalTotal = item.normal * item.qty;
-            const memberTotal = item.member * item.qty;
-            const savings = Math.max(0, normalTotal - memberTotal);
-            return (
-              <View key={item.id} style={styles.savingsRow}>
-                <View style={styles.savingsRowMain}>
-                  <Text style={styles.savingsLabel}>{item.label}</Text>
-                  <Text style={styles.savingsQty}>x{item.qty}</Text>
-                </View>
-                <View style={styles.savingsRowValues}>
-                  <View style={styles.savingsValueBlock}>
-                    <Text style={styles.savingsValueLabel}>Normal</Text>
-                    <Text style={styles.savingsValue}>{formatCop(normalTotal)}</Text>
-                  </View>
-                  <View style={styles.savingsValueBlock}>
-                    <Text style={styles.savingsValueLabel}>Con membresía</Text>
-                    <Text style={styles.savingsValue}>{formatCop(memberTotal)}</Text>
-                  </View>
-                  <View style={styles.savingsValueBlock}>
-                    <Text style={styles.savingsValueLabel}>Ahorro</Text>
-                    <Text style={styles.savingsValue}>{formatCop(savings)}</Text>
-                  </View>
-                </View>
+          <Text style={styles.sectionTitle}>Qué incluye cada membresía</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.tableWrap}>
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.tableCellDesc, styles.tableHeaderText]}>DESCRIPCION</Text>
+                <Text style={[styles.tableCellBasic, styles.tableHeaderText]}>BASIC</Text>
+                <Text style={[styles.tableCellPro, styles.tableHeaderText]}>PROFESSIONAL</Text>
+                <Text style={[styles.tableCellPremium, styles.tableHeaderText]}>PREMIUM</Text>
               </View>
-            );
-          })}
-          <Text style={styles.savingsNote}>
-            Certificaciones y capacitaciones pueden ser pagas según el caso.
-          </Text>
-          <View style={styles.row}>
-            <Text style={styles.totalLabel}>Total ahorro anual</Text>
-            <Text style={styles.totalValue}>{formatCop(savingsTotal)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.totalLabel}>Membresía anual</Text>
-            <Text style={styles.totalValue}>{formatCop(annualMembershipValue)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.totalLabel}>Ahorro neto estimado</Text>
-            <Text style={styles.totalValue}>{formatCop(netSavings)}</Text>
-          </View>
+              {tableRows.map((row, index) => (
+                <View key={`row-${index}`} style={styles.tableRow}>
+                  <Text style={styles.tableCellDesc} numberOfLines={3}>{row.description}</Text>
+                  <Text style={styles.tableCellBasic}>{row.basic != null ? String(row.basic) : 'Incl.'}</Text>
+                  <Text style={styles.tableCellPro}>{row.professional != null ? String(row.professional) : 'Incl.'}</Text>
+                  <Text style={styles.tableCellPremium}>{row.premium != null ? String(row.premium) : 'Incl.'}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Incluye</Text>
-          {benefits.map((benefit, index) => (
-            <View key={`${benefit.label}-${index}`} style={styles.benefitRow}>
-              <View style={styles.benefitIcon}>
-                <Ionicons name={benefit.icon} size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.benefitText}>{benefit.label}</Text>
+          <Text style={styles.sectionTitle}>Lo que ahorrarías</Text>
+          <Text style={styles.subtitle}>Pagando cada servicio incluido a valor unitario.</Text>
+          {savingsByMembership.map((item) => (
+            <View key={item.id} style={styles.savingsRow}>
+              <Text style={styles.savingsLabel}>{item.label}</Text>
+              <Text style={styles.savingsAmount}>{formatCop(item.amount)}</Text>
             </View>
           ))}
         </View>
@@ -490,92 +411,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  savingsHeader: {
+  tableWrap: {
+    minWidth: 520,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tableHeaderRow: {
     flexDirection: 'row',
+    backgroundColor: colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  tableHeaderText: {
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  savingsHeaderLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
+  tableCellDesc: {
+    color: colors.textSoft,
+    fontSize: 11,
+    flex: 1.8,
+    marginRight: 8,
   },
-  savingsHeaderValue: {
-    color: colors.textMuted,
+  tableCellBasic: {
+    color: colors.textMain,
     fontSize: 12,
+    width: 52,
+    textAlign: 'center',
+  },
+  tableCellPro: {
+    color: colors.textMain,
+    fontSize: 12,
+    width: 72,
+    textAlign: 'center',
+  },
+  tableCellPremium: {
+    color: colors.textMain,
+    fontSize: 12,
+    width: 58,
+    textAlign: 'center',
   },
   savingsRow: {
-    gap: spacing.xs,
-  },
-  savingsRowMain: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   savingsLabel: {
     color: colors.textSoft,
     fontSize: 13,
     flex: 1,
   },
-  savingsQty: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  savingsRowValues: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  savingsValueBlock: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  savingsValueLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-  },
-  savingsValue: {
+  savingsAmount: {
     color: colors.textMain,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  savingsNote: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  totalLabel: {
-    color: colors.textMain,
+    fontSize: 15,
     fontWeight: '700',
-    fontSize: 14,
-  },
-  totalValue: {
-    color: colors.textMain,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  benefitIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  benefitText: {
-    color: colors.textSoft,
-    fontSize: 13,
-    flex: 1,
   },
   primaryButton: {
     backgroundColor: colors.buttonBg,
