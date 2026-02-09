@@ -24,11 +24,13 @@ const CXC_VENTAS_CACHE_MINUTES = Number(process.env.CXC_VENTAS_CACHE_MINUTES || 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rewardsPath = path.resolve(__dirname, '../data', 'rewards.json');
 const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
+const gspCareRequestsPath = path.resolve(__dirname, '../data', 'gspcare-requests.json');
 const offersPath = path.resolve(__dirname, '../data', 'offers.json');
 const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
 const pushHistoryPath = path.resolve(__dirname, '../data', 'push-history.json');
+const cashbackRequestsPath = path.resolve(__dirname, '../data', 'cashback-requests.json');
 const commercialTeamPath = path.resolve(__dirname, '../data', 'commercial-team.csv');
 const adminUsersPath = path.resolve(__dirname, '../data', 'admin-users.json');
 const CLIENTS_CACHE_REFRESH_HOURS = Number(
@@ -174,6 +176,7 @@ const ADMIN_SECTIONS = [
   'inicio',
   'clientes',
   'premios',
+  'solicitudes-cashback',
   'notificaciones',
   'ofertas',
   'producto-semana',
@@ -185,6 +188,7 @@ const ADMIN_SECTION_LABELS = {
   inicio: 'Inicio',
   clientes: 'Buscar cliente',
   premios: 'Premios',
+  'solicitudes-cashback': 'Solicitudes cashback',
   notificaciones: 'Notificaciones',
   ofertas: 'Ofertas',
   'producto-semana': 'Producto semana',
@@ -325,7 +329,7 @@ const recordPushHistory = (entry) => {
 
 const defaultAdminRoles = () => [
   { id: 'admin', name: 'Administrador', permissions: [...ADMIN_SECTIONS] },
-  { id: 'operaciones', name: 'Operaciones', permissions: ['inicio', 'clientes', 'premios'] },
+  { id: 'operaciones', name: 'Operaciones', permissions: ['inicio', 'clientes', 'premios', 'solicitudes-cashback'] },
   { id: 'marketing', name: 'Marketing', permissions: ['inicio', 'notificaciones', 'ofertas'] },
   { id: 'comercial', name: 'Comercial', permissions: ['inicio', 'comercial', 'clientes'] },
 ];
@@ -1194,6 +1198,7 @@ const renderRewardsPortal = ({
   gspCareActive = false,
   gspCareList = [],
   gspCareVerCedula = '',
+  gspCareError = '',
   gspCareServices = [],
   offers = [],
   weeklyProduct = null,
@@ -1209,6 +1214,7 @@ const renderRewardsPortal = ({
   refreshStatus = '',
   notificationStatus = '',
   pushTokensCount = 0,
+  cashbackRequests = [],
   timings = null,
 } = {}) => {
   const rewardsList = rewards;
@@ -1270,6 +1276,7 @@ const renderRewardsPortal = ({
   const showDashboard = normalizedSection === 'inicio';
   const showClientes = normalizedSection === 'clientes';
   const showPremios = normalizedSection === 'premios';
+  const showSolicitudesCashback = normalizedSection === 'solicitudes-cashback';
   const showCare = normalizedSection === 'gsp-care';
   const showNotifications = normalizedSection === 'notificaciones';
   const showOfertas = normalizedSection === 'ofertas';
@@ -1284,18 +1291,45 @@ const renderRewardsPortal = ({
     gspCareMember && Array.isArray(gspCareServices)
       ? gspCareServices.map((svc) => {
           const limit = getGspCareLimitForPlan(svc, gspCareMember.plan);
-          const used = Number(gspCareMember.consumption?.[svc.id] || 0);
+          const categoryId = svc.categoryId;
+          const used = Number(gspCareMember.periodConsumption?.[categoryId] ?? 0);
           const remaining =
-            limit == null ? 'Ilimitado' : Math.max(0, limit - used);
+            limit == null ? null : Math.max(0, limit - used);
           return {
             id: svc.id,
             name: svc.name,
-            limit: limit == null ? 'Incl.' : String(limit),
+            categoryId,
+            marca: svc.marca,
+            modalidad: svc.modalidad,
+            limit: limit == null ? '—' : String(limit),
             used,
-            remaining: typeof remaining === 'number' ? String(remaining) : remaining,
+            remaining: limit == null ? '—' : String(remaining),
+            remainingNum: remaining,
           };
         })
       : [];
+  const gspCareBolsones =
+    gspCareMember && GSP_CARE_CATEGORY_IDS
+      ? GSP_CARE_CATEGORY_IDS.map((catId) => {
+          const limit = getGspCareCategoryLimitForPlan(catId, gspCareMember.plan);
+          const used = Number(gspCareMember.periodConsumption?.[catId] ?? 0);
+          const remaining = limit == null ? 0 : Math.max(0, limit - used);
+          return {
+            id: catId,
+            name: GSP_CARE_CATEGORIES[catId]?.name || catId,
+            limit: limit == null ? '—' : limit,
+            used,
+            remaining,
+          };
+        })
+      : [];
+  const gspCareMemberRequests = gspCareVerCedula
+    ? (() => {
+        const list = loadGspCareRequests();
+        const norm = normalizeId(gspCareVerCedula);
+        return list.filter((r) => r.cedula === norm);
+      })()
+    : [];
   const navLinks = allowedSections
     .filter((key) => ADMIN_SECTION_LABELS[key])
     .map(
@@ -2054,6 +2088,55 @@ const renderRewardsPortal = ({
           }
 
           ${
+            showSolicitudesCashback
+              ? `<div id="solicitudes-cashback" class="card">
+            <h2 class="section-title">Solicitudes de cashback</h2>
+            <p class="section-subtitle">
+              Lista de solicitudes de cashback. Cierra cada una con el número y monto de la NC generada en el ERP.
+            </p>
+            ${notificationStatus === 'closed'
+              ? '<div class="alert" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">Solicitud cerrada correctamente.</div>'
+              : ''}
+            <div class="grid" style="margin-top:16px;">
+              ${
+                cashbackRequests.length
+                  ? cashbackRequests
+                      .map(
+                        (r) => `<div class="subcard" style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                          <div>
+                            <strong>Cédula:</strong> ${escapeHtml(r.cedula || '')}
+                            &nbsp;|&nbsp;
+                            <strong>Monto solicitado:</strong> $${formatNumber(Number(r.amount) || 0)}
+                            &nbsp;|&nbsp;
+                            <strong>Fecha:</strong> ${escapeHtml((r.createdAt || '').slice(0, 10))}
+                          </div>
+                          <span class="label" style="padding:4px 8px;border-radius:6px;background:${
+                            r.status === 'completed' ? 'rgba(16,185,129,0.2)' : 'rgba(251,191,36,0.2)'
+                          };">${r.status === 'completed' ? 'Cerrada' : 'Pendiente'}</span>
+                        </div>
+                        ${
+                          r.status === 'completed'
+                            ? `<div class="label">NC: ${escapeHtml(String(r.ncNumber || ''))} · Monto NC: $${formatNumber(Number(r.ncAmount) || 0)}</div>`
+                            : `<form method="post" action="/admin/cashback/close" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+                            <input type="hidden" name="requestId" value="${escapeHtml(r.id)}" />
+                            <input type="hidden" name="section" value="solicitudes-cashback" />
+                            <input type="text" name="ncNumber" placeholder="Nº documento NC" required style="min-width:140px;" />
+                            <input type="number" name="ncAmount" placeholder="Monto NC" required min="0" step="1" style="min-width:120px;" />
+                            <button type="submit">Cerrar con NC</button>
+                          </form>`
+                        }
+                      </div>`
+                      )
+                      .join('')
+                  : '<div class="alert">No hay solicitudes de cashback.</div>'
+              }
+            </div>
+          </div>`
+              : ''
+          }
+
+          ${
             showNotifications
               ? `<div id="notificaciones" class="card">
             <h2 class="section-title">Notificaciones push</h2>
@@ -2367,48 +2450,43 @@ const renderRewardsPortal = ({
         </div>
         ${
           gspCareMember
-            ? `<div class="subcard" style="margin-top:20px;">
-          <h3>Servicios disponibles · ${escapeHtml(gspCareMember.cedula)} (${escapeHtml(gspCareMember.plan || '—')})</h3>
+            ? (() => {
+                const errorMsg = gspCareError === 'cupo-agotado' ? 'Cupo agotado para esta categoría.' : gspCareError === 'no-member' ? 'Cliente sin membresía activa.' : gspCareError === 'invalid-service' ? 'Servicio no válido.' : gspCareError === 'already-completed' ? 'La solicitud ya está completada.' : '';
+                const servicesWithCupo = gspCareServiceRows.filter((row) => row.remainingNum != null && row.remainingNum > 0);
+                return `<div class="subcard" style="margin-top:20px;">
+          <h3>Bolsones (cupos por categoría) · ${escapeHtml(gspCareMember.cedula)} (${escapeHtml(gspCareMember.plan || '—')})</h3>
           <p class="label"><a href="/admin/rewards?section=gsp-care">← Volver a lista</a></p>
+          ${errorMsg ? `<p class="label" style="color:var(--warning);">${escapeHtml(errorMsg)}</p>` : ''}
           <table style="width:100%;border-collapse:collapse;margin-top:12px;">
-            <thead>
-              <tr style="border-bottom:1px solid var(--surface);">
-                <th style="text-align:left;padding:8px;">Servicio</th>
-                <th style="text-align:center;padding:8px;">Límite</th>
-                <th style="text-align:center;padding:8px;">Usado</th>
-                <th style="text-align:center;padding:8px;">Disponible</th>
-              </tr>
-            </thead>
+            <thead><tr style="border-bottom:1px solid var(--surface);"><th style="text-align:left;padding:8px;">Categoría</th><th style="text-align:center;padding:8px;">Límite</th><th style="text-align:center;padding:8px;">Usado</th><th style="text-align:center;padding:8px;">Disponible</th></tr></thead>
             <tbody>
-              ${gspCareServiceRows
-                .map(
-                  (row) => `<tr style="border-bottom:1px solid var(--surface);">
-                <td style="padding:8px;">${escapeHtml(row.name)}</td>
-                <td style="text-align:center;padding:8px;">${escapeHtml(row.limit)}</td>
-                <td style="text-align:center;padding:8px;">${row.used}</td>
-                <td style="text-align:center;padding:8px;">${escapeHtml(row.remaining)}</td>
-              </tr>`
-                )
-                .join('')}
+              ${(gspCareBolsones || []).map((b) => `<tr style="border-bottom:1px solid var(--surface);"><td style="padding:8px;">${escapeHtml(b.name)}</td><td style="text-align:center;padding:8px;">${b.limit}</td><td style="text-align:center;padding:8px;">${b.used}</td><td style="text-align:center;padding:8px;">${b.remaining}</td></tr>`).join('')}
             </tbody>
           </table>
-          <form class="form" method="post" action="/admin/gspcare/consumo" style="margin-top:16px;">
+          <h4 style="margin-top:16px;">Solicitudes (servicios)</h4>
+          <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+            <thead><tr style="border-bottom:1px solid var(--surface);"><th style="text-align:left;padding:6px;">Fecha</th><th style="text-align:left;padding:6px;">Servicio</th><th style="text-align:left;padding:6px;">Marca / Modalidad</th><th style="text-align:left;padding:6px;">Cliente/Equipo</th><th style="text-align:center;padding:6px;">Estado</th><th></th></tr></thead>
+            <tbody>
+              ${(gspCareMemberRequests || []).length === 0 ? '<tr><td colspan="6" style="padding:12px;">Sin solicitudes.</td></tr>' : (gspCareMemberRequests || []).map((r) => `<tr style="border-bottom:1px solid var(--surface);"><td style="padding:6px;">${escapeHtml(r.date || '—')}</td><td style="padding:6px;">${escapeHtml(r.serviceName || '—')}</td><td style="padding:6px;">${escapeHtml((r.brand || '') + ' / ' + (r.modality || ''))}</td><td style="padding:6px;">${escapeHtml(r.clientOrEquipment || '—')}</td><td style="text-align:center;padding:6px;">${r.status === 'completed' ? 'Completado' : 'Pendiente'}</td><td style="padding:6px;">${r.status === 'pending' ? `<form method="post" action="/admin/gspcare/request/complete" style="display:inline;"><input type="hidden" name="requestId" value="${escapeHtml(r.id)}" /><button type="submit" class="btn-secondary">Completar</button></form>` : ''}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <form class="form" method="post" action="/admin/gspcare/request/create" style="margin-top:16px;">
             <input type="hidden" name="section" value="gsp-care" />
             <input type="hidden" name="cedula" value="${escapeHtml(gspCareMember.cedula)}" />
-            <label class="label">Registrar consumo</label>
+            <label class="label">Nueva solicitud (descuenta 1 del bolsón de la categoría al completarla)</label>
             <select name="serviceId" required>
               <option value="">Servicio</option>
-              ${gspCareServiceRows
-                .map(
-                  (row) =>
-                    `<option value="${escapeHtml(row.id)}">${escapeHtml(row.name)} (disp. ${escapeHtml(row.remaining)})</option>`
-                )
-                .join('')}
+              ${(servicesWithCupo || []).map((row) => `<option value="${escapeHtml(row.id)}">[${escapeHtml(row.categoryId)}] ${escapeHtml(row.name)} (${escapeHtml(row.remaining)} disp.)</option>`).join('')}
             </select>
-            <input type="number" name="quantity" min="1" value="1" style="width:80px;" />
-            <button type="submit">Descontar</button>
+            <input type="text" name="clientOrEquipment" placeholder="Cliente o equipo" style="margin-top:8px;" />
+            <button type="submit">Crear solicitud</button>
           </form>
-        </div>`
+          <form method="post" action="/admin/gspcare/renew" style="margin-top:12px;">
+            <input type="hidden" name="cedula" value="${escapeHtml(gspCareMember.cedula)}" />
+            <button type="submit" class="btn-secondary">Renovar membresía (reinicia bolsones, mantiene historial)</button>
+          </form>
+        </div>`;
+              })()
             : ''
         }
       </div>`
@@ -2599,20 +2677,26 @@ const saveWeeklyProduct = (product) => {
 };
 
 const GSP_CARE_PLAN_MONTHS = { Basic: 3, Professional: 6, Premium: 12 };
+const GSP_CARE_CATEGORY_IDS = ['A', 'B', 'C'];
+const GSP_CARE_CATEGORIES = {
+  A: { name: 'Hikvision/HiLook + Diagnóstico CCTV no PTZ', Basic: 10, Professional: 16, Premium: 32 },
+  B: { name: 'ZKTeco/Honeywell', Basic: 2, Professional: 2, Premium: 3 },
+  C: { name: 'Otros diagnósticos/plataformas', Basic: 1, Professional: 2, Premium: 3 },
+};
 const GSP_CARE_SERVICES = [
-  { id: 'reset_hikvision', name: 'Reset contraseña equipo hikvision/hiklook', basic: null, professional: null, premium: null },
-  { id: 'flasheo_hikvision', name: 'Servicio flasheo Hikvision', basic: null, professional: null, premium: null },
-  { id: 'desvinculacion_hikconnect', name: 'Desvinculacion cuenta HIK-CONNECT', basic: null, professional: null, premium: null },
-  { id: 'firmware_hikvision', name: 'Actualizacion firmware equipo Hikvision /Hilook', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_no_ptz', name: 'Diagnostico (no incluye PTZ) – incluye grabador – camaras fuera de garantia', basic: 10, professional: 16, premium: 32 },
-  { id: 'reset_zkteco', name: 'Reset contraseña servidores software zkteco Biotime -Zkbiocvsecurity -Zkbiocvacces', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_remoto_zkteco', name: 'Diagnostico Remoto Equipo fuera de Garantia (Servidores Zkbiocvacces Zkbiocvsecurity Biotime)', basic: 2, professional: 2, premium: 3 },
-  { id: 'parametrizacion_honeywell', name: 'Parametrizacion Lector Honeywell lectura codigo de barras software Zkbiocvsecurity en modulo visitantes', basic: null, professional: null, premium: null },
-  { id: 'desvinculacion_dsc', name: 'Desvinculacion de equipo DSC plataforma Comunicadores', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_powermanage', name: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_dsc', name: 'Diagnostico equipos marca DSC fuera de garantia', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_uhf', name: 'Diagnostico equipos marca UHF fuera de garantia', basic: null, professional: null, premium: null },
-  { id: 'diagnostico_came', name: 'Diagnostico equipo marca CAME en sede fuera de garantia', basic: 1, professional: 2, premium: 3 },
+  { id: 'reset_hikvision', name: 'Reset contraseña equipo hikvision/hiklook', marca: 'Hikvision/HiLook', modalidad: 'Remoto', categoryId: 'A' },
+  { id: 'flasheo_hikvision', name: 'Servicio flasheo Hikvision', marca: 'Hikvision', modalidad: 'Remoto', categoryId: 'A' },
+  { id: 'desvinculacion_hikconnect', name: 'Desvinculacion cuenta HIK-CONNECT', marca: 'Hikvision', modalidad: 'Remoto', categoryId: 'A' },
+  { id: 'firmware_hikvision', name: 'Actualizacion firmware equipo Hikvision/Hilook', marca: 'Hikvision/HiLook', modalidad: 'Remoto', categoryId: 'A' },
+  { id: 'diagnostico_no_ptz', name: 'Diagnostico (no incluye PTZ) – grabador – camaras fuera de garantia', marca: 'Hikvision/HiLook', modalidad: 'Remoto', categoryId: 'A' },
+  { id: 'reset_zkteco', name: 'Reset contraseña servidores Zkteco Biotime/Zkbiocvsecurity/Zkbiocvacces', marca: 'ZKTeco', modalidad: 'Remoto', categoryId: 'B' },
+  { id: 'diagnostico_remoto_zkteco', name: 'Diagnostico Remoto Equipo fuera de Garantia (Zkbiocvacces Zkbiocvsecurity Biotime)', marca: 'ZKTeco', modalidad: 'Remoto', categoryId: 'B' },
+  { id: 'parametrizacion_honeywell', name: 'Parametrizacion Lector Honeywell codigo de barras Zkbiocvsecurity modulo visitantes', marca: 'Honeywell/ZKTeco', modalidad: 'Remoto', categoryId: 'B' },
+  { id: 'desvinculacion_dsc', name: 'Desvinculacion de equipo DSC plataforma Comunicadores', marca: 'DSC', modalidad: 'Remoto', categoryId: 'C' },
+  { id: 'diagnostico_powermanage', name: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', marca: 'Otros', modalidad: 'Remoto', categoryId: 'C' },
+  { id: 'diagnostico_dsc', name: 'Diagnostico equipos marca DSC fuera de garantia', marca: 'DSC', modalidad: 'Remoto', categoryId: 'C' },
+  { id: 'diagnostico_uhf', name: 'Diagnostico equipos marca UHF fuera de garantia', marca: 'UHF', modalidad: 'Remoto', categoryId: 'C' },
+  { id: 'diagnostico_came', name: 'Diagnostico equipo marca CAME en sede fuera de garantia', marca: 'CAME', modalidad: 'En sede', categoryId: 'C' },
 ];
 
 function getGspCareExpiresAt(activatedAt, plan) {
@@ -2625,14 +2709,34 @@ function getGspCareExpiresAt(activatedAt, plan) {
   return d.toISOString().slice(0, 10);
 }
 
-function getGspCareLimitForPlan(service, plan) {
-  if (!service || !plan) return null;
-  const key = plan.toLowerCase();
-  if (key === 'basic') return service.basic;
-  if (key === 'professional') return service.professional;
-  if (key === 'premium') return service.premium;
+function getGspCareCategoryLimitForPlan(categoryId, plan) {
+  const cat = GSP_CARE_CATEGORIES[categoryId];
+  if (!cat || !plan) return null;
+  const key = plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+  if (key === 'Basic') return cat.Basic;
+  if (key === 'Professional') return cat.Professional;
+  if (key === 'Premium') return cat.Premium;
   return null;
 }
+
+function getGspCareServiceById(serviceId) {
+  return GSP_CARE_SERVICES.find((s) => s.id === serviceId) || null;
+}
+
+function getGspCareCategoryRemaining(member, categoryId) {
+  if (!member || !categoryId) return 0;
+  const limit = getGspCareCategoryLimitForPlan(categoryId, member.plan);
+  if (limit == null) return 0;
+  const used = Number(member.periodConsumption?.[categoryId] ?? 0);
+  return Math.max(0, limit - used);
+}
+
+function getGspCareLimitForPlan(service, plan) {
+  if (!service || !service.categoryId) return null;
+  return getGspCareCategoryLimitForPlan(service.categoryId, plan);
+}
+
+const defaultPeriodConsumption = () => ({ A: 0, B: 0, C: 0 });
 
 const loadGspCare = () => {
   try {
@@ -2641,7 +2745,7 @@ const loadGspCare = () => {
     if (Array.isArray(parsed)) {
       return parsed
         .map((item) => {
-          let cedula; let activatedAt; let plan; let expiresAt; let consumption;
+          let cedula; let activatedAt; let plan; let expiresAt; let periodConsumption; let periodStart;
           if (typeof item === 'string') {
             cedula = normalizeId(item);
             activatedAt = null;
@@ -2651,19 +2755,27 @@ const loadGspCare = () => {
             activatedAt = String(item.activatedAt || '').trim() || null;
             plan = String(item.plan || '').trim();
             expiresAt = String(item.expiresAt || '').trim() || null;
-            consumption = item.consumption && typeof item.consumption === 'object' ? { ...item.consumption } : {};
+            periodStart = String(item.periodStart || item.activatedAt || '').trim() || null;
+            const pc = item.periodConsumption && typeof item.periodConsumption === 'object' ? item.periodConsumption : {};
+            periodConsumption = {
+              A: Math.max(0, Number(pc.A) || 0),
+              B: Math.max(0, Number(pc.B) || 0),
+              C: Math.max(0, Number(pc.C) || 0),
+            };
           } else {
             return null;
           }
           if (activatedAt && plan && !expiresAt) {
             expiresAt = getGspCareExpiresAt(activatedAt, plan);
           }
+          if (!periodStart && activatedAt) periodStart = activatedAt;
           return {
             cedula,
             activatedAt,
             plan,
             expiresAt,
-            consumption: consumption || {},
+            periodStart: periodStart || activatedAt,
+            periodConsumption: periodConsumption || defaultPeriodConsumption(),
           };
         })
         .filter(Boolean);
@@ -2682,6 +2794,28 @@ const saveGspCare = (items) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('No se pudo guardar gspcare.json:', error?.message || error);
+  }
+};
+
+const loadGspCareRequests = () => {
+  try {
+    const raw = fs.readFileSync(gspCareRequestsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer gspcare-requests.json:', error?.message || error);
+  }
+  return [];
+};
+
+const saveGspCareRequests = (items) => {
+  try {
+    fs.mkdirSync(path.dirname(gspCareRequestsPath), { recursive: true });
+    fs.writeFileSync(gspCareRequestsPath, JSON.stringify(items, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar gspcare-requests.json:', error?.message || error);
   }
 };
 
@@ -2731,12 +2865,64 @@ const upsertPushToken = ({ token, cedula, email, platform } = {}) => {
   return payload;
 };
 
+const loadCashbackRequests = () => {
+  try {
+    const raw = fs.readFileSync(cashbackRequestsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+};
+
+const saveCashbackRequests = (requests) => {
+  try {
+    fs.mkdirSync(path.dirname(cashbackRequestsPath), { recursive: true });
+    fs.writeFileSync(cashbackRequestsPath, JSON.stringify(requests, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar cashback-requests.json:', error?.message || error);
+  }
+};
+
 const chunkArray = (items, size) => {
   const chunks = [];
   for (let i = 0; i < items.length; i += size) {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
+};
+
+const sendPushToCedula = async (cedula, { title, body, data } = {}) => {
+  const stored = loadPushTokens();
+  const norm = normalizeId(cedula);
+  const tokens = stored
+    .filter((item) => item?.cedula === norm && isExpoPushToken(item?.token))
+    .map((item) => item.token);
+  if (!tokens.length) return { total: 0, sent: 0, failed: 0 };
+  const chunks = chunkArray(tokens, 100);
+  let sent = 0;
+  let failed = 0;
+  for (const chunk of chunks) {
+    const messages = chunk.map((token) => ({
+      to: token,
+      title: title || 'GSP Pro',
+      body: body || '',
+      sound: 'default',
+      data: data || {},
+    }));
+    try {
+      const response = await axios.post('https://exp.host/--/api/v2/push/send', messages);
+      const results = Array.isArray(response.data?.data) ? response.data.data : [];
+      results.forEach((result) => {
+        if (result?.status === 'ok') sent += 1;
+        else failed += 1;
+      });
+    } catch (_error) {
+      failed += messages.length;
+    }
+  }
+  return { total: tokens.length, sent, failed };
 };
 
 const sendPushNotifications = async ({ title, body, data } = {}) => {
@@ -3037,6 +3223,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const userId = String(req.query.userId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
   const gspCareVerCedula = String(req.query.ver || '').trim();
+  const gspCareError = String(req.query.error || '').trim();
   const refreshStatus = String(req.query.refresh || '').trim();
   const notificationStatus = String(req.query.notify || '').trim();
   const vendedorInput = String(req.query.vendedor || '').trim();
@@ -3074,6 +3261,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const editUser = userId
     ? adminUsers.find((user) => String(user.id) === userId) || null
     : null;
+  const cashbackRequests = loadCashbackRequests();
   if (!cedula) {
     return res.send(
       renderRewardsPortal({
@@ -3098,7 +3286,9 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         refreshStatus,
         notificationStatus,
         pushTokensCount,
+        cashbackRequests,
         gspCareVerCedula,
+        gspCareError,
         gspCareServices: GSP_CARE_SERVICES,
       })
     );
@@ -3178,7 +3368,9 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         refreshStatus,
         notificationStatus,
         pushTokensCount,
+        cashbackRequests,
         gspCareVerCedula,
+        gspCareError,
         gspCareServices: GSP_CARE_SERVICES,
       })
     );
@@ -3209,6 +3401,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section: safeSection,
         gspCareVerCedula,
+        gspCareError,
         gspCareServices: GSP_CARE_SERVICES,
         timings: {
           search: searchTimings,
@@ -3216,10 +3409,40 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         refreshStatus,
         notificationStatus,
         pushTokensCount,
+        cashbackRequests,
       })
     );
   }
 });
+
+app.post(
+  '/admin/cashback/close',
+  adminAuth,
+  requireSectionPermission('solicitudes-cashback'),
+  (req, res) => {
+    const requestId = String(req.body?.requestId || '').trim();
+    const ncNumber = String(req.body?.ncNumber || '').trim();
+    const ncAmount = Math.max(0, Number(req.body?.ncAmount) || 0);
+    const section = String(req.body?.section || 'solicitudes-cashback').trim() || 'solicitudes-cashback';
+    if (!requestId || !ncNumber) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
+    }
+    const requests = loadCashbackRequests();
+    const index = requests.findIndex((r) => r.id === requestId);
+    if (index < 0) {
+      return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
+    }
+    requests[index] = {
+      ...requests[index],
+      status: 'completed',
+      ncNumber,
+      ncAmount,
+      completedAt: new Date().toISOString(),
+    };
+    saveCashbackRequests(requests);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=closed`);
+  }
+);
 
 app.post(
   '/admin/rewards/refresh-clients',
@@ -3361,7 +3584,8 @@ app.post(
       activatedAt: nextActivatedAt,
       plan: nextPlan || existing.plan || '',
       expiresAt: nextExpiresAt || existing.expiresAt,
-      consumption: existing.consumption || {},
+      periodStart: existing.periodStart || nextActivatedAt,
+      periodConsumption: existing.periodConsumption || defaultPeriodConsumption(),
     };
   } else {
     const expiresAt = getGspCareExpiresAt(today, nextPlan);
@@ -3370,7 +3594,8 @@ app.post(
       activatedAt: today,
       plan: nextPlan,
       expiresAt,
-      consumption: {},
+      periodStart: today,
+      periodConsumption: defaultPeriodConsumption(),
     });
   }
   saveGspCare(current);
@@ -3380,32 +3605,126 @@ app.post(
 );
 
 app.post(
-  '/admin/gspcare/consumo',
+  '/admin/gspcare/request/create',
   adminAuth,
   requireSectionPermission('gsp-care'),
   (req, res) => {
-    const { cedula, serviceId, quantity, section } = req.body || {};
+    const { cedula, serviceId, clientOrEquipment, section } = req.body || {};
     const normalized = normalizeId(cedula);
-    const qty = Math.max(0, parseInt(quantity, 10) || 1);
     if (!normalized || !serviceId) {
-      return res.redirect(`/admin/rewards?section=gsp-care${normalized ? `&ver=${encodeURIComponent(normalized)}` : ''}`);
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized || '')}&error=missing`);
+    }
+    const member = loadGspCare().find((item) => item.cedula === normalized);
+    if (!member) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}&error=no-member`);
+    }
+    const service = getGspCareServiceById(serviceId);
+    if (!service) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}&error=invalid-service`);
+    }
+    const remaining = getGspCareCategoryRemaining(member, service.categoryId);
+    if (remaining <= 0) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}&error=cupo-agotado`);
+    }
+    const requests = loadGspCareRequests();
+    const now = new Date().toISOString();
+    const newRequest = {
+      id: `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      cedula: normalized,
+      serviceId: service.id,
+      serviceName: service.name,
+      brand: service.marca,
+      modality: service.modalidad,
+      date: now.slice(0, 10),
+      clientOrEquipment: String(clientOrEquipment || '').trim() || '—',
+      status: 'pending',
+      createdAt: now,
+    };
+    requests.unshift(newRequest);
+    saveGspCareRequests(requests);
+    return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}`);
+  }
+);
+
+app.post(
+  '/admin/gspcare/request/complete',
+  adminAuth,
+  requireSectionPermission('gsp-care'),
+  (req, res) => {
+    const { requestId, section } = req.body || {};
+    if (!requestId) {
+      return res.redirect(`/admin/rewards?section=gsp-care&error=missing-request`);
+    }
+    const requests = loadGspCareRequests();
+    const reqIndex = requests.findIndex((r) => r.id === requestId);
+    if (reqIndex < 0) {
+      return res.redirect(`/admin/rewards?section=gsp-care&error=not-found`);
+    }
+    const servReq = requests[reqIndex];
+    if (servReq.status === 'completed') {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(servReq.cedula)}&error=already-completed`);
+    }
+    const cedula = servReq.cedula;
+    const current = loadGspCare();
+    const memberIndex = current.findIndex((item) => item.cedula === cedula);
+    if (memberIndex < 0) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(cedula)}&error=no-member`);
+    }
+    const member = current[memberIndex];
+    const service = getGspCareServiceById(servReq.serviceId);
+    if (!service) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(cedula)}&error=invalid-service`);
+    }
+    const categoryId = service.categoryId;
+    const remaining = getGspCareCategoryRemaining(member, categoryId);
+    if (remaining <= 0) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(cedula)}&error=cupo-agotado`);
+    }
+    const periodConsumption = { ...(member.periodConsumption || defaultPeriodConsumption()) };
+    periodConsumption[categoryId] = (periodConsumption[categoryId] || 0) + 1;
+    current[memberIndex] = { ...member, periodConsumption };
+    saveGspCare(current);
+    const now = new Date().toISOString();
+    requests[reqIndex] = {
+      ...servReq,
+      status: 'completed',
+      eventConsumed: 1,
+      categoryId,
+      planId: member.plan,
+      completedAt: now,
+      periodId: member.periodStart,
+    };
+    saveGspCareRequests(requests);
+    return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(cedula)}`);
+  }
+);
+
+app.post(
+  '/admin/gspcare/renew',
+  adminAuth,
+  requireSectionPermission('gsp-care'),
+  (req, res) => {
+    const { cedula, section } = req.body || {};
+    const normalized = normalizeId(cedula);
+    if (!normalized) {
+      return res.redirect(`/admin/rewards?section=gsp-care`);
     }
     const current = loadGspCare();
     const index = current.findIndex((item) => item.cedula === normalized);
     if (index < 0) {
       return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}`);
     }
-    const item = current[index];
-    const consumption = { ...(item.consumption || {}) };
-    const used = (consumption[serviceId] || 0) + qty;
-    const service = GSP_CARE_SERVICES.find((s) => s.id === serviceId);
-    const limit = service ? getGspCareLimitForPlan(service, item.plan) : null;
-    if (limit != null) {
-      consumption[serviceId] = Math.min(used, limit);
-    } else {
-      consumption[serviceId] = used;
-    }
-    current[index] = { ...item, consumption };
+    const member = current[index];
+    const today = new Date().toISOString().slice(0, 10);
+    const newPeriodStart = today;
+    const newExpiresAt = getGspCareExpiresAt(newPeriodStart, member.plan);
+    current[index] = {
+      ...member,
+      activatedAt: newPeriodStart,
+      expiresAt: newExpiresAt,
+      periodStart: newPeriodStart,
+      periodConsumption: defaultPeriodConsumption(),
+    };
     saveGspCare(current);
     return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}`);
   }
@@ -3651,6 +3970,40 @@ app.post('/api/push/register', (req, res) => {
     return res.status(400).json({ error: 'token inválido' });
   }
   return res.json({ ok: true });
+});
+
+app.post('/api/cashback/request', async (req, res) => {
+  const { cedula, amount } = req.body || {};
+  const norm = normalizeId(cedula);
+  if (!norm) {
+    return res.status(400).json({ error: 'cédula es requerida' });
+  }
+  const monto = Math.max(0, Number(amount) || 0);
+  const requests = loadCashbackRequests();
+  const id = `cb-${Date.now()}-${norm.slice(-4)}`;
+  const request = {
+    id,
+    cedula: norm,
+    amount: monto,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    ncNumber: null,
+    ncAmount: null,
+    completedAt: null,
+  };
+  requests.unshift(request);
+  saveCashbackRequests(requests);
+  try {
+    await sendPushToCedula(norm, {
+      title: 'Solicitud de cashback',
+      body:
+        'Tu solicitud será validada y recibirás vía correo la NC correspondiente al cashback solicitado.',
+      data: { screen: 'Rewards' },
+    });
+  } catch (_err) {
+    // no bloquear respuesta si falla el push
+  }
+  return res.json({ ok: true, requestId: id });
 });
 
 app.get('/api/home/offers', (_req, res) => {
@@ -4486,16 +4839,28 @@ app.get('/api/gspcare/status', (req, res) => {
     }
     const expiresAt = member.expiresAt || getGspCareExpiresAt(member.activatedAt, member.plan);
     const isExpired = expiresAt && expiresAt < todayStr;
+    const categories = GSP_CARE_CATEGORY_IDS.map((catId) => {
+      const limit = getGspCareCategoryLimitForPlan(catId, member.plan);
+      const used = Number(member.periodConsumption?.[catId] ?? 0);
+      const remaining = limit == null ? null : Math.max(0, limit - used);
+      return {
+        id: catId,
+        name: GSP_CARE_CATEGORIES[catId]?.name || catId,
+        limit,
+        used,
+        remaining,
+      };
+    });
     const services = GSP_CARE_SERVICES.map((svc) => {
       const limit = getGspCareLimitForPlan(svc, member.plan);
-      const used = Number(member.consumption?.[svc.id] || 0);
-      const remaining =
-        limit == null ? null : Math.max(0, limit - used);
+      const remaining = getGspCareCategoryRemaining(member, svc.categoryId);
       return {
         id: svc.id,
         name: svc.name,
+        categoryId: svc.categoryId,
+        marca: svc.marca,
+        modalidad: svc.modalidad,
         limit,
-        used,
         remaining: limit == null ? 'Ilimitado' : remaining,
       };
     });
@@ -4505,6 +4870,7 @@ app.get('/api/gspcare/status', (req, res) => {
       activatedAt: member.activatedAt,
       expiresAt,
       isExpired,
+      categories,
       services,
     });
   } catch (error) {

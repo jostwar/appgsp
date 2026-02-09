@@ -96,3 +96,10 @@ export function getGspCareStatus({ cedula }) {
     params: { cedula },
   });
 }
+
+export function requestCashback({ cedula, amount }) {
+  return request('/api/cashback/request', {
+    method: 'POST',
+    body: { cedula, amount },
+  });
+}

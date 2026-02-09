@@ -7,10 +7,16 @@ import {
   Pressable,
   Linking,
   Image,
+  Alert,
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
-import { getCarteraSummary, getRewardsCatalog, getRewardsPoints } from '../api/backend';
+import {
+  getCarteraSummary,
+  getRewardsCatalog,
+  getRewardsPoints,
+  requestCashback,
+} from '../api/backend';
 import { useAuth } from '../store/auth';
 
 export default function RewardsScreen() {
@@ -23,6 +29,7 @@ export default function RewardsScreen() {
   const [pointsError, setPointsError] = useState('');
   const [carteraStatus, setCarteraStatus] = useState(null);
   const [carteraState, setCarteraState] = useState('idle');
+  const [cashbackRequestStatus, setCashbackRequestStatus] = useState('idle');
   const customerLevel = pointsData?.level || 'Sin nivel';
   const rebatePercent = Number(pointsData?.rebate || 0);
   const levelThresholds = [
@@ -183,7 +190,29 @@ export default function RewardsScreen() {
   }, [user?.cedula]);
 
   const hasOverdueBalance = Number(carteraStatus?.saldoVencido || 0) > 0;
-  const canRequestCashback = carteraState === 'ready' && !hasOverdueBalance;
+  const canRequestCashback =
+    carteraState === 'ready' && !hasOverdueBalance && cashbackRequestStatus !== 'loading';
+
+  const handleRequestCashback = async () => {
+    if (!user?.cedula || !canRequestCashback) return;
+    setCashbackRequestStatus('loading');
+    try {
+      const amount = Number(pointsData?.cashback || 0);
+      await requestCashback({ cedula: user.cedula, amount });
+      setCashbackRequestStatus('idle');
+      Alert.alert(
+        'Solicitud enviada',
+        'Tu solicitud será validada y recibirás vía correo la NC correspondiente al cashback solicitado.',
+        [{ text: 'Entendido' }]
+      );
+    } catch (err) {
+      setCashbackRequestStatus('idle');
+      Alert.alert(
+        'Error',
+        err?.message || 'No se pudo enviar la solicitud de cashback. Intenta de nuevo.'
+      );
+    }
+  };
 
   const rewardsToShow = rewards.length ? rewards : fallbackRewards;
 
@@ -272,8 +301,11 @@ export default function RewardsScreen() {
                 pressed && styles.pressed,
               ]}
               disabled={!canRequestCashback}
+              onPress={handleRequestCashback}
             >
-              <Text style={styles.primaryButtonText}>Solicitar cashback</Text>
+              <Text style={styles.primaryButtonText}>
+                {cashbackRequestStatus === 'loading' ? 'Enviando…' : 'Solicitar cashback'}
+              </Text>
             </Pressable>
             {carteraState === 'error' ? (
               <Text style={styles.pointsHint}>No se pudo validar cartera.</Text>
