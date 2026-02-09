@@ -90,3 +90,9 @@ export function getCommercialContact({ cedula, vendedor } = {}) {
     params: { cedula, vendedor },
   });
 }
+
+export function getGspCareStatus({ cedula }) {
+  return request('/api/gspcare/status', {
+    params: { cedula },
+  });
+}

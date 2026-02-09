@@ -1,14 +1,50 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View, ScrollView, Pressable, Image } from 'react-native';
+import { useMemo, useEffect, useState, useCallback } from 'react';
+import { StyleSheet, Text, View, ScrollView, Pressable, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
+import { getGspCareStatus } from '../api/backend';
 
 export default function MembershipScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const tabBarHeight = useBottomTabBarHeight();
+  const [gspCareStatus, setGspCareStatus] = useState(null);
+  const [gspCareLoading, setGspCareLoading] = useState(false);
+  const [gspCareError, setGspCareError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadGspCareStatus = useCallback(async () => {
+    const cedula = user?.cedula ? String(user.cedula).replace(/\D/g, '').trim() : '';
+    if (!cedula) {
+      setGspCareStatus(null);
+      return;
+    }
+    setGspCareError('');
+    try {
+      const data = await getGspCareStatus({ cedula });
+      setGspCareStatus(data);
+    } catch (err) {
+      setGspCareError(err?.message || 'No se pudo cargar el estado');
+      setGspCareStatus(null);
+    }
+  }, [user?.cedula]);
+
+  useEffect(() => {
+    let mounted = true;
+    setGspCareLoading(true);
+    loadGspCareStatus().finally(() => {
+      if (mounted) setGspCareLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [loadGspCareStatus]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadGspCareStatus();
+    setRefreshing(false);
+  }, [loadGspCareStatus]);
   const formatName = (value) =>
     value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   const toTitleCase = (value) =>
@@ -38,7 +74,6 @@ export default function MembershipScreen() {
     if (fallbackName) return toTitleCase(fallbackName);
     return 'Cliente GSP';
   })();
-  const validUntil = '31 dic 2026';
   const memberships = useMemo(
     () => [
       {
@@ -110,10 +145,25 @@ export default function MembershipScreen() {
       currency: 'COP',
       maximumFractionDigits: 0,
     }).format(Number(value || 0));
+
+  const formatExpiresAt = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (_) {
+      return dateStr;
+    }
+  };
+
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
     pressed && styles.pressed,
   ];
+
+  const hasCedula = Boolean(user?.cedula);
+  const showMyServices = gspCareStatus?.active && Array.isArray(gspCareStatus?.services) && gspCareStatus.services.length > 0;
 
   return (
     <View style={styles.screen}>
@@ -122,6 +172,13 @@ export default function MembershipScreen() {
           styles.content,
           { paddingBottom: spacing.xxl + tabBarHeight },
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         <View style={styles.headerCard}>
           <Image
@@ -137,13 +194,42 @@ export default function MembershipScreen() {
         <View style={styles.memberCard}>
           <View style={styles.memberCardHighlight} />
           <View style={styles.memberCardHeader}>
-            <Text style={styles.memberCardTitle}>Membresía</Text>
+            <Text style={styles.memberCardTitle}>Titular</Text>
           </View>
           <View style={styles.memberRow}>
-            <View>
-              <Text style={styles.memberLabel}>Titular</Text>
+            <View style={styles.memberInfo}>
               <Text style={styles.memberName}>{memberName}</Text>
-              <Text style={styles.memberMeta}>Válido hasta {validUntil}</Text>
+              {gspCareLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.memberMeta}>Cargando membresía...</Text>
+                </View>
+              ) : gspCareError ? (
+                <Text style={styles.memberMetaError}>{gspCareError}</Text>
+              ) : gspCareStatus?.active ? (
+                <>
+                  <Text style={styles.memberMeta}>Membresía {gspCareStatus.plan}</Text>
+                  <Text style={styles.memberMeta}>Vence {formatExpiresAt(gspCareStatus.expiresAt)}</Text>
+                  <View style={styles.badgeVigente}>
+                    <Text style={styles.badgeVigenteText}>Vigente</Text>
+                  </View>
+                </>
+              ) : gspCareStatus && !gspCareStatus.active ? (
+                <>
+                  {gspCareStatus.isExpired ? (
+                    <>
+                      <Text style={styles.memberMeta}>Venció {formatExpiresAt(gspCareStatus.expiresAt)}</Text>
+                      <View style={styles.badgeVencida}>
+                        <Text style={styles.badgeVencidaText}>Vencida</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <Text style={styles.memberMeta}>Sin membresía activa</Text>
+                  )}
+                </>
+              ) : !hasCedula ? (
+                <Text style={styles.memberMeta}>Tu membresía aparecerá aquí</Text>
+              ) : null}
             </View>
             <View style={styles.memberLogoWrap}>
               <Image
@@ -156,6 +242,21 @@ export default function MembershipScreen() {
             </View>
           </View>
         </View>
+
+        {showMyServices ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Tus servicios disponibles</Text>
+            <Text style={styles.subtitle}>Según tu plan {gspCareStatus.plan}. Actualiza deslizando hacia abajo.</Text>
+            {gspCareStatus.services.map((svc) => (
+              <View key={svc.id} style={styles.serviceRow}>
+                <Text style={styles.serviceName} numberOfLines={2}>{svc.name}</Text>
+                <Text style={styles.serviceRemaining}>
+                  {svc.remaining === 'Ilimitado' ? 'Ilimitado' : `${svc.remaining} disp.`}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Tipos de membresía</Text>
@@ -313,6 +414,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  memberMetaError: {
+    color: colors.warning,
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  badgeVigente: {
+    alignSelf: 'center',
+    marginTop: 6,
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeVigenteText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  badgeVencida: {
+    alignSelf: 'center',
+    marginTop: 6,
+    backgroundColor: '#6b7280',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeVencidaText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  serviceName: {
+    color: colors.textSoft,
+    fontSize: 13,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  serviceRemaining: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   memberLogoWrap: {
     alignItems: 'center',

@@ -1193,6 +1193,8 @@ const renderRewardsPortal = ({
   editReward = null,
   gspCareActive = false,
   gspCareList = [],
+  gspCareVerCedula = '',
+  gspCareServices = [],
   offers = [],
   weeklyProduct = null,
   commercialTeamRaw = '',
@@ -1274,6 +1276,26 @@ const renderRewardsPortal = ({
   const showWeekly = normalizedSection === 'producto-semana';
   const showComercial = normalizedSection === 'comercial';
   const showUsuarios = normalizedSection === 'usuarios';
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const gspCareMember = gspCareVerCedula
+    ? gspCareList.find((item) => item.cedula === normalizeId(gspCareVerCedula))
+    : null;
+  const gspCareServiceRows =
+    gspCareMember && Array.isArray(gspCareServices)
+      ? gspCareServices.map((svc) => {
+          const limit = getGspCareLimitForPlan(svc, gspCareMember.plan);
+          const used = Number(gspCareMember.consumption?.[svc.id] || 0);
+          const remaining =
+            limit == null ? 'Ilimitado' : Math.max(0, limit - used);
+          return {
+            id: svc.id,
+            name: svc.name,
+            limit: limit == null ? 'Incl.' : String(limit),
+            used,
+            remaining: typeof remaining === 'number' ? String(remaining) : remaining,
+          };
+        })
+      : [];
   const navLinks = allowedSections
     .filter((key) => ADMIN_SECTION_LABELS[key])
     .map(
@@ -2280,7 +2302,7 @@ const renderRewardsPortal = ({
           ? `<div id="gsp-care" class="card">
         <h2 class="section-title">GSP Care</h2>
         <p class="section-subtitle">
-          Activa o desactiva la membresía para NITs que compren GSP Care.
+          Activa membresía (fecha de activación y vencimiento automáticos según tipo). Consulta servicios y registra consumo.
         </p>
         <div class="subcard" style="margin-top:12px;">
           <div class="label" style="margin-bottom:8px;">
@@ -2303,7 +2325,6 @@ const renderRewardsPortal = ({
         <form class="form" method="post" action="/admin/gspcare/save">
           <input type="hidden" name="section" value="gsp-care" />
           <input type="text" name="cedula" placeholder="NIT o cédula" required />
-          <input type="text" name="fecha" placeholder="Fecha activación (YYYY-MM-DD)" />
           <select name="plan" required>
             <option value="">Selecciona tipo de membresía</option>
             <option value="Basic">Basic (3 Meses)</option>
@@ -2312,32 +2333,84 @@ const renderRewardsPortal = ({
           </select>
           <button type="submit">Activar</button>
         </form>
+        <p class="label" style="margin-top:8px;">La fecha de activación se asigna automáticamente al activar. El vencimiento: Basic 3 meses, Professional 6 meses, Premium 1 año.</p>
         <div class="grid" style="margin-top:16px;">
           ${
             gspCareList.length > 0
               ? gspCareList
                   .map(
-                    (item) => `<div class="subcard">
+                    (item) => {
+                      const exp = item.expiresAt || getGspCareExpiresAt(item.activatedAt, item.plan);
+                      const isExpired = exp && exp < todayStr;
+                      const statusLabel = isExpired ? 'Vencida' : 'Vigente';
+                      const statusClass = isExpired ? 'alert' : '';
+                      return `<div class="subcard">
                     <h3>${escapeHtml(item.cedula)}</h3>
-                    <div class="label">Activado: ${escapeHtml(
-                      item.activatedAt || '—'
-                    )}</div>
                     <div class="label">Membresía: ${escapeHtml(item.plan || '—')}</div>
-                    <div class="reward-actions">
-                      <form method="post" action="/admin/gspcare/delete">
+                    <div class="label">Activado: ${escapeHtml(item.activatedAt || '—')}</div>
+                    <div class="label">Vence: ${escapeHtml(exp || '—')}</div>
+                    <div class="label"><strong>${statusLabel}</strong></div>
+                    <div class="reward-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                      <a href="/admin/rewards?section=gsp-care&ver=${encodeURIComponent(item.cedula)}" class="btn-secondary">Ver servicios</a>
+                      <form method="post" action="/admin/gspcare/delete" style="display:inline;">
                         <input type="hidden" name="section" value="gsp-care" />
-                        <input type="hidden" name="cedula" value="${escapeHtml(
-                          item.cedula
-                        )}" />
+                        <input type="hidden" name="cedula" value="${escapeHtml(item.cedula)}" />
                         <button type="submit" class="btn-secondary">Desactivar</button>
                       </form>
                     </div>
-                  </div>`
+                  </div>`;
+                    }
                   )
                   .join('')
               : '<div class="alert">No hay membresías activas.</div>'
           }
         </div>
+        ${
+          gspCareMember
+            ? `<div class="subcard" style="margin-top:20px;">
+          <h3>Servicios disponibles · ${escapeHtml(gspCareMember.cedula)} (${escapeHtml(gspCareMember.plan || '—')})</h3>
+          <p class="label"><a href="/admin/rewards?section=gsp-care">← Volver a lista</a></p>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--surface);">
+                <th style="text-align:left;padding:8px;">Servicio</th>
+                <th style="text-align:center;padding:8px;">Límite</th>
+                <th style="text-align:center;padding:8px;">Usado</th>
+                <th style="text-align:center;padding:8px;">Disponible</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${gspCareServiceRows
+                .map(
+                  (row) => `<tr style="border-bottom:1px solid var(--surface);">
+                <td style="padding:8px;">${escapeHtml(row.name)}</td>
+                <td style="text-align:center;padding:8px;">${escapeHtml(row.limit)}</td>
+                <td style="text-align:center;padding:8px;">${row.used}</td>
+                <td style="text-align:center;padding:8px;">${escapeHtml(row.remaining)}</td>
+              </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>
+          <form class="form" method="post" action="/admin/gspcare/consumo" style="margin-top:16px;">
+            <input type="hidden" name="section" value="gsp-care" />
+            <input type="hidden" name="cedula" value="${escapeHtml(gspCareMember.cedula)}" />
+            <label class="label">Registrar consumo</label>
+            <select name="serviceId" required>
+              <option value="">Servicio</option>
+              ${gspCareServiceRows
+                .map(
+                  (row) =>
+                    `<option value="${escapeHtml(row.id)}">${escapeHtml(row.name)} (disp. ${escapeHtml(row.remaining)})</option>`
+                )
+                .join('')}
+            </select>
+            <input type="number" name="quantity" min="1" value="1" style="width:80px;" />
+            <button type="submit">Descontar</button>
+          </form>
+        </div>`
+            : ''
+        }
       </div>`
           : ''
       }
@@ -2525,6 +2598,42 @@ const saveWeeklyProduct = (product) => {
   }
 };
 
+const GSP_CARE_PLAN_MONTHS = { Basic: 3, Professional: 6, Premium: 12 };
+const GSP_CARE_SERVICES = [
+  { id: 'reset_hikvision', name: 'Reset contraseña equipo hikvision/hiklook', basic: null, professional: null, premium: null },
+  { id: 'flasheo_hikvision', name: 'Servicio flasheo Hikvision', basic: null, professional: null, premium: null },
+  { id: 'desvinculacion_hikconnect', name: 'Desvinculacion cuenta HIK-CONNECT', basic: null, professional: null, premium: null },
+  { id: 'firmware_hikvision', name: 'Actualizacion firmware equipo Hikvision /Hilook', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_no_ptz', name: 'Diagnostico (no incluye PTZ) – incluye grabador – camaras fuera de garantia', basic: 10, professional: 16, premium: 32 },
+  { id: 'reset_zkteco', name: 'Reset contraseña servidores software zkteco Biotime -Zkbiocvsecurity -Zkbiocvacces', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_remoto_zkteco', name: 'Diagnostico Remoto Equipo fuera de Garantia (Servidores Zkbiocvacces Zkbiocvsecurity Biotime)', basic: 2, professional: 2, premium: 3 },
+  { id: 'parametrizacion_honeywell', name: 'Parametrizacion Lector Honeywell lectura codigo de barras software Zkbiocvsecurity en modulo visitantes', basic: null, professional: null, premium: null },
+  { id: 'desvinculacion_dsc', name: 'Desvinculacion de equipo DSC plataforma Comunicadores', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_powermanage', name: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_dsc', name: 'Diagnostico equipos marca DSC fuera de garantia', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_uhf', name: 'Diagnostico equipos marca UHF fuera de garantia', basic: null, professional: null, premium: null },
+  { id: 'diagnostico_came', name: 'Diagnostico equipo marca CAME en sede fuera de garantia', basic: 1, professional: 2, premium: 3 },
+];
+
+function getGspCareExpiresAt(activatedAt, plan) {
+  if (!activatedAt || !plan) return null;
+  const months = GSP_CARE_PLAN_MONTHS[plan];
+  if (months == null) return null;
+  const d = new Date(activatedAt);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+function getGspCareLimitForPlan(service, plan) {
+  if (!service || !plan) return null;
+  const key = plan.toLowerCase();
+  if (key === 'basic') return service.basic;
+  if (key === 'professional') return service.professional;
+  if (key === 'premium') return service.premium;
+  return null;
+}
+
 const loadGspCare = () => {
   try {
     const raw = fs.readFileSync(gspCarePath, 'utf8');
@@ -2532,17 +2641,30 @@ const loadGspCare = () => {
     if (Array.isArray(parsed)) {
       return parsed
         .map((item) => {
+          let cedula; let activatedAt; let plan; let expiresAt; let consumption;
           if (typeof item === 'string') {
-            return { cedula: normalizeId(item), activatedAt: null, plan: '' };
+            cedula = normalizeId(item);
+            activatedAt = null;
+            plan = '';
+          } else if (item && typeof item === 'object') {
+            cedula = normalizeId(item.cedula || item.id || '');
+            activatedAt = String(item.activatedAt || '').trim() || null;
+            plan = String(item.plan || '').trim();
+            expiresAt = String(item.expiresAt || '').trim() || null;
+            consumption = item.consumption && typeof item.consumption === 'object' ? { ...item.consumption } : {};
+          } else {
+            return null;
           }
-          if (item && typeof item === 'object') {
-            return {
-              cedula: normalizeId(item.cedula || item.id || ''),
-              activatedAt: String(item.activatedAt || '').trim() || null,
-              plan: String(item.plan || '').trim(),
-            };
+          if (activatedAt && plan && !expiresAt) {
+            expiresAt = getGspCareExpiresAt(activatedAt, plan);
           }
-          return null;
+          return {
+            cedula,
+            activatedAt,
+            plan,
+            expiresAt,
+            consumption: consumption || {},
+          };
         })
         .filter(Boolean);
     }
@@ -2914,6 +3036,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const roleId = String(req.query.roleId || '').trim();
   const userId = String(req.query.userId || '').trim();
   const section = String(req.query.section || 'inicio').trim() || 'inicio';
+  const gspCareVerCedula = String(req.query.ver || '').trim();
   const refreshStatus = String(req.query.refresh || '').trim();
   const notificationStatus = String(req.query.notify || '').trim();
   const vendedorInput = String(req.query.vendedor || '').trim();
@@ -2975,6 +3098,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         refreshStatus,
         notificationStatus,
         pushTokensCount,
+        gspCareVerCedula,
+        gspCareServices: GSP_CARE_SERVICES,
       })
     );
   }
@@ -3053,6 +3178,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         refreshStatus,
         notificationStatus,
         pushTokensCount,
+        gspCareVerCedula,
+        gspCareServices: GSP_CARE_SERVICES,
       })
     );
   } catch (error) {
@@ -3081,6 +3208,8 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         vendedorInput,
         defaultVendedor: DEFAULT_CXC_VENDEDOR,
         section: safeSection,
+        gspCareVerCedula,
+        gspCareServices: GSP_CARE_SERVICES,
         timings: {
           search: searchTimings,
         },
@@ -3214,7 +3343,7 @@ app.post(
   adminAuth,
   requireSectionPermission('gsp-care'),
   (req, res) => {
-  const { cedula, fecha, section, plan } = req.body || {};
+  const { cedula, section, plan } = req.body || {};
   const normalized = normalizeId(cedula);
   if (!normalized) {
     return res.redirect('/admin/rewards?section=gsp-care');
@@ -3222,24 +3351,63 @@ app.post(
   const current = loadGspCare();
   const today = new Date().toISOString().slice(0, 10);
   const nextPlan = String(plan || '').trim();
-  const nextActivatedAt = String(fecha || '').trim() || today;
   const existingIndex = current.findIndex((item) => item.cedula === normalized);
   if (existingIndex >= 0) {
+    const existing = current[existingIndex];
+    const nextActivatedAt = existing.activatedAt || today;
+    const nextExpiresAt = getGspCareExpiresAt(nextActivatedAt, nextPlan || existing.plan);
     current[existingIndex] = {
-      ...current[existingIndex],
+      ...existing,
       activatedAt: nextActivatedAt,
-      plan: nextPlan || current[existingIndex].plan || '',
+      plan: nextPlan || existing.plan || '',
+      expiresAt: nextExpiresAt || existing.expiresAt,
+      consumption: existing.consumption || {},
     };
   } else {
+    const expiresAt = getGspCareExpiresAt(today, nextPlan);
     current.unshift({
       cedula: normalized,
-      activatedAt: nextActivatedAt,
+      activatedAt: today,
       plan: nextPlan,
+      expiresAt,
+      consumption: {},
     });
   }
   saveGspCare(current);
   const targetSection = section || 'gsp-care';
   return res.redirect(`/admin/rewards?section=${encodeURIComponent(targetSection)}`);
+  }
+);
+
+app.post(
+  '/admin/gspcare/consumo',
+  adminAuth,
+  requireSectionPermission('gsp-care'),
+  (req, res) => {
+    const { cedula, serviceId, quantity, section } = req.body || {};
+    const normalized = normalizeId(cedula);
+    const qty = Math.max(0, parseInt(quantity, 10) || 1);
+    if (!normalized || !serviceId) {
+      return res.redirect(`/admin/rewards?section=gsp-care${normalized ? `&ver=${encodeURIComponent(normalized)}` : ''}`);
+    }
+    const current = loadGspCare();
+    const index = current.findIndex((item) => item.cedula === normalized);
+    if (index < 0) {
+      return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}`);
+    }
+    const item = current[index];
+    const consumption = { ...(item.consumption || {}) };
+    const used = (consumption[serviceId] || 0) + qty;
+    const service = GSP_CARE_SERVICES.find((s) => s.id === serviceId);
+    const limit = service ? getGspCareLimitForPlan(service, item.plan) : null;
+    if (limit != null) {
+      consumption[serviceId] = Math.min(used, limit);
+    } else {
+      consumption[serviceId] = used;
+    }
+    current[index] = { ...item, consumption };
+    saveGspCare(current);
+    return res.redirect(`/admin/rewards?section=gsp-care&ver=${encodeURIComponent(normalized)}`);
   }
 );
 
@@ -4293,6 +4461,56 @@ app.post('/api/cxc/points', async (req, res) => {
     return res.status(500).json({
       error: 'No se pudo calcular cashback desde CxC',
       details: error?.response?.data || error?.message,
+    });
+  }
+});
+
+app.get('/api/gspcare/status', (req, res) => {
+  try {
+    const cedula = normalizeId(req.query.cedula || '');
+    if (!cedula) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    const list = loadGspCare();
+    const member = list.find((item) => item.cedula === cedula);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (!member) {
+      return res.json({
+        active: false,
+        plan: null,
+        activatedAt: null,
+        expiresAt: null,
+        isExpired: false,
+        services: [],
+      });
+    }
+    const expiresAt = member.expiresAt || getGspCareExpiresAt(member.activatedAt, member.plan);
+    const isExpired = expiresAt && expiresAt < todayStr;
+    const services = GSP_CARE_SERVICES.map((svc) => {
+      const limit = getGspCareLimitForPlan(svc, member.plan);
+      const used = Number(member.consumption?.[svc.id] || 0);
+      const remaining =
+        limit == null ? null : Math.max(0, limit - used);
+      return {
+        id: svc.id,
+        name: svc.name,
+        limit,
+        used,
+        remaining: limit == null ? 'Ilimitado' : remaining,
+      };
+    });
+    return res.json({
+      active: !isExpired,
+      plan: member.plan,
+      activatedAt: member.activatedAt,
+      expiresAt,
+      isExpired,
+      services,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo consultar estado GSP Care',
+      details: error?.message,
     });
   }
 });
