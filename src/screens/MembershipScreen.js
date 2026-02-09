@@ -1,10 +1,33 @@
 import { useMemo, useEffect, useState, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, Pressable, Image, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Pressable, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
-import { getGspCareStatus } from '../api/backend';
+import { getGspCareCatalog, getGspCareStatus, getGspCareRequests, createGspCareRequest } from '../api/backend';
+
+const GSP_CARE_CATALOG_FALLBACK = {
+  categories: [
+    { id: 'A', name: 'Hikvision/HiLook + Diagnóstico CCTV no PTZ', Basic: 10, Professional: 16, Premium: 32 },
+    { id: 'B', name: 'ZKTeco/Honeywell', Basic: 2, Professional: 2, Premium: 3 },
+    { id: 'C', name: 'Otros diagnósticos/plataformas', Basic: 1, Professional: 2, Premium: 3 },
+  ],
+  services: [
+    { id: 'reset_hikvision', name: 'Reset contraseña equipo hikvision/hiklook', categoryId: 'A', marca: 'Hikvision/HiLook', modalidad: 'Remoto' },
+    { id: 'flasheo_hikvision', name: 'Servicio flasheo Hikvision', categoryId: 'A', marca: 'Hikvision', modalidad: 'Remoto' },
+    { id: 'desvinculacion_hikconnect', name: 'Desvinculacion cuenta HIK-CONNECT', categoryId: 'A', marca: 'Hikvision', modalidad: 'Remoto' },
+    { id: 'firmware_hikvision', name: 'Actualizacion firmware equipo Hikvision/Hilook', categoryId: 'A', marca: 'Hikvision/HiLook', modalidad: 'Remoto' },
+    { id: 'diagnostico_no_ptz', name: 'Diagnostico (no incluye PTZ) – grabador – camaras fuera de garantia', categoryId: 'A', marca: 'Hikvision/HiLook', modalidad: 'Remoto' },
+    { id: 'reset_zkteco', name: 'Reset contraseña servidores Zkteco Biotime/Zkbiocvsecurity/Zkbiocvacces', categoryId: 'B', marca: 'ZKTeco', modalidad: 'Remoto' },
+    { id: 'diagnostico_remoto_zkteco', name: 'Diagnostico Remoto Equipo fuera de Garantia (Zkbiocvacces Zkbiocvsecurity Biotime)', categoryId: 'B', marca: 'ZKTeco', modalidad: 'Remoto' },
+    { id: 'parametrizacion_honeywell', name: 'Parametrizacion Lector Honeywell codigo de barras Zkbiocvsecurity modulo visitantes', categoryId: 'B', marca: 'Honeywell/ZKTeco', modalidad: 'Remoto' },
+    { id: 'desvinculacion_dsc', name: 'Desvinculacion de equipo DSC plataforma Comunicadores', categoryId: 'C', marca: 'DSC', modalidad: 'Remoto' },
+    { id: 'diagnostico_powermanage', name: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', categoryId: 'C', marca: 'Otros', modalidad: 'Remoto' },
+    { id: 'diagnostico_dsc', name: 'Diagnostico equipos marca DSC fuera de garantia', categoryId: 'C', marca: 'DSC', modalidad: 'Remoto' },
+    { id: 'diagnostico_uhf', name: 'Diagnostico equipos marca UHF fuera de garantia', categoryId: 'C', marca: 'UHF', modalidad: 'Remoto' },
+    { id: 'diagnostico_came', name: 'Diagnostico equipo marca CAME en sede fuera de garantia', categoryId: 'C', marca: 'CAME', modalidad: 'En sede' },
+  ],
+};
 
 export default function MembershipScreen() {
   const { user } = useAuth();
@@ -13,10 +36,14 @@ export default function MembershipScreen() {
   const [gspCareStatus, setGspCareStatus] = useState(null);
   const [gspCareLoading, setGspCareLoading] = useState(false);
   const [gspCareError, setGspCareError] = useState('');
+  const [requests, setRequests] = useState([]);
+  const [requestLoadingId, setRequestLoadingId] = useState(null);
+  const [catalog, setCatalog] = useState(GSP_CARE_CATALOG_FALLBACK);
   const [refreshing, setRefreshing] = useState(false);
 
+  const cedula = user?.cedula ? String(user.cedula).replace(/\D/g, '').trim() : '';
+
   const loadGspCareStatus = useCallback(async () => {
-    const cedula = user?.cedula ? String(user.cedula).replace(/\D/g, '').trim() : '';
     if (!cedula) {
       setGspCareStatus(null);
       return;
@@ -29,22 +56,83 @@ export default function MembershipScreen() {
       setGspCareError(err?.message || 'No se pudo cargar el estado');
       setGspCareStatus(null);
     }
-  }, [user?.cedula]);
+  }, [cedula]);
+
+  const loadRequests = useCallback(async () => {
+    if (!cedula) {
+      setRequests([]);
+      return;
+    }
+    try {
+      const data = await getGspCareRequests({ cedula });
+      setRequests(Array.isArray(data?.requests) ? data.requests : []);
+    } catch (_err) {
+      setRequests([]);
+    }
+  }, [cedula]);
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const data = await getGspCareCatalog();
+      const categories = Array.isArray(data?.categories) ? data.categories : [];
+      const services = Array.isArray(data?.services) ? data.services : [];
+      setCatalog(
+        categories.length && services.length
+          ? { categories, services }
+          : GSP_CARE_CATALOG_FALLBACK
+      );
+    } catch (_err) {
+      setCatalog(GSP_CARE_CATALOG_FALLBACK);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
     setGspCareLoading(true);
-    loadGspCareStatus().finally(() => {
+    Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests()]).finally(() => {
       if (mounted) setGspCareLoading(false);
     });
     return () => { mounted = false; };
-  }, [loadGspCareStatus]);
+  }, [loadCatalog, loadGspCareStatus, loadRequests]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadGspCareStatus();
+    await Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests()]);
     setRefreshing(false);
-  }, [loadGspCareStatus]);
+  }, [loadCatalog, loadGspCareStatus, loadRequests]);
+
+  const servicesByCategory = useMemo(() => {
+    if (!catalog?.services?.length) return {};
+    const byCat = {};
+    catalog.services.forEach((s) => {
+      const cid = s.categoryId || 'C';
+      if (!byCat[cid]) byCat[cid] = [];
+      byCat[cid].push(s);
+    });
+    return byCat;
+  }, [catalog]);
+
+  const canRequestService = (svc) => {
+    if (!svc) return false;
+    const rem = svc.remaining;
+    return rem === 'Ilimitado' || (typeof rem === 'number' && rem > 0);
+  };
+
+  const handleRequestService = useCallback(
+    async (serviceId) => {
+      if (!cedula || !serviceId) return;
+      setRequestLoadingId(serviceId);
+      try {
+        await createGspCareRequest({ cedula, serviceId });
+        await Promise.all([loadGspCareStatus(), loadRequests()]);
+      } catch (err) {
+        Alert.alert('Error', err?.message || 'No se pudo enviar la solicitud');
+      } finally {
+        setRequestLoadingId(null);
+      }
+    },
+    [cedula, loadGspCareStatus, loadRequests]
+  );
   const formatName = (value) =>
     value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   const toTitleCase = (value) =>
@@ -109,24 +197,6 @@ export default function MembershipScreen() {
         border: '#1F1F1F',
         highlight: '1 Año',
       },
-    ],
-    []
-  );
-  const tableRows = useMemo(
-    () => [
-      { description: 'Reset contraseña equipo hikvision/hiklook', basic: null, professional: null, premium: null },
-      { description: 'Servicio flasheo Hikvision', basic: null, professional: null, premium: null },
-      { description: 'Desvinculacion cuenta HIK-CONNECT', basic: null, professional: null, premium: null },
-      { description: 'Actualizacion firmware equipo Hikvision /Hilook', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico (no incluye PTZ) – incluye grabador – camaras fuera de garantia', basic: 10, professional: 16, premium: 32 },
-      { description: 'Reset contraseña servidores software zkteco Biotime -Zkbiocvsecurity -Zkbiocvacces', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico Remoto Equipo fuera de Garantia (Servidores Zkbiocvacces Zkbiocvsecurity Biotime)', basic: 2, professional: 2, premium: 3 },
-      { description: 'Parametrizacion Lector Honeywell lectura codigo de barras software Zkbiocvsecurity en modulo visitantes', basic: null, professional: null, premium: null },
-      { description: 'Desvinculacion de equipo DSC plataforma Comunicadores', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico remoto Servidor powermanage para instalacion powermanage', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico equipos marca DSC fuera de garantia', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico equipos marca UHF fuera de garantia', basic: null, professional: null, premium: null },
-      { description: 'Diagnostico equipo marca CAME en sede fuera de garantia', basic: 1, professional: 2, premium: 3 },
     ],
     []
   );
@@ -246,13 +316,50 @@ export default function MembershipScreen() {
         {showMyServices ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Tus servicios disponibles</Text>
-            <Text style={styles.subtitle}>Según tu plan {gspCareStatus.plan}. Actualiza deslizando hacia abajo.</Text>
-            {gspCareStatus.services.map((svc) => (
-              <View key={svc.id} style={styles.serviceRow}>
-                <Text style={styles.serviceName} numberOfLines={2}>{svc.name}</Text>
-                <Text style={styles.serviceRemaining}>
-                  {svc.remaining === 'Ilimitado' ? 'Ilimitado' : `${svc.remaining} disp.`}
-                </Text>
+            <Text style={styles.subtitle}>Según tu plan {gspCareStatus.plan}. Solicita el servicio y un asesor lo procesará.</Text>
+            {gspCareStatus.services.map((svc) => {
+              const canRequest = canRequestService(svc);
+              const isLoading = requestLoadingId === svc.id;
+              return (
+                <View key={svc.id} style={styles.serviceRow}>
+                  <View style={styles.serviceInfo}>
+                    <Text style={styles.serviceName} numberOfLines={2}>{svc.name}</Text>
+                    <Text style={styles.serviceRemaining}>
+                      {svc.remaining === 'Ilimitado' ? 'Ilimitado' : `${svc.remaining} disp.`}
+                    </Text>
+                  </View>
+                  {canRequest ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.solicitarBtn, pressed && styles.pressed]}
+                      onPress={() => handleRequestService(svc.id)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.solicitarBtnText}>Solicitar</Text>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {showMyServices && requests.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Mis solicitudes</Text>
+            <Text style={styles.subtitle}>Estado de tus solicitudes de servicio.</Text>
+            {requests.map((r) => (
+              <View key={r.id} style={styles.requestRow}>
+                <View style={styles.requestInfo}>
+                  <Text style={styles.requestServiceName} numberOfLines={2}>{r.serviceName || r.serviceId}</Text>
+                  <Text style={styles.requestMeta}>{r.date || ''}</Text>
+                </View>
+                <View style={[styles.requestBadge, r.status === 'completed' ? styles.requestBadgeDone : styles.requestBadgePending]}>
+                  <Text style={styles.requestBadgeText}>{r.status === 'completed' ? 'Completado' : 'Pendiente'}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -282,25 +389,32 @@ export default function MembershipScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Qué incluye cada membresía</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.tableWrap}>
-              <View style={styles.tableHeaderRow}>
-                <Text style={[styles.tableCellDesc, styles.tableHeaderText]}>DESCRIPCION</Text>
-                <Text style={[styles.tableCellBasic, styles.tableHeaderText]}>BASIC</Text>
-                <Text style={[styles.tableCellPro, styles.tableHeaderText]}>PROFESSIONAL</Text>
-                <Text style={[styles.tableCellPremium, styles.tableHeaderText]}>PREMIUM</Text>
-              </View>
-              {tableRows.map((row, index) => (
-                <View key={`row-${index}`} style={styles.tableRow}>
-                  <Text style={styles.tableCellDesc} numberOfLines={3}>{row.description}</Text>
-                  <Text style={styles.tableCellBasic}>{row.basic != null ? String(row.basic) : 'Incl.'}</Text>
-                  <Text style={styles.tableCellPro}>{row.professional != null ? String(row.professional) : 'Incl.'}</Text>
-                  <Text style={styles.tableCellPremium}>{row.premium != null ? String(row.premium) : 'Incl.'}</Text>
+          <Text style={styles.sectionTitle}>Categorías y qué incluye</Text>
+          <Text style={styles.subtitle}>Cupos por plan (Basic / Professional / Premium) y servicios incluidos en cada categoría.</Text>
+          {catalog?.categories?.length ? (
+            catalog.categories.map((cat) => (
+              <View key={cat.id} style={styles.categoryBlock}>
+                <View style={styles.categoryHeader}>
+                  <Text style={styles.categoryName}>{cat.name}</Text>
+                  <View style={styles.categoryLimits}>
+                    <Text style={styles.categoryLimitLabel}>Basic: {cat.Basic != null ? cat.Basic : 'Incl.'}</Text>
+                    <Text style={styles.categoryLimitLabel}>Pro: {cat.Professional != null ? cat.Professional : 'Incl.'}</Text>
+                    <Text style={styles.categoryLimitLabel}>Premium: {cat.Premium != null ? cat.Premium : 'Incl.'}</Text>
+                  </View>
                 </View>
-              ))}
-            </View>
-          </ScrollView>
+                <View style={styles.serviceList}>
+                  {(servicesByCategory[cat.id] || []).map((svc) => (
+                    <View key={svc.id} style={styles.catalogServiceRow}>
+                      <Text style={styles.catalogServiceName} numberOfLines={2}>{svc.name}</Text>
+                      <Text style={styles.catalogServiceMeta}>{svc.marca || ''} · {svc.modalidad || ''}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.mutedText}>Cargando catálogo…</Text>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -464,17 +578,120 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  serviceInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   serviceName: {
     color: colors.textSoft,
     fontSize: 13,
-    flex: 1,
     marginRight: spacing.sm,
   },
   serviceRemaining: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
+    marginTop: 2,
+  },
+  solicitarBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 88,
+    alignItems: 'center',
+  },
+  solicitarBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  requestRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  requestInfo: {
+    flex: 1,
+  },
+  requestServiceName: {
+    color: colors.textMain,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  requestMeta: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  requestBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  requestBadgePending: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+  },
+  requestBadgeDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  requestBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMain,
+  },
+  categoryBlock: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  categoryHeader: {
+    marginBottom: spacing.sm,
+  },
+  categoryName: {
+    color: colors.textMain,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  categoryLimits: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  categoryLimitLabel: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  serviceList: {
+    paddingLeft: spacing.sm,
+    gap: 6,
+  },
+  catalogServiceRow: {
+    paddingVertical: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
+    paddingLeft: 8,
+  },
+  catalogServiceName: {
+    color: colors.textSoft,
+    fontSize: 13,
+  },
+  catalogServiceMeta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  mutedText: {
+    color: colors.textMuted,
+    fontSize: 13,
   },
   memberLogoWrap: {
     alignItems: 'center',

@@ -4818,6 +4818,34 @@ app.post('/api/cxc/points', async (req, res) => {
   }
 });
 
+app.get('/api/gspcare/catalog', (_req, res) => {
+  try {
+    const categories = GSP_CARE_CATEGORY_IDS.map((catId) => {
+      const cat = GSP_CARE_CATEGORIES[catId];
+      return {
+        id: catId,
+        name: cat?.name || catId,
+        Basic: cat?.Basic ?? null,
+        Professional: cat?.Professional ?? null,
+        Premium: cat?.Premium ?? null,
+      };
+    });
+    const services = GSP_CARE_SERVICES.map((s) => ({
+      id: s.id,
+      name: s.name,
+      categoryId: s.categoryId,
+      marca: s.marca,
+      modalidad: s.modalidad,
+    }));
+    return res.json({ categories, services });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo cargar el catálogo',
+      details: error?.message,
+    });
+  }
+});
+
 app.get('/api/gspcare/status', (req, res) => {
   try {
     const cedula = normalizeId(req.query.cedula || '');
@@ -4876,6 +4904,70 @@ app.get('/api/gspcare/status', (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: 'No se pudo consultar estado GSP Care',
+      details: error?.message,
+    });
+  }
+});
+
+app.get('/api/gspcare/requests', (req, res) => {
+  try {
+    const cedula = normalizeId(req.query.cedula || '');
+    if (!cedula) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    const list = loadGspCareRequests();
+    const requests = list.filter((r) => r.cedula === cedula);
+    return res.json({ requests });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudieron listar las solicitudes',
+      details: error?.message,
+    });
+  }
+});
+
+app.post('/api/gspcare/request', (req, res) => {
+  try {
+    const { cedula, serviceId, clientOrEquipment } = req.body || {};
+    const normalized = normalizeId(cedula);
+    if (!normalized) {
+      return res.status(400).json({ error: 'cedula es requerida' });
+    }
+    if (!serviceId || typeof serviceId !== 'string') {
+      return res.status(400).json({ error: 'serviceId es requerido' });
+    }
+    const member = loadGspCare().find((item) => item.cedula === normalized);
+    if (!member) {
+      return res.status(404).json({ error: 'No tienes membresía GSP Care activa' });
+    }
+    const service = getGspCareServiceById(serviceId.trim());
+    if (!service) {
+      return res.status(400).json({ error: 'Servicio no válido' });
+    }
+    const remaining = getGspCareCategoryRemaining(member, service.categoryId);
+    if (remaining <= 0) {
+      return res.status(400).json({ error: 'No tienes cupo disponible para este servicio en el período actual' });
+    }
+    const requests = loadGspCareRequests();
+    const now = new Date().toISOString();
+    const newRequest = {
+      id: `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      cedula: normalized,
+      serviceId: service.id,
+      serviceName: service.name,
+      brand: service.marca,
+      modality: service.modalidad,
+      date: now.slice(0, 10),
+      clientOrEquipment: String(clientOrEquipment || '').trim() || '—',
+      status: 'pending',
+      createdAt: now,
+    };
+    requests.unshift(newRequest);
+    saveGspCareRequests(requests);
+    return res.json({ ok: true, request: newRequest });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'No se pudo crear la solicitud',
       details: error?.message,
     });
   }

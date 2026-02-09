@@ -91,9 +91,26 @@ export function getCommercialContact({ cedula, vendedor } = {}) {
   });
 }
 
+export function getGspCareCatalog() {
+  return request('/api/gspcare/catalog');
+}
+
 export function getGspCareStatus({ cedula }) {
   return request('/api/gspcare/status', {
     params: { cedula },
+  });
+}
+
+export function getGspCareRequests({ cedula }) {
+  return request('/api/gspcare/requests', {
+    params: { cedula },
+  });
+}
+
+export function createGspCareRequest({ cedula, serviceId, clientOrEquipment }) {
+  return request('/api/gspcare/request', {
+    method: 'POST',
+    body: { cedula, serviceId, clientOrEquipment: clientOrEquipment || undefined },
   });
 }
 
