@@ -52,6 +52,25 @@ Ruta: `/admin/rewards`
 npx eas build -p android --profile apk
 ```
 
+## Deploy backend a Lightsail
+Tras `git push origin main`, en tu máquina (con acceso SSH al instance):
+
+```bash
+export DEPLOY_HOST=bitnami@TU_IP_LIGHTSAIL
+export DEPLOY_PATH=/home/bitnami/appgsp   # ruta donde está el repo en el servidor
+./scripts/deploy-lightsail.sh
+```
+
+En el servidor (SSH), para actualizar a mano:
+```bash
+cd /home/bitnami/appgsp
+git pull origin main
+cd backend && npm install --omit=dev
+pm2 restart appgsp-backend
+```
+
+El script hace `git pull`, `npm install` en `backend/` y reinicia el proceso (pm2 o node).
+
 ## Notas
 - Si el proyecto está en OneDrive, marca la carpeta como
   "Always Keep on This Device" para evitar errores `ETIMEDOUT`.

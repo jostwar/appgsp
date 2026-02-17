@@ -8,7 +8,7 @@ export function getBackendUrl() {
 
 const REQUEST_TIMEOUT_MS = 20000; // 20 segundos
 
-async function request(path, { method = 'GET', body, params } = {}) {
+async function request(path, { method = 'GET', body, params, timeoutMs } = {}) {
   const urlBase = getBackendUrl();
   if (!urlBase) {
     throw new Error('EXPO_PUBLIC_BACKEND_URL no está configurada');
@@ -23,8 +23,9 @@ async function request(path, { method = 'GET', body, params } = {}) {
     });
   }
 
+  const timeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
     const response = await fetch(url.toString(), {
@@ -97,6 +98,7 @@ export function getWooOrders({ cedula, customerId, email, page, perPage } = {}) 
 export function getCarteraSummary({ cedula, vendedor } = {}) {
   return request('/api/cxc/estado-cartera/summary', {
     params: { cedula, vendedor },
+    timeoutMs: 28000,
   });
 }
 

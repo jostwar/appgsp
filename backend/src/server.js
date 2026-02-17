@@ -4621,6 +4621,8 @@ const carteraSummaryCache = new Map();
 const getCarteraSummaryCacheKey = (cedula, vendedor) =>
   `${normalizeId(cedula)}:${String(vendedor || '').trim()}`;
 
+const RESOLVE_SELLER_TIMEOUT_MS = 6000;
+
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
   try {
     const { cedula, vendedor, debug } = req.query;
@@ -4628,7 +4630,20 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const normCedula = normalizeId(cedula);
-    const resolvedSeller = vendedor || (await resolveSellerFromClients(cedula));
+    let resolvedSeller = vendedor;
+    if (resolvedSeller === undefined || resolvedSeller === '') {
+      try {
+        resolvedSeller = await Promise.race([
+          resolveSellerFromClients(cedula),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), RESOLVE_SELLER_TIMEOUT_MS)
+          ),
+        ]);
+      } catch (_e) {
+        resolvedSeller = '';
+      }
+    }
+    resolvedSeller = String(resolvedSeller || '').trim();
     if (!debug) {
       const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
       const cached = carteraSummaryCache.get(cacheKey);
@@ -4734,6 +4749,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     }
     return res.json(summaryPayload);
   } catch (error) {
+    console.error('[cartera/summary]', error?.message || error);
     return res.status(500).json({
       error: 'No se pudo consultar estado de cartera',
       details: error?.response?.data || error?.message,
