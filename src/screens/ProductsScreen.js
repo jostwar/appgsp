@@ -471,10 +471,9 @@ export default function ProductsScreen({ route, navigation }) {
   if (status === 'missing') {
     return (
       <View style={styles.center}>
-        <Text style={styles.centerTitle}>Conecta WooCommerce</Text>
+        <Text style={styles.centerTitle}>No hay productos disponibles</Text>
         <Text style={styles.centerText}>
-          Configura `EXPO_PUBLIC_WC_URL`, `EXPO_PUBLIC_WC_KEY` y
-          `EXPO_PUBLIC_WC_SECRET` para ver tus productos.
+          El catálogo no está disponible en este momento. Intenta más tarde.
         </Text>
       </View>
     );
@@ -485,7 +484,7 @@ export default function ProductsScreen({ route, navigation }) {
       <View style={styles.center}>
         <Text style={styles.centerTitle}>No se pudieron cargar productos</Text>
         <Text style={styles.centerText}>
-          Revisa tus credenciales o la conexión a internet.
+          Revisa tu conexión a internet e intenta de nuevo.
         </Text>
         <Pressable
           style={pressableStyle(styles.primaryButton)}
@@ -505,7 +504,7 @@ export default function ProductsScreen({ route, navigation }) {
       <View style={styles.center}>
         <Text style={styles.centerTitle}>No hay productos disponibles</Text>
         <Text style={styles.centerText}>
-          Publica productos en WooCommerce o revisa los permisos de la llave.
+          No encontramos productos con los filtros actuales. Prueba cambiando la categoría o la búsqueda, o intenta más tarde.
         </Text>
         <Pressable
           style={pressableStyle(styles.primaryButton)}

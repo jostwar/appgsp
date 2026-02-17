@@ -331,7 +331,7 @@ export default function ProfileScreen({ navigation }) {
           {carteraState === 'loading' ? (
             <Text style={styles.sectionHint}>Consultando cartera...</Text>
           ) : carteraState === 'error' ? (
-            <Text style={styles.sectionHint}>No se pudo consultar cartera.</Text>
+            <Text style={styles.sectionHint}>No pudimos cargar tu estado de cartera. Intenta más tarde.</Text>
           ) : carteraState === 'missing' ? (
             <Text style={styles.sectionHint}>No hay cédula asociada.</Text>
           ) : (

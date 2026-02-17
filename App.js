@@ -80,8 +80,11 @@ function MainTabs() {
   const { items } = useCart();
   const insets = useSafeAreaInsets();
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  const tabBarBottom = Math.max(insets.bottom, 12);
-  const tabBarPaddingBottom = Math.max(insets.bottom, 6);
+  const safeBottom = insets.bottom ?? 0;
+  const tabBarMarginBottom = Math.max(safeBottom, 6);
+  const tabBarExtraPadding = Math.min(safeBottom, 8);
+  const tabBarHeight = 52 + tabBarExtraPadding;
+  const scenePaddingBottom = tabBarHeight + tabBarMarginBottom + 8;
   return (
     <Tab.Navigator
       initialRouteName="Inicio"
@@ -103,12 +106,12 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: 'transparent',
-          height: 56 + tabBarPaddingBottom,
-          paddingTop: 6,
-          paddingBottom: tabBarPaddingBottom,
+          height: tabBarHeight,
+          paddingTop: 4,
+          paddingBottom: tabBarExtraPadding,
           justifyContent: 'space-around',
           marginHorizontal: 16,
-          marginBottom: tabBarBottom,
+          marginBottom: tabBarMarginBottom,
           borderRadius: 18,
           elevation: 8,
           shadowColor: '#000',
@@ -119,7 +122,7 @@ function MainTabs() {
         },
         tabBarHideOnKeyboard: true,
         sceneContainerStyle: {
-          paddingBottom: 96 + Math.max(insets.bottom - 12, 0),
+          paddingBottom: scenePaddingBottom,
         },
         tabBarShowLabel: true,
         tabBarIconStyle: {

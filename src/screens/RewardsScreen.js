@@ -315,7 +315,7 @@ export default function RewardsScreen() {
               </Text>
             </Pressable>
             {carteraState === 'error' ? (
-              <Text style={styles.pointsHint}>No se pudo validar cartera.</Text>
+              <Text style={styles.pointsHint}>No pudimos cargar tu estado de cartera. Intenta más tarde.</Text>
             ) : hasOverdueBalance ? (
               <Text style={styles.pointsHint}>
                 Tienes saldo vencido. Contacta a cartera para solicitar cashback.
