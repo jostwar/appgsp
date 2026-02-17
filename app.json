@@ -8,9 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "updates": {
-      "enabled": false
-    },
+    "updates": { "enabled": false },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -30,9 +28,7 @@
       "package": "co.com.gsp.app"
     },
     "web": { "favicon": "./assets/favicon.png" },
-    "extra": {
-      "eas": { "projectId": "e45648a5-c13e-4633-a255-4d906ddb758c" }
-    },
+    "extra": {},
     "owner": "jostwars-organization"
   }
 }

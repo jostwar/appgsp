@@ -1,8 +1,12 @@
-const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BASE_URL_FALLBACK = 'https://app.gsp.com.co';
+const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL || BASE_URL_FALLBACK;
 
 export function getBackendUrl() {
-  return baseUrl.replace(/\/$/, '');
+  const url = (baseUrl || BASE_URL_FALLBACK).replace(/\/$/, '');
+  return url || BASE_URL_FALLBACK;
 }
+
+const REQUEST_TIMEOUT_MS = 20000; // 20 segundos
 
 async function request(path, { method = 'GET', body, params } = {}) {
   const urlBase = getBackendUrl();
@@ -19,18 +23,25 @@ async function request(path, { method = 'GET', body, params } = {}) {
     });
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = data?.error || 'Error en el backend';
-    throw new Error(message);
+  try {
+    const response = await fetch(url.toString(), {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = data?.error || 'Error en el backend';
+      throw new Error(message);
+    }
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data;
 }
 
 export function loginWoo({ email, password }) {
@@ -67,6 +78,10 @@ export function getRewardsCatalog() {
 
 export function getHomeOffers() {
   return request('/api/home/offers');
+}
+
+export function getHomeBanners() {
+  return request('/api/home/banners');
 }
 
 export function getWeeklyProduct() {

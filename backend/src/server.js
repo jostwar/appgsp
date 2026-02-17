@@ -27,6 +27,7 @@ const gspCarePath = path.resolve(__dirname, '../data', 'gspcare.json');
 const gspCareRequestsPath = path.resolve(__dirname, '../data', 'gspcare-requests.json');
 const offersPath = path.resolve(__dirname, '../data', 'offers.json');
 const weeklyProductPath = path.resolve(__dirname, '../data', 'weekly-product.json');
+const bannersPath = path.resolve(__dirname, '../data', 'banners.json');
 const clientsCachePath = path.resolve(__dirname, '../data', 'clients-cache.json');
 const pushTokensPath = path.resolve(__dirname, '../data', 'push-tokens.json');
 const pushHistoryPath = path.resolve(__dirname, '../data', 'push-history.json');
@@ -180,6 +181,7 @@ const ADMIN_SECTIONS = [
   'notificaciones',
   'ofertas',
   'producto-semana',
+  'banners',
   'gsp-care',
   'comercial',
   'usuarios',
@@ -192,6 +194,7 @@ const ADMIN_SECTION_LABELS = {
   notificaciones: 'Notificaciones',
   ofertas: 'Ofertas',
   'producto-semana': 'Producto semana',
+  banners: 'Banners',
   'gsp-care': 'GSP Care',
   comercial: 'Comercial',
   usuarios: 'Usuarios',
@@ -330,7 +333,7 @@ const recordPushHistory = (entry) => {
 const defaultAdminRoles = () => [
   { id: 'admin', name: 'Administrador', permissions: [...ADMIN_SECTIONS] },
   { id: 'operaciones', name: 'Operaciones', permissions: ['inicio', 'clientes', 'premios', 'solicitudes-cashback'] },
-  { id: 'marketing', name: 'Marketing', permissions: ['inicio', 'notificaciones', 'ofertas'] },
+  { id: 'marketing', name: 'Marketing', permissions: ['inicio', 'notificaciones', 'ofertas', 'banners'] },
   { id: 'comercial', name: 'Comercial', permissions: ['inicio', 'comercial', 'clientes'] },
 ];
 
@@ -347,6 +350,7 @@ const ensureJsonFile = (targetPath, fallbackValue) => {
 const ensureDataFiles = () => {
   ensureJsonFile(offersPath, []);
   ensureJsonFile(weeklyProductPath, null);
+  ensureJsonFile(bannersPath, []);
   ensureJsonFile(gspCarePath, []);
   ensureJsonFile(pushHistoryPath, []);
   ensureJsonFile(adminUsersPath, { users: [], roles: defaultAdminRoles() });
@@ -1215,6 +1219,7 @@ const renderRewardsPortal = ({
   notificationStatus = '',
   pushTokensCount = 0,
   cashbackRequests = [],
+  banners = [],
   timings = null,
 } = {}) => {
   const rewardsList = rewards;
@@ -1281,6 +1286,7 @@ const renderRewardsPortal = ({
   const showNotifications = normalizedSection === 'notificaciones';
   const showOfertas = normalizedSection === 'ofertas';
   const showWeekly = normalizedSection === 'producto-semana';
+  const showBanners = normalizedSection === 'banners';
   const showComercial = normalizedSection === 'comercial';
   const showUsuarios = normalizedSection === 'usuarios';
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -2253,6 +2259,42 @@ const renderRewardsPortal = ({
           }
 
           ${
+            showBanners
+              ? `<div id="banners" class="card">
+            <h2 class="section-title">Banners del carrusel (inicio app)</h2>
+            <p class="section-subtitle">
+              Imágenes del carrusel que se muestran arriba en la pantalla de inicio. Orden: el primero es el que aparece primero.
+            </p>
+            <form class="form-grid" method="post" action="/admin/banners/save">
+              <input type="hidden" name="section" value="banners" />
+              <input type="text" name="imageUrl" placeholder="URL de la imagen" required />
+              <input type="text" name="link" placeholder="URL al hacer clic (opcional)" />
+              <button type="submit">Agregar banner</button>
+            </form>
+            <div class="grid" style="margin-top:16px;">
+              ${
+                banners.length
+                  ? banners
+                      .map(
+                        (b, i) => `<div class="subcard">
+                        ${b.imageUrl ? `<img class="reward-image" src="${escapeHtml(b.imageUrl)}" alt="Banner ${i + 1}" style="max-height:120px;object-fit:cover;" />` : ''}
+                        <div class="label">#${i + 1} ${escapeHtml(b.link || 'Sin enlace')}</div>
+                        <form method="post" action="/admin/banners/delete" style="margin-top:8px;">
+                          <input type="hidden" name="section" value="banners" />
+                          <input type="hidden" name="id" value="${escapeHtml(b.id)}" />
+                          <button type="submit" class="btn-secondary">Eliminar</button>
+                        </form>
+                      </div>`
+                      )
+                      .join('')
+                  : '<div class="alert">No hay banners. Agrega la URL de una imagen.</div>'
+              }
+            </div>
+          </div>`
+              : ''
+          }
+
+          ${
             showComercial
               ? `<div id="comercial" class="card">
             <h2 class="section-title">Equipo comercial</h2>
@@ -2676,6 +2718,28 @@ const saveWeeklyProduct = (product) => {
   }
 };
 
+const loadBanners = () => {
+  try {
+    const raw = fs.readFileSync(bannersPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo leer banners.json:', error?.message || error);
+    return [];
+  }
+};
+
+const saveBanners = (banners) => {
+  try {
+    fs.mkdirSync(path.dirname(bannersPath), { recursive: true });
+    fs.writeFileSync(bannersPath, JSON.stringify(banners, null, 2));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo guardar banners.json:', error?.message || error);
+  }
+};
+
 const GSP_CARE_PLAN_MONTHS = { Basic: 3, Professional: 6, Premium: 12 };
 const GSP_CARE_CATEGORY_IDS = ['A', 'B', 'C'];
 const GSP_CARE_CATEGORIES = {
@@ -2893,13 +2957,21 @@ const chunkArray = (items, size) => {
   return chunks;
 };
 
+const EXPO_PUSH_HEADERS = {
+  Accept: 'application/json',
+  'Accept-Encoding': 'gzip, deflate',
+  'Content-Type': 'application/json',
+};
+
 const sendPushToCedula = async (cedula, { title, body, data } = {}) => {
   const stored = loadPushTokens();
   const norm = normalizeId(cedula);
   const tokens = stored
     .filter((item) => item?.cedula === norm && isExpoPushToken(item?.token))
     .map((item) => item.token);
-  if (!tokens.length) return { total: 0, sent: 0, failed: 0 };
+  if (!tokens.length) {
+    return { total: 0, sent: 0, failed: 0 };
+  }
   const chunks = chunkArray(tokens, 100);
   let sent = 0;
   let failed = 0;
@@ -2909,17 +2981,31 @@ const sendPushToCedula = async (cedula, { title, body, data } = {}) => {
       title: title || 'GSP Pro',
       body: body || '',
       sound: 'default',
-      data: data || {},
+      data: data && Object.keys(data).length ? data : {},
     }));
     try {
-      const response = await axios.post('https://exp.host/--/api/v2/push/send', messages);
+      const response = await axios.post(
+        'https://exp.host/--/api/v2/push/send',
+        messages,
+        { headers: EXPO_PUSH_HEADERS, timeout: 15000 }
+      );
+      if (response.data?.errors?.length) {
+        console.error('[push] Expo request errors:', response.data.errors);
+        failed += messages.length;
+        continue;
+      }
       const results = Array.isArray(response.data?.data) ? response.data.data : [];
       results.forEach((result) => {
-        if (result?.status === 'ok') sent += 1;
-        else failed += 1;
+        if (result?.status === 'ok') {
+          sent += 1;
+        } else {
+          failed += 1;
+          if (result?.message) console.warn('[push] Expo ticket:', result.message);
+        }
       });
-    } catch (_error) {
+    } catch (error) {
       failed += messages.length;
+      console.error('[push] Expo request failed:', error?.message || error?.response?.data || error);
     }
   }
   return { total: tokens.length, sent, failed };
@@ -2929,7 +3015,7 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
   const stored = loadPushTokens();
   const tokens = stored.map((item) => item?.token).filter(isExpoPushToken);
   if (!tokens.length) {
-    return { total: 0, sent: 0, failed: 0 };
+    return { total: 0, sent: 0, failed: 0, receipts: [] };
   }
   const chunks = chunkArray(tokens, 100);
   let sent = 0;
@@ -2941,10 +3027,20 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
       title: title || 'GSP Pro',
       body: body || '',
       sound: 'default',
-      data: data || {},
+      data: data && Object.keys(data).length ? data : {},
     }));
     try {
-      const response = await axios.post('https://exp.host/--/api/v2/push/send', messages);
+      const response = await axios.post(
+        'https://exp.host/--/api/v2/push/send',
+        messages,
+        { headers: EXPO_PUSH_HEADERS, timeout: 15000 }
+      );
+      if (response.data?.errors?.length) {
+        console.error('[push] Expo request errors:', response.data.errors);
+        failed += messages.length;
+        receipts.push({ status: 'error', message: String(response.data.errors[0]?.message || 'Expo error') });
+        continue;
+      }
       const results = Array.isArray(response.data?.data) ? response.data.data : [];
       results.forEach((result) => {
         if (result?.status === 'ok') {
@@ -2953,11 +3049,14 @@ const sendPushNotifications = async ({ title, body, data } = {}) => {
         } else {
           failed += 1;
           receipts.push({ status: 'error', message: result?.message || 'Error' });
+          if (result?.message) console.warn('[push] Expo ticket:', result.message);
         }
       });
-    } catch (_error) {
+    } catch (error) {
       failed += messages.length;
-      receipts.push({ status: 'error', message: 'Error enviando notificación' });
+      const msg = error?.response?.data?.errors?.[0]?.message || error?.message || 'Error enviando notificación';
+      receipts.push({ status: 'error', message: msg });
+      console.error('[push] Expo request failed:', error?.message || error?.response?.data || error);
     }
   }
   return { total: tokens.length, sent, failed, receipts };
@@ -3233,6 +3332,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
   const rewards = loadRewards();
   const offers = loadOffers();
   const weeklyProduct = loadWeeklyProduct();
+  const banners = loadBanners();
   const commercialTeamRaw = loadCommercialRaw();
   const commercialTeamCount = loadCommercialTeam().length;
   const { users: adminUsers, roles: adminRoles } = loadAdminUsers();
@@ -3287,6 +3387,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         notificationStatus,
         pushTokensCount,
         cashbackRequests,
+        banners,
         gspCareVerCedula,
         gspCareError,
         gspCareServices: GSP_CARE_SERVICES,
@@ -3369,6 +3470,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         notificationStatus,
         pushTokensCount,
         cashbackRequests,
+        banners,
         gspCareVerCedula,
         gspCareError,
         gspCareServices: GSP_CARE_SERVICES,
@@ -3410,6 +3512,7 @@ app.get('/admin/rewards', adminAuth, async (req, res) => {
         notificationStatus,
         pushTokensCount,
         cashbackRequests,
+        banners,
       })
     );
   }
@@ -3933,6 +4036,41 @@ app.post(
 );
 
 app.post(
+  '/admin/banners/save',
+  adminAuth,
+  requireSectionPermission('banners'),
+  (req, res) => {
+    const { imageUrl, link, section } = req.body || {};
+    if (!imageUrl || !String(imageUrl).trim()) {
+      return res.redirect('/admin/rewards?section=banners');
+    }
+    const banners = loadBanners();
+    banners.push({
+      id: `banner-${Date.now()}`,
+      imageUrl: String(imageUrl).trim(),
+      link: String(link || '').trim() || undefined,
+    });
+    saveBanners(banners);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section || 'banners')}`);
+  }
+);
+
+app.post(
+  '/admin/banners/delete',
+  adminAuth,
+  requireSectionPermission('banners'),
+  (req, res) => {
+    const { id, section } = req.body || {};
+    if (!id) {
+      return res.redirect('/admin/rewards?section=banners');
+    }
+    const banners = loadBanners().filter((b) => String(b.id) !== String(id));
+    saveBanners(banners);
+    return res.redirect(`/admin/rewards?section=${encodeURIComponent(section || 'banners')}`);
+  }
+);
+
+app.post(
   '/admin/weekly/save',
   adminAuth,
   requireSectionPermission('producto-semana'),
@@ -3969,6 +4107,8 @@ app.post('/api/push/register', (req, res) => {
   if (!saved) {
     return res.status(400).json({ error: 'token inválido' });
   }
+  const total = loadPushTokens().length;
+  console.log('[push] Token registrado. Total tokens:', total, 'cedula:', cedula || '(sin cédula)');
   return res.json({ ok: true });
 });
 
@@ -4009,6 +4149,11 @@ app.post('/api/cashback/request', async (req, res) => {
 app.get('/api/home/offers', (_req, res) => {
   const offers = loadOffers();
   return res.json({ offers });
+});
+
+app.get('/api/home/banners', (_req, res) => {
+  const banners = loadBanners();
+  return res.json({ banners });
 });
 
 app.get('/api/home/weekly', (_req, res) => {
@@ -4470,14 +4615,28 @@ app.get('/api/cxc/estado-cartera', async (req, res) => {
   }
 });
 
+const CARTERA_SUMMARY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutos
+const carteraSummaryCache = new Map();
+
+const getCarteraSummaryCacheKey = (cedula, vendedor) =>
+  `${normalizeId(cedula)}:${String(vendedor || '').trim()}`;
+
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
   try {
     const { cedula, vendedor, debug } = req.query;
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
-    const fecha = formatDateTimeNow();
+    const normCedula = normalizeId(cedula);
     const resolvedSeller = vendedor || (await resolveSellerFromClients(cedula));
+    if (!debug) {
+      const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
+      const cached = carteraSummaryCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return res.json(cached.payload);
+      }
+    }
+    const fecha = formatDateTimeNow();
     const data = await cxc.estadoCartera({
       fecha,
       cedula,
@@ -4554,12 +4713,26 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
         }
       }
     }
-    return res.json({
+    const summaryPayload = {
       cupoCredito,
       saldoCartera,
       saldoPorVencer,
       saldoVencido,
-    });
+    };
+    if (!debug) {
+      const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
+      carteraSummaryCache.set(cacheKey, {
+        payload: summaryPayload,
+        expiresAt: Date.now() + CARTERA_SUMMARY_CACHE_TTL_MS,
+      });
+      if (carteraSummaryCache.size > 500) {
+        const now = Date.now();
+        for (const [k, v] of carteraSummaryCache.entries()) {
+          if (v.expiresAt < now) carteraSummaryCache.delete(k);
+        }
+      }
+    }
+    return res.json(summaryPayload);
   } catch (error) {
     return res.status(500).json({
       error: 'No se pudo consultar estado de cartera',

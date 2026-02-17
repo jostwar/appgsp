@@ -17,13 +17,13 @@ import {
 } from 'react-native';
 import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { searchProducts } from '../api/woocommerce';
-import { getHomeOffers, getWeeklyProduct, registerPushToken } from '../api/backend';
+import { getHomeOffers, getWeeklyProduct, getHomeBanners, registerPushToken } from '../api/backend';
 import { useAuth } from '../store/auth';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
 
@@ -87,7 +87,6 @@ export default function HomeScreen() {
         });
       }
       await loadNotifications();
-      await markAllNotificationsRead();
       setNotificationsOpen(true);
     } catch (_error) {
       Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
@@ -112,6 +111,13 @@ export default function HomeScreen() {
     });
     return () => subscription.remove();
   }, [loadNotifications]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadNotifications();
+    }, [loadNotifications])
+  );
+
   const services = useMemo(
     () => [
       'Cotizaciones y pedidos en minutos',
@@ -176,6 +182,8 @@ export default function HomeScreen() {
   const portfolioScrollRef = useRef(null);
   const portfolioScrollX = useRef(0);
   const portfolioContentWidth = useRef(0);
+  const portfolioPausedRef = useRef(false);
+  const portfolioResumeTimerRef = useRef(null);
   const brandsScrollRef = useRef(null);
   const brandsScrollX = useRef(0);
   const brandsContentWidth = useRef(0);
@@ -183,6 +191,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const step = 196;
     const interval = setInterval(() => {
+      if (portfolioPausedRef.current) return;
       if (!portfolioScrollRef.current || portfolioContentWidth.current === 0) {
         return;
       }
@@ -330,7 +339,7 @@ export default function HomeScreen() {
     []
   );
 
-  const sliderImages = useMemo(
+  const sliderImagesFallback = useMemo(
     () => [
       'https://gsp.com.co/wp-content/uploads/2026/01/SMART-HOME-scaled.jpg',
       'https://gsp.com.co/wp-content/uploads/2026/01/SWICHES-Y-REDES-1-scaled.png',
@@ -407,6 +416,17 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [homeOffers, setHomeOffers] = useState([]);
   const [weeklyProduct, setWeeklyProduct] = useState(null);
+  const [banners, setBanners] = useState([]);
+
+  const sliderImages = useMemo(
+    () =>
+      banners.length > 0
+        ? banners
+            .map((b) => (typeof b === 'string' ? b : b?.imageUrl))
+            .filter(Boolean)
+        : sliderImagesFallback,
+    [banners, sliderImagesFallback]
+  );
 
   const loadLocation = useCallback(async () => {
     setLocationError('');
@@ -451,17 +471,20 @@ export default function HomeScreen() {
 
   const loadHomeData = useCallback(async (isMountedRef) => {
     try {
-      const [offersData, weeklyData] = await Promise.all([
+      const [offersData, weeklyData, bannersData] = await Promise.all([
         getHomeOffers().catch(() => ({ offers: [] })),
         getWeeklyProduct().catch(() => ({ product: null })),
+        getHomeBanners().catch(() => ({ banners: [] })),
       ]);
       if (isMountedRef && !isMountedRef.current) return;
       setHomeOffers(Array.isArray(offersData?.offers) ? offersData.offers : []);
       setWeeklyProduct(weeklyData?.product || null);
+      setBanners(Array.isArray(bannersData?.banners) ? bannersData.banners : []);
     } catch (_error) {
       if (isMountedRef && !isMountedRef.current) return;
       setHomeOffers([]);
       setWeeklyProduct(null);
+      setBanners([]);
     }
   }, []);
 
@@ -582,15 +605,28 @@ export default function HomeScreen() {
                 ))}
               </ScrollView>
             )}
-            <Pressable
-              style={({ pressed }) => [
-                styles.modalClear,
-                pressed && styles.pressed,
-              ]}
-              onPress={handleClearNotifications}
-            >
-              <Text style={styles.modalClearText}>Limpiar</Text>
-            </Pressable>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalClear,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  await markAllNotificationsRead();
+                }}
+              >
+                <Text style={styles.modalClearText}>Marcar todas leídas</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalClear,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleClearNotifications}
+              >
+                <Text style={styles.modalClearText}>Limpiar</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -723,6 +759,10 @@ export default function HomeScreen() {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.sliderContent}
+            style={{ width: windowWidth }}
+            snapToInterval={windowWidth}
+            snapToAlignment="start"
+            decelerationRate="fast"
             onMomentumScrollEnd={(event) => {
               const offsetX = event.nativeEvent.contentOffset.x;
               if (windowWidth) {
@@ -907,13 +947,25 @@ export default function HomeScreen() {
             onContentSizeChange={(width) => {
               portfolioContentWidth.current = width;
             }}
+            onScrollBeginDrag={() => {
+              portfolioPausedRef.current = true;
+              if (portfolioResumeTimerRef.current) clearTimeout(portfolioResumeTimerRef.current);
+            }}
+            onMomentumScrollEnd={(e) => {
+              portfolioScrollX.current = e.nativeEvent.contentOffset.x;
+              if (portfolioResumeTimerRef.current) clearTimeout(portfolioResumeTimerRef.current);
+              portfolioResumeTimerRef.current = setTimeout(() => {
+                portfolioPausedRef.current = false;
+                portfolioResumeTimerRef.current = null;
+              }, 3500);
+            }}
           >
             <View style={styles.portfolioRow}>
             {loopedRows[0].map((item, index) => (
               <Pressable
                 key={`${item.id}-row1-${index}`}
                 style={pressableStyle(styles.portfolioCard)}
-                onPress={() => handleNavigate('Portafolio')}
+                onPress={() => handleNavigate('Productos', { categoryName: item.title, _ts: Date.now() })}
               >
                   <Image
                     source={{ uri: item.image }}
@@ -929,7 +981,7 @@ export default function HomeScreen() {
               <Pressable
                 key={`${item.id}-row2-${index}`}
                 style={pressableStyle(styles.portfolioCard)}
-                onPress={() => handleNavigate('Portafolio')}
+                onPress={() => handleNavigate('Productos', { categoryName: item.title, _ts: Date.now() })}
               >
                   <Image
                     source={{ uri: item.image }}
@@ -1255,6 +1307,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     marginTop: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
   modalClear: {
     alignSelf: 'flex-end',

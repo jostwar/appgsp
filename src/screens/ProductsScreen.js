@@ -393,8 +393,9 @@ export default function ProductsScreen({ route, navigation }) {
           updateSearch('', { immediate: true });
           navSearchRef.current = false;
         }
+        navigation?.setParams?.({ categoryName: null, brandName: null, searchQuery: null, _ts: null });
       };
-    }, [updateSearch])
+    }, [updateSearch, navigation])
   );
 
   const load = useCallback(
@@ -410,7 +411,7 @@ export default function ProductsScreen({ route, navigation }) {
         const categoriesPromise = fetchCategories();
         const productsPromise = fetchProducts({
           page: 1,
-          perPage: 30,
+          perPage: 20,
           brandName,
         });
         const [cats, data] = await Promise.all([categoriesPromise, productsPromise]);
@@ -424,7 +425,7 @@ export default function ProductsScreen({ route, navigation }) {
           })
           .catch(() => null);
         setPage(1);
-        setHasMore(data.length === 30);
+        setHasMore(data.length === 20);
         setStatus('ready');
       } catch (error) {
         setStatus('error');
@@ -440,12 +441,12 @@ export default function ProductsScreen({ route, navigation }) {
       const nextPage = page + 1;
       const data = await fetchProducts({
         page: nextPage,
-        perPage: 30,
+        perPage: 20,
         brandName: activeBrandName,
       });
       setProducts((prev) => [...prev, ...data.map(normalizeProduct)]);
       setPage(nextPage);
-      setHasMore(data.length === 30);
+      setHasMore(data.length === 20);
     } catch (_error) {
       // ignore for now
     } finally {

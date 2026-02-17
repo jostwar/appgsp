@@ -8,6 +8,7 @@ import {
   Linking,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
@@ -294,6 +295,12 @@ export default function RewardsScreen() {
 
         <View style={styles.section}>
           <View style={styles.actionCard}>
+            {carteraState === 'loading' ? (
+              <View style={styles.carteraLoadingRow}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.pointsHint}>Cargando estado de cartera…</Text>
+              </View>
+            ) : null}
             <Pressable
               style={({ pressed }) => [
                 styles.primaryButton,
@@ -527,6 +534,12 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
+  },
+  carteraLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   actionCard: {
     backgroundColor: colors.card,

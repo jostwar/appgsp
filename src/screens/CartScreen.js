@@ -178,7 +178,7 @@ export default function CartScreen({ navigation }) {
               }));
               const order = await createOrder(lineItems);
               const payUrl = getOrderPayUrl(order.id, order.order_key);
-              navigation.navigate('Checkout', { url: payUrl });
+              navigation.navigate('Checkout', { url: payUrl, forceLogin: true });
             } catch (err) {
               setError('No se pudo iniciar el pago. Intenta nuevamente.');
             } finally {

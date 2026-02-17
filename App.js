@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Image, Linking, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -51,6 +52,22 @@ const persistNotification = async (notification) => {
   }
 };
 
+const markNotificationAsReadById = async (notificationId) => {
+  if (!notificationId) return;
+  try {
+    const raw = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list) || list.length === 0) return;
+    const id = String(notificationId);
+    const next = list.map((item) =>
+      item?.id === id ? { ...item, read: true } : item
+    );
+    await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
+  } catch (_error) {
+    // ignore
+  }
+};
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -61,7 +78,10 @@ Notifications.setNotificationHandler({
 
 function MainTabs() {
   const { items } = useCart();
+  const insets = useSafeAreaInsets();
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const tabBarBottom = Math.max(insets.bottom, 12);
+  const tabBarPaddingBottom = Math.max(insets.bottom, 6);
   return (
     <Tab.Navigator
       initialRouteName="Inicio"
@@ -83,12 +103,12 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: 'transparent',
-          height: 74,
+          height: 56 + tabBarPaddingBottom,
           paddingTop: 6,
-          paddingBottom: 6,
+          paddingBottom: tabBarPaddingBottom,
           justifyContent: 'space-around',
           marginHorizontal: 16,
-          marginBottom: 12,
+          marginBottom: tabBarBottom,
           borderRadius: 18,
           elevation: 8,
           shadowColor: '#000',
@@ -99,7 +119,7 @@ function MainTabs() {
         },
         tabBarHideOnKeyboard: true,
         sceneContainerStyle: {
-          paddingBottom: 96,
+          paddingBottom: 96 + Math.max(insets.bottom - 12, 0),
         },
         tabBarShowLabel: true,
         tabBarIconStyle: {
@@ -249,8 +269,12 @@ export default function App() {
     );
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const url = response?.notification?.request?.content?.data?.url;
-        persistNotification(response?.notification);
+        const notification = response?.notification;
+        const content = notification?.request?.content || {};
+        const identifier = notification?.request?.identifier || '';
+        persistNotification(notification);
+        markNotificationAsReadById(identifier || content?.notificationId);
+        const url = content?.data?.url;
         if (url) {
           Linking.openURL(String(url)).catch(() => null);
         }
@@ -262,13 +286,15 @@ export default function App() {
     };
   }, []);
   return (
-    <AuthProvider>
-      <CartProvider>
-        <NavigationContainer>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </NavigationContainer>
-      </CartProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <CartProvider>
+          <NavigationContainer>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </NavigationContainer>
+        </CartProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

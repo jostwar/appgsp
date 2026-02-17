@@ -2,6 +2,10 @@ const baseUrl = process.env.EXPO_PUBLIC_WC_URL || 'https://gsp.com.co';
 const key = process.env.EXPO_PUBLIC_WC_KEY;
 const secret = process.env.EXPO_PUBLIC_WC_SECRET;
 
+const WC_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutos
+const productsCache = new Map();
+const categoriesCache = { data: null, expiresAt: 0 };
+
 const normalize = (value) => String(value || '').toLowerCase().trim();
 
 const buildUrl = (path, { auth = true, params = {} } = {}) => {
@@ -73,7 +77,11 @@ const matchesBrandName = (value, brandName) => {
 
 const filterProductsByBrand = (products, brandName) => {
   if (!brandName) return products;
+  const targetBrand = normalize(brandName);
   return products.filter((product) => {
+    const name = normalize(product?.name || '');
+    if (name && targetBrand && name.includes(targetBrand)) return true;
+
     const brands = Array.isArray(product?.brands) ? product.brands : [];
     const tags = Array.isArray(product?.tags) ? product.tags : [];
     const attributes = Array.isArray(product?.attributes) ? product.attributes : [];
@@ -98,18 +106,24 @@ const filterProductsByBrand = (products, brandName) => {
       return true;
     }
 
-    return attributes.some((attr) => {
-      if (!attr) return false;
-      const attrName = normalize(attr?.name);
-      const attrSlug = normalize(attr?.slug);
-      if (!attrName.includes('marca') && !attrName.includes('brand')) {
-        if (!attrSlug.includes('marca') && !attrSlug.includes('brand')) {
-          return false;
+    if (
+      attributes.some((attr) => {
+        if (!attr) return false;
+        const attrName = normalize(attr?.name);
+        const attrSlug = normalize(attr?.slug);
+        if (!attrName.includes('marca') && !attrName.includes('brand')) {
+          if (!attrSlug.includes('marca') && !attrSlug.includes('brand')) {
+            return false;
+          }
         }
-      }
-      const options = Array.isArray(attr?.options) ? attr.options : [];
-      return options.some((option) => matchesBrandName(option, brandName));
-    });
+        const options = Array.isArray(attr?.options) ? attr.options : [];
+        return options.some((option) => matchesBrandName(option, brandName));
+      })
+    ) {
+      return true;
+    }
+
+    return false;
   });
 };
 
@@ -160,6 +174,12 @@ export async function fetchProducts({
     return [];
   }
 
+  const cacheKey = `p:${page}:${perPage}:${categoryId || ''}:${(brandName || '').trim()}`;
+  const cached = productsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   const request = async (extraParams = {}) => {
     const url = new URL('/wp-json/wc/v3/products', baseUrl);
     url.searchParams.set('consumer_key', key);
@@ -208,12 +228,27 @@ export async function fetchProducts({
     const data = await runRequest(params);
     const filtered = filterProductsByBrand(data, brandName);
     if (filtered.length > 0) {
+      productsCache.set(cacheKey, {
+        data: filtered,
+        expiresAt: Date.now() + WC_CACHE_TTL_MS,
+      });
       return filtered;
     }
   }
 
   const fallbackData = await runRequest();
-  return filterProductsByBrand(fallbackData, brandName);
+  const result = filterProductsByBrand(fallbackData, brandName);
+  productsCache.set(cacheKey, {
+    data: result,
+    expiresAt: Date.now() + WC_CACHE_TTL_MS,
+  });
+  if (productsCache.size > 80) {
+    const now = Date.now();
+    for (const [k, v] of productsCache.entries()) {
+      if (v.expiresAt < now) productsCache.delete(k);
+    }
+  }
+  return result;
 }
 
 export async function fetchAllProducts({ perPage = 50, maxPages = 10 } = {}) {
@@ -232,7 +267,10 @@ export async function fetchCategories() {
   if (!hasWooCredentials()) {
     return [];
   }
-
+  const now = Date.now();
+  if (categoriesCache.data && categoriesCache.expiresAt > now) {
+    return categoriesCache.data;
+  }
   const url = new URL('/wp-json/wc/v3/products/categories', baseUrl);
   url.searchParams.set('consumer_key', key);
   url.searchParams.set('consumer_secret', secret);
@@ -243,7 +281,10 @@ export async function fetchCategories() {
   if (!response.ok) {
     throw new Error('No se pudieron cargar categorías.');
   }
-  return response.json();
+  const data = await response.json();
+  categoriesCache.data = data;
+  categoriesCache.expiresAt = now + WC_CACHE_TTL_MS;
+  return data;
 }
 
 export async function fetchBrandOptions() {

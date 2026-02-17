@@ -262,7 +262,8 @@ export default function ProfileScreen({ navigation }) {
   const handlePhonePress = useCallback((value) => {
     const phone = normalizePhone(value);
     if (!phone) return;
-    Linking.openURL(`tel:${phone}`).catch(() => null);
+    const waNumber = phone.startsWith('57') ? phone : `57${phone.replace(/^0/, '')}`;
+    Linking.openURL(`https://wa.me/${waNumber}`).catch(() => null);
   }, []);
   const handleEmailPress = useCallback((value) => {
     const email = String(value || '').trim();
@@ -527,12 +528,15 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Acciones rápidas</Text>
           <Pressable
             style={pressableStyle(styles.primaryButton)}
-            onPress={() => Linking.openURL('https://gsp.com.co/my-account/')}
+            onPress={() => navigation?.navigate?.('Checkout', { url: 'https://gsp.com.co/my-account/', forceLogin: true })}
           >
             <Text style={styles.primaryButtonText}>Actualizar datos</Text>
           </Pressable>
-          <Pressable style={pressableStyle(styles.secondaryButton)}>
-            <Text style={styles.secondaryButtonText}>Contactar soporte</Text>
+          <Pressable
+            style={pressableStyle(styles.secondaryButton)}
+            onPress={() => Linking.openURL('https://wa.me/573102181182')}
+          >
+            <Text style={styles.secondaryButtonText}>Soporte APP</Text>
           </Pressable>
           <Pressable
             style={pressableStyle(styles.secondaryButton)}

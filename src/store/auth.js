@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true;
     const syncPushToken = async () => {
-      if (!user?.cedula) return;
+      if (!user) return;
       try {
         const token = await registerForPushNotificationsAsync();
         if (!token || !isMounted) return;
@@ -64,7 +64,7 @@ export function AuthProvider({ children }) {
         if (storedToken === token) return;
         await registerPushToken({
           token,
-          cedula: user?.cedula,
+          cedula: user?.cedula || undefined,
           email: user?.email,
           platform: Platform.OS,
         });
@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [user?.cedula, user?.email]);
+  }, [user?.cedula, user?.email, user?.id]);
 
   const signIn = async ({ email, password, remember }) => {
     setLoading(true);
