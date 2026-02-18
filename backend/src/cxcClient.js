@@ -236,12 +236,15 @@ export const cxc = {
     return { xml: raw, parsed: null, response: null, result };
   },
 
-  estadoCartera({ fecha, cedula, vendedor, timeoutMs } = {}) {
+  estadoCartera({ fecha, cedula, vendedor, timeoutMs, usePost } = {}) {
     const params = {
       datPar_Fecha: fecha,
       strPar_Cedula: cedula,
       strPar_Vended: vendedor,
     };
+    if (usePost) {
+      return this.call('EstadoDeCuentaCartera', params);
+    }
     const opts = typeof timeoutMs === 'number' && timeoutMs > 0 ? { timeoutMs } : {};
     return this.callGet('EstadoDeCuentaCartera', params, opts).catch(() =>
       this.call('EstadoDeCuentaCartera', params)

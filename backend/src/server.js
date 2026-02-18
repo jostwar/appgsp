@@ -4764,6 +4764,31 @@ const carteraDiagnosticHandler = async (req, res) => {
         ...(firstKey ? { firstKey } : {}),
       });
       if (!valid) payload = null;
+      const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
+      if (payload && itemsFromGet.length === 0 && firstKey === 'xmlns') {
+        addStep('cxc_post_fallback', 0, true, { message: 'GET devolvió solo xmlns; intentando SOAP POST' });
+        const tPost = Date.now();
+        try {
+          data = await cxc.estadoCartera({
+            fecha,
+            cedula: normCedula,
+            vendedor: resolvedSeller || undefined,
+            usePost: true,
+          });
+          const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+          if (typeof payloadPost === 'string' && payloadPost.trim()) {
+            try {
+              const parsed = JSON.parse(payloadPost);
+              if (parsed != null) payload = parsed;
+            } catch (_e) {}
+          } else if (payloadPost && (Array.isArray(payloadPost) || typeof payloadPost === 'object')) {
+            payload = payloadPost;
+          }
+          addStep('cxc_post_result', Date.now() - tPost, getCarteraItemsArray(payload).length > 0, { items: getCarteraItemsArray(payload).length });
+        } catch (errPost) {
+          addStep('cxc_post_result', Date.now() - tPost, false, { error: errPost?.message || String(errPost) });
+        }
+      }
     } catch (err) {
       const ms0 = Date.now() - t0;
       const msg = err?.message || String(err);
@@ -4834,12 +4859,21 @@ const carteraDiagnosticHandler = async (req, res) => {
     if (diagnosticItems.length > 0) {
       const totals = diagnosticItems.reduce(
         (acc, item) => {
-          const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO);
-          const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido']) || item?.DAIAVEN;
-          const dias = Number(daysRaw || 0);
-          acc.saldoCartera += saldo;
-          if (dias > 0) acc.saldoVencido += saldo;
-          else acc.saldoPorVencer += saldo;
+          const porVencerDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_POR_VENCER_KEYS));
+          const vencidoDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_VENCIDO_KEYS));
+          const tienePorVencerVencido = porVencerDoc > 0 || vencidoDoc > 0;
+          if (tienePorVencerVencido) {
+            acc.saldoPorVencer += Math.max(0, porVencerDoc);
+            acc.saldoVencido += Math.max(0, vencidoDoc);
+            acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
+          } else {
+            const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO);
+            const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido']) || item?.DAIAVEN;
+            const dias = Number(daysRaw || 0);
+            acc.saldoCartera += saldo;
+            if (dias > 0) acc.saldoVencido += saldo;
+            else acc.saldoPorVencer += saldo;
+          }
           return acc;
         },
         { saldoCartera: 0, saldoPorVencer: 0, saldoVencido: 0 }
@@ -4934,6 +4968,31 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       } else {
         payload = null;
       }
+      const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
+      const firstKeySummary = typeof payload === 'object' && !Array.isArray(payload) && payload && Object.keys(payload).length > 0 ? Object.keys(payload)[0] : null;
+      if (payload && itemsFromGet.length === 0 && firstKeySummary === 'xmlns') {
+        log('GET devolvió solo xmlns; intentando SOAP POST');
+        try {
+          data = await cxc.estadoCartera({
+            fecha,
+            cedula: normCedula,
+            vendedor: resolvedSeller || undefined,
+            usePost: true,
+          });
+          const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+          if (typeof payloadPost === 'string' && payloadPost.trim()) {
+            try {
+              const parsed = JSON.parse(payloadPost);
+              if (parsed != null) payload = parsed;
+            } catch (_e) {}
+          } else if (payloadPost && (Array.isArray(payloadPost) || typeof payloadPost === 'object')) {
+            payload = payloadPost;
+          }
+          log(`SOAP POST respondió, items=${getCarteraItemsArray(payload).length}`);
+        } catch (errPost) {
+          log('SOAP POST falló: ' + (errPost?.message || errPost));
+        }
+      }
     } catch (err) {
       log(`CXC sin vendedor falló en ${Date.now() - t0}ms: ` + (err?.message || err));
     }
@@ -4996,24 +5055,33 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     if (carteraItems.length > 0) {
       const totals = carteraItems.reduce(
         (acc, item) => {
-          const saldo = parseCarteraNumber(
-            findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO
-          );
-          const daysRaw =
-            findValueByKeys(item, [
-              'daiaven',
-              'diasvenc',
-              'dias_venc',
-              'dias_vencimiento',
-              'diasvencido',
-              'dias_vencido',
-            ]) || item?.DAIAVEN;
-          const dias = Number(daysRaw || 0);
-          acc.saldoCartera += saldo;
-          if (dias > 0) {
-            acc.saldoVencido += saldo;
+          const porVencerDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_POR_VENCER_KEYS));
+          const vencidoDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_VENCIDO_KEYS));
+          const tienePorVencerVencido = porVencerDoc > 0 || vencidoDoc > 0;
+          if (tienePorVencerVencido) {
+            acc.saldoPorVencer += Math.max(0, porVencerDoc);
+            acc.saldoVencido += Math.max(0, vencidoDoc);
+            acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
           } else {
-            acc.saldoPorVencer += saldo;
+            const saldo = parseCarteraNumber(
+              findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO
+            );
+            const daysRaw =
+              findValueByKeys(item, [
+                'daiaven',
+                'diasvenc',
+                'dias_venc',
+                'dias_vencimiento',
+                'diasvencido',
+                'dias_vencido',
+              ]) || item?.DAIAVEN;
+            const dias = Number(daysRaw || 0);
+            acc.saldoCartera += saldo;
+            if (dias > 0) {
+              acc.saldoVencido += saldo;
+            } else {
+              acc.saldoPorVencer += saldo;
+            }
           }
           return acc;
         },
