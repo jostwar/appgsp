@@ -16,6 +16,7 @@ import {
   getCarteraSummary,
   getRewardsCatalog,
   getRewardsPoints,
+  getWooOrders,
   requestCashback,
 } from '../api/backend';
 import { useAuth } from '../store/auth';
@@ -30,7 +31,10 @@ export default function RewardsScreen() {
   const [pointsError, setPointsError] = useState('');
   const [carteraStatus, setCarteraStatus] = useState(null);
   const [carteraState, setCarteraState] = useState('idle');
+  const [carteraRetryCount, setCarteraRetryCount] = useState(0);
   const [cashbackRequestStatus, setCashbackRequestStatus] = useState('idle');
+  const [activityOrders, setActivityOrders] = useState([]);
+  const [activityStatus, setActivityStatus] = useState('idle');
   const customerLevel = pointsData?.level || 'Sin nivel';
   const rebatePercent = Number(pointsData?.rebate || 0);
   const levelThresholds = [
@@ -170,17 +174,26 @@ export default function RewardsScreen() {
         return;
       }
       setCarteraState('loading');
-      try {
-        const data = await getCarteraSummary({ cedula: user.cedula });
-        if (isMounted) {
-          setCarteraStatus(data || null);
-          setCarteraState('ready');
+      const tryFetch = async () => {
+        try {
+          const data = await getCarteraSummary({ cedula: user.cedula });
+          if (isMounted) {
+            setCarteraStatus(data || null);
+            setCarteraState('ready');
+          }
+        } catch (e) {
+          if (!isMounted) return;
+          return e;
         }
-      } catch (_error) {
-        if (isMounted) {
-          setCarteraStatus(null);
-          setCarteraState('error');
-        }
+      };
+      let err = await tryFetch();
+      if (err && isMounted) {
+        await new Promise((r) => setTimeout(r, 2000));
+        err = await tryFetch();
+      }
+      if (err && isMounted) {
+        setCarteraStatus(null);
+        setCarteraState('error');
       }
     };
 
@@ -188,7 +201,47 @@ export default function RewardsScreen() {
     return () => {
       isMounted = false;
     };
-  }, [user?.cedula]);
+  }, [user?.cedula, carteraRetryCount]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadActivity = async () => {
+      if (!user?.cedula && !user?.customerId && !user?.email) {
+        setActivityOrders([]);
+        setActivityStatus('missing');
+        return;
+      }
+      setActivityStatus('loading');
+      try {
+        const data = await getWooOrders({
+          cedula: user?.cedula,
+          customerId: user?.customerId,
+          email: user?.email,
+          perPage: 15,
+          page: 1,
+        });
+        const list = Array.isArray(data?.orders) ? data.orders : [];
+        if (isMounted) {
+          setActivityOrders(list);
+          setActivityStatus('ready');
+        }
+      } catch (_err) {
+        if (isMounted) {
+          setActivityOrders([]);
+          setActivityStatus('error');
+        }
+      }
+    };
+    loadActivity();
+    return () => { isMounted = false; };
+  }, [user?.cedula, user?.customerId, user?.email]);
+
+  const formatActivityDate = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+  };
 
   const hasOverdueBalance = Number(carteraStatus?.saldoVencido || 0) > 0;
   const canRequestCashback =
@@ -315,7 +368,15 @@ export default function RewardsScreen() {
               </Text>
             </Pressable>
             {carteraState === 'error' ? (
-              <Text style={styles.pointsHint}>No pudimos cargar tu estado de cartera. Intenta más tarde.</Text>
+              <>
+                <Text style={styles.pointsHint}>No pudimos cargar tu estado de cartera. Intenta más tarde.</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+                  onPress={() => setCarteraRetryCount((c) => c + 1)}
+                >
+                  <Text style={styles.primaryButtonText}>Reintentar</Text>
+                </Pressable>
+              </>
             ) : hasOverdueBalance ? (
               <Text style={styles.pointsHint}>
                 Tienes saldo vencido. Contacta a cartera para solicitar cashback.
@@ -404,20 +465,29 @@ export default function RewardsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actividad reciente</Text>
-          <View style={styles.activityCard}>
-            <View style={styles.activityRow}>
-              <Text style={styles.activityTitle}>Canje $500.000 cashback</Text>
-              <Text style={styles.activityRedeem}>-$500.000</Text>
-            </View>
-            <Text style={styles.activityDate}>21 ene 2026</Text>
-          </View>
-          <View style={styles.activityCard}>
-            <View style={styles.activityRow}>
-              <Text style={styles.activityTitle}>Canje bono gasolina</Text>
-              <Text style={styles.activityRedeem}>-$80.000</Text>
-            </View>
-            <Text style={styles.activityDate}>10 ene 2026</Text>
-          </View>
+          {activityStatus === 'loading' ? (
+            <Text style={styles.activityDate}>Cargando transacciones...</Text>
+          ) : activityStatus === 'error' ? (
+            <Text style={styles.activityDate}>No se pudieron cargar las transacciones.</Text>
+          ) : activityOrders.length === 0 ? (
+            <Text style={styles.activityDate}>Aún no hay compras registradas.</Text>
+          ) : (
+            activityOrders.map((order) => {
+              const total = Number(order.total ?? 0);
+              const cashback = rebatePercent > 0 ? Math.round((total * rebatePercent) / 100) : 0;
+              return (
+                <View key={order.id} style={styles.activityCard}>
+                  <View style={styles.activityRow}>
+                    <Text style={styles.activityTitle}>Compra pedido #{order.id}</Text>
+                    {cashback > 0 ? (
+                      <Text style={styles.activityPoints}>+{formatCop(cashback)}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.activityDate}>{formatActivityDate(order.date_created || order.date)}</Text>
+                </View>
+              );
+            })
+          )}
         </View>
 
         <View style={styles.section}>

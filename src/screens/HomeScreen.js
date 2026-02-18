@@ -118,15 +118,6 @@ export default function HomeScreen() {
     }, [loadNotifications])
   );
 
-  const services = useMemo(
-    () => [
-      'Cotizaciones y pedidos en minutos',
-      'Soporte 24/7 por WhatsApp',
-      'Acceso directo a portafolio',
-    ],
-    []
-  );
-
   const portfolio = useMemo(
     () => [
       {
@@ -1051,16 +1042,6 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Servicios destacados</Text>
-          {services.map((item) => (
-            <View key={item} style={styles.serviceRow}>
-              <View style={styles.dot} />
-              <Text style={styles.serviceText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Beneficios extra</Text>
           <View style={styles.benefitsCard}>
             <View style={styles.benefitRow}>
@@ -1553,21 +1534,6 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     fontSize: 22,
     fontWeight: '600',
-  },
-  serviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-  },
-  serviceText: {
-    color: colors.textSoft,
-    fontSize: 14,
   },
   logoRow: {
     gap: spacing.md,

@@ -6,13 +6,11 @@ import {
   ScrollView,
   Image,
   Pressable,
-  Switch,
   Linking,
   RefreshControl,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import { colors, spacing } from '../theme';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -60,9 +58,6 @@ export default function ProfileScreen({ navigation }) {
     if (fallbackName) return toTitleCase(fallbackName);
     return 'Usuario GSP';
   })();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [preferredChannel, setPreferredChannel] = useState('WhatsApp');
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [orders, setOrders] = useState([]);
   const [ordersStatus, setOrdersStatus] = useState('idle');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,37 +74,6 @@ export default function ProfileScreen({ navigation }) {
     'Red Partner': '#EF4444',
   };
   const levelColor = levelColors[customerLevel] || colors.accent;
-
-  const savePrefs = async (next) => {
-    try {
-      await AsyncStorage.setItem('profile_prefs', JSON.stringify(next));
-    } catch (_error) {
-      // ignore persistence errors for now
-    }
-  };
-
-  const loadPrefs = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem('profile_prefs');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed) return;
-      if (typeof parsed.notificationsEnabled === 'boolean') {
-        setNotificationsEnabled(parsed.notificationsEnabled);
-      }
-      if (typeof parsed.preferredChannel === 'string') {
-        setPreferredChannel(parsed.preferredChannel);
-      }
-    } catch (_error) {
-      // ignore load errors
-    } finally {
-      setPrefsLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadPrefs();
-  }, [loadPrefs]);
 
   const fetchOrders = useCallback(async () => {
     if (!user?.cedula && !user?.customerId && !user?.email) {
@@ -415,52 +379,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferencias</Text>
-          <View style={styles.preferenceCard}>
-            <Text style={styles.preferenceLabel}>Notificaciones</Text>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={(value) => {
-                setNotificationsEnabled(value);
-                savePrefs({ notificationsEnabled: value, preferredChannel });
-              }}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textMain}
-              disabled={!prefsLoaded}
-            />
-          </View>
-          <View style={styles.preferenceCard}>
-            <Text style={styles.preferenceLabel}>Canal preferido</Text>
-            <View style={styles.channelRow}>
-              {['WhatsApp', 'Email', 'Llamada'].map((option) => (
-                <Pressable
-                  key={option}
-                  style={({ pressed }) => [
-                    styles.channelChip,
-                    preferredChannel === option && styles.channelChipActive,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() => {
-                    setPreferredChannel(option);
-                    savePrefs({ notificationsEnabled, preferredChannel: option });
-                  }}
-                  disabled={!prefsLoaded}
-                >
-                  <Text
-                    style={[
-                      styles.channelText,
-                      preferredChannel === option && styles.channelTextActive,
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Mis pedidos</Text>
           {ordersStatus === 'loading' ? (
             <Text style={styles.sectionHint}>Cargando pedidos...</Text>
@@ -720,32 +638,6 @@ const styles = StyleSheet.create({
   contactPhoto: {
     width: '100%',
     height: '100%',
-  },
-  channelRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    justifyContent: 'flex-end',
-  },
-  channelChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: colors.surface,
-  },
-  channelChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.buttonBg,
-  },
-  channelText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  channelTextActive: {
-    color: colors.buttonText,
   },
   primaryButton: {
     backgroundColor: colors.buttonBg,
