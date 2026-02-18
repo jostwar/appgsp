@@ -4621,31 +4621,80 @@ const carteraSummaryCache = new Map();
 const getCarteraSummaryCacheKey = (cedula, vendedor) =>
   `${normalizeId(cedula)}:${String(vendedor || '').trim()}`;
 
+const hasValidCarteraPayload = (payload) =>
+  payload &&
+  (typeof payload === 'object' || Array.isArray(payload)) &&
+  (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
+
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
+  const log = (msg) => console.log('[cartera/summary]', new Date().toISOString(), msg);
   try {
     const { cedula, vendedor, debug } = req.query;
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const normCedula = normalizeId(cedula);
-    const resolvedSeller = vendedor || (await resolveSellerFromClients(cedula));
+    const fecha = formatDateTimeNow();
+
     if (!debug) {
-      const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
-      const cached = carteraSummaryCache.get(cacheKey);
+      const cacheKeyByCedula = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
+      const cached = carteraSummaryCache.get(cacheKeyByCedula);
       if (cached && Date.now() < cached.expiresAt) {
+        log('cache hit');
         return res.json(cached.payload);
       }
     }
-    const fecha = formatDateTimeNow();
-    const data = await cxc.estadoCartera({
-      fecha,
-      cedula,
-      vendedor: resolvedSeller || undefined,
-    });
-    if (debug) {
-      return res.json(data);
+
+    let resolvedSeller = String(vendedor || '').trim();
+    let data = null;
+    let payload = null;
+
+    log('intentando CXC sin vendedor');
+    try {
+      data = await cxc.estadoCartera({ fecha, cedula, vendedor: resolvedSeller || undefined });
+      payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+      if (hasValidCarteraPayload(payload)) {
+        log('CXC respondió sin vendedor');
+      } else {
+        payload = null;
+      }
+    } catch (err) {
+      log('CXC sin vendedor falló: ' + (err?.message || err));
     }
-    const payload = parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {});
+
+    if (!payload) {
+      log('resolviendo vendedor');
+      try {
+        resolvedSeller = String(await resolveSellerFromClients(cedula) || '').trim();
+        log('vendedor=' + (resolvedSeller || '(vacío)'));
+      } catch (err) {
+        log('resolveSeller falló: ' + (err?.message || err));
+      }
+      log('llamando CXC con vendedor');
+      try {
+        data = await cxc.estadoCartera({
+          fecha,
+          cedula,
+          vendedor: resolvedSeller || undefined,
+        });
+        payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+      } catch (err) {
+        log('CXC con vendedor falló: ' + (err?.message || err));
+        throw err;
+      }
+    }
+
+    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
+      log('payload inválido');
+      return res.status(502).json({
+        error: 'No se pudo obtener estado de cartera',
+        details: 'El servicio no devolvió datos.',
+      });
+    }
+
+    if (debug) {
+      return res.json({ payload, resolvedSeller, data });
+    }
     let cupoCredito = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_CUPO_KEYS)
     );
@@ -4734,7 +4783,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     }
     return res.json(summaryPayload);
   } catch (error) {
-    console.error('[cartera/summary]', error?.message || error, error?.response?.data || '');
+    console.error('[cartera/summary] ERROR', error?.message || error, error?.response?.data || '', error?.stack || '');
     return res.status(500).json({
       error: 'No se pudo consultar estado de cartera',
       details: error?.response?.data || error?.message,
