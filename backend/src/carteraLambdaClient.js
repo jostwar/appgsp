@@ -32,6 +32,7 @@ export async function estadoCarteraLambda({ cedula } = {}) {
       params: {
         data: dataParam,
         tool_name: 'cartera',
+        customer_id: customerId,
       },
       headers: {
         'Content-Type': 'application/json',
