@@ -2,12 +2,10 @@
  * Lambda fom-cartera — Consulta de cartera (SOAP Fomplus)
  * Compatible con el body: { data: { action, customer_id }, tool_name: "cartera" }
  *
- * En AWS: Node 18+; subir como index.mjs o index.js con "type": "module".
+ * En AWS: Node 18+ o 20; subir como index.js (CommonJS, sin "type": "module").
  *
- * Variables de entorno (las que ya tienes en la Lambda):
- *   FOM_HOST, FOM_SOAP_PATH, FOM_SOAP_ACTION_CARTERA, FOMPLUS_TOKEN, FOM_BASEDATOS, SOAP_TIMEOUT_MS
- *
- * En AWS: Configuración → Timeout de la función = 35 segundos (el SOAP puede tardar ~28 s).
+ * Variables de entorno: FOM_HOST, FOM_SOAP_PATH, FOM_SOAP_ACTION_CARTERA, FOMPLUS_TOKEN, FOM_BASEDATOS, SOAP_TIMEOUT_MS
+ * Timeout de la función = 35 segundos.
  */
 
 function resp(statusCode, body) {
@@ -213,7 +211,7 @@ async function fetchCarteraFromFomplus(customer_id) {
   return result;
 }
 
-export async function handler(event) {
+exports.handler = async function (event) {
   try {
     const method = event?.requestContext?.http?.method || event?.httpMethod || "POST";
 
