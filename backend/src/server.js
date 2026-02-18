@@ -4621,17 +4621,6 @@ const carteraSummaryCache = new Map();
 const getCarteraSummaryCacheKey = (cedula, vendedor) =>
   `${normalizeId(cedula)}:${String(vendedor || '').trim()}`;
 
-const RESOLVE_SELLER_TIMEOUT_MS = 5000;
-
-const fetchCarteraPayload = async (fecha, cedula, vendedor = '') => {
-  const data = await cxc.estadoCartera({
-    fecha,
-    cedula,
-    vendedor: vendedor || undefined,
-  });
-  return parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {});
-};
-
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
   try {
     const { cedula, vendedor, debug } = req.query;
@@ -4639,51 +4628,24 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const normCedula = normalizeId(cedula);
-    const fecha = formatDateTimeNow();
-
+    const resolvedSeller = vendedor || (await resolveSellerFromClients(cedula));
     if (!debug) {
-      const cacheKey = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
+      const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
       const cached = carteraSummaryCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         return res.json(cached.payload);
       }
     }
-
-    let payload = null;
-    let resolvedSeller = String(vendedor || '').trim();
-
-    try {
-      payload = await fetchCarteraPayload(fecha, cedula, resolvedSeller);
-    } catch (firstErr) {
-      console.warn('[cartera/summary] primera llamada sin vendedor falló:', firstErr?.message);
+    const fecha = formatDateTimeNow();
+    const data = await cxc.estadoCartera({
+      fecha,
+      cedula,
+      vendedor: resolvedSeller || undefined,
+    });
+    if (debug) {
+      return res.json(data);
     }
-
-    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      try {
-        resolvedSeller = await Promise.race([
-          resolveSellerFromClients(cedula),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), RESOLVE_SELLER_TIMEOUT_MS)),
-        ]).then((s) => String(s || '').trim()).catch(() => '');
-        payload = await fetchCarteraPayload(fecha, cedula, resolvedSeller);
-      } catch (retryErr) {
-        console.warn('[cartera/summary] retry con vendedor falló:', retryErr?.message);
-        if (!payload) throw retryErr;
-      }
-    }
-
-    if (debug && payload) {
-      return res.json({ payload, resolvedSeller });
-    }
-    const emptySummary = {
-      cupoCredito: 0,
-      saldoCartera: 0,
-      saldoPorVencer: 0,
-      saldoVencido: 0,
-    };
-    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      console.error('[cartera/summary] CXC no devolvió datos válidos. cedula=', normCedula);
-      return res.status(200).json(emptySummary);
-    }
+    const payload = parseMaybeJson(data.result ?? data.response ?? data.parsed ?? {});
     let cupoCredito = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_CUPO_KEYS)
     );
@@ -4731,28 +4693,24 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       }
     }
     if (!cupoCredito) {
-      try {
-        const cupoResult = await Promise.race([
-          (async () => {
-            const cached = await findClientInfo({
-              cedula,
-              vendedor: resolvedSeller || '',
-              useRemoteFallback: false,
-            });
-            const cupo = parseCarteraNumber(cached?.info?.cupo);
-            if (cupo) return cupo;
-            const remote = await findClientInfo({
-              cedula,
-              vendedor: resolvedSeller || '',
-              useRemoteFallback: true,
-            });
-            return parseCarteraNumber(remote?.info?.cupo);
-          })(),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-        ]);
-        if (cupoResult) cupoCredito = cupoResult;
-      } catch (_e) {
-        // dejar cupoCredito en 0 si falla o timeout
+      const cachedClient = await findClientInfo({
+        cedula,
+        vendedor: resolvedSeller || '',
+        useRemoteFallback: false,
+      });
+      const cachedCupo = parseCarteraNumber(cachedClient?.info?.cupo);
+      if (cachedCupo) {
+        cupoCredito = cachedCupo;
+      } else {
+        const remoteClient = await findClientInfo({
+          cedula,
+          vendedor: resolvedSeller || '',
+          useRemoteFallback: true,
+        });
+        const remoteCupo = parseCarteraNumber(remoteClient?.info?.cupo);
+        if (remoteCupo) {
+          cupoCredito = remoteCupo;
+        }
       }
     }
     const summaryPayload = {
@@ -4777,13 +4735,10 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     return res.json(summaryPayload);
   } catch (error) {
     console.error('[cartera/summary]', error?.message || error, error?.response?.data || '');
-    const emptySummary = {
-      cupoCredito: 0,
-      saldoCartera: 0,
-      saldoPorVencer: 0,
-      saldoVencido: 0,
-    };
-    return res.status(200).json(emptySummary);
+    return res.status(500).json({
+      error: 'No se pudo consultar estado de cartera',
+      details: error?.response?.data || error?.message,
+    });
   }
 });
 
