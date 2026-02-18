@@ -6,6 +6,8 @@
  *
  * Variables de entorno (las que ya tienes en la Lambda):
  *   FOM_HOST, FOM_SOAP_PATH, FOM_SOAP_ACTION_CARTERA, FOMPLUS_TOKEN, FOM_BASEDATOS, SOAP_TIMEOUT_MS
+ *
+ * En AWS: Configuración → Timeout de la función = 35 segundos (el SOAP puede tardar ~28 s).
  */
 
 function resp(statusCode, body) {
@@ -212,29 +214,29 @@ async function fetchCarteraFromFomplus(customer_id) {
 }
 
 export async function handler(event) {
-  const method = event?.requestContext?.http?.method || event?.httpMethod || "POST";
-
-  if (method === "OPTIONS") {
-    return resp(200, { ok: true });
-  }
-
-  const data = parseEvent(event);
-  if (!data) {
-    return resp(400, { ok: false, message: "Body JSON inválido" });
-  }
-
-  const action = (data.action || "status").toLowerCase();
-  const customer_id = data.customer_id;
-
-  if (!customer_id) {
-    return resp(400, { ok: false, message: "Falta customer_id" });
-  }
-
-  if (action !== "status") {
-    return resp(400, { ok: false, message: "Falta action (status)" });
-  }
-
   try {
+    const method = event?.requestContext?.http?.method || event?.httpMethod || "POST";
+
+    if (method === "OPTIONS") {
+      return resp(200, { ok: true });
+    }
+
+    const data = parseEvent(event);
+    if (!data) {
+      return resp(400, { ok: false, message: "Body JSON inválido" });
+    }
+
+    const action = (data.action || "status").toLowerCase();
+    const customer_id = data.customer_id;
+
+    if (!customer_id) {
+      return resp(400, { ok: false, message: "Falta customer_id" });
+    }
+
+    if (action !== "status") {
+      return resp(400, { ok: false, message: "Falta action (status)" });
+    }
+
     const apiPayload = await fetchCarteraFromFomplus(customer_id);
     const items = getItems(apiPayload);
 
@@ -267,7 +269,14 @@ export async function handler(event) {
     });
   } catch (err) {
     console.error("Cartera error:", err);
-    return resp(500, {
+    let customer_id;
+    try {
+      const d = parseEvent(event);
+      customer_id = d?.customer_id;
+    } catch {
+      customer_id = undefined;
+    }
+    return resp(200, {
       ok: false,
       message: err?.message || "Error consultando cartera",
       customer_id,

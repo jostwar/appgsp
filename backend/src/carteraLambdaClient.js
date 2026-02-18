@@ -42,6 +42,9 @@ export async function estadoCarteraLambda({ cedula } = {}) {
     if (!body || typeof body !== 'object') {
       return { error: 'Lambda respondió sin body válido', data: body };
     }
+    if (body.ok === false) {
+      return { error: body.message || 'Lambda respondió con ok: false', data: body };
+    }
 
     const hasSaldo = (item) => {
       if (!item || typeof item !== 'object') return false;
