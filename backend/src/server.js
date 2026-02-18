@@ -4674,11 +4674,15 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     if (debug && payload) {
       return res.json({ payload, resolvedSeller });
     }
+    const emptySummary = {
+      cupoCredito: 0,
+      saldoCartera: 0,
+      saldoPorVencer: 0,
+      saldoVencido: 0,
+    };
     if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      return res.status(502).json({
-        error: 'No se pudo obtener estado de cartera',
-        details: 'El servicio no devolvió datos.',
-      });
+      console.error('[cartera/summary] CXC no devolvió datos válidos. cedula=', normCedula);
+      return res.status(200).json(emptySummary);
     }
     let cupoCredito = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_CUPO_KEYS)
@@ -4772,11 +4776,14 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     }
     return res.json(summaryPayload);
   } catch (error) {
-    console.error('[cartera/summary]', error?.message || error);
-    return res.status(500).json({
-      error: 'No se pudo consultar estado de cartera',
-      details: error?.response?.data || error?.message,
-    });
+    console.error('[cartera/summary]', error?.message || error, error?.response?.data || '');
+    const emptySummary = {
+      cupoCredito: 0,
+      saldoCartera: 0,
+      saldoPorVencer: 0,
+      saldoVencido: 0,
+    };
+    return res.status(200).json(emptySummary);
   }
 });
 
