@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { cxc } from './cxcClient.js';
+import { estadoCarteraLambda } from './carteraLambdaClient.js';
 import { erp, isB2BApproved } from './erpClient.js';
 import { woo } from './wooClient.js';
 
@@ -4738,6 +4739,23 @@ const carteraDiagnosticHandler = async (req, res) => {
     let data = null;
     let payload = null;
 
+    if (process.env.CARTERA_LAMBDA_URL) {
+      const tLambda = Date.now();
+      try {
+        const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
+        const msLambda = Date.now() - tLambda;
+        if (lambdaResult.items && lambdaResult.items.length > 0) {
+          payload = lambdaResult.items;
+          addStep('cartera_lambda', msLambda, true, { message: 'Lambda respondió con datos', items: payload.length });
+        } else {
+          addStep('cartera_lambda', msLambda, false, { message: lambdaResult.error || 'Sin ítems', error: lambdaResult.error });
+        }
+      } catch (errLambda) {
+        addStep('cartera_lambda', Date.now() - tLambda, false, { error: errLambda?.message || String(errLambda) });
+      }
+    }
+
+    if (!payload) {
     const CARTERA_DIAG_FIRST_TIMEOUT_MS = 20000;
     const t0 = Date.now();
     try {
@@ -4843,6 +4861,7 @@ const carteraDiagnosticHandler = async (req, res) => {
         });
       }
     }
+    }
 
     if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
       out.summary = CARTERA_SUMMARY_EMPTY;
@@ -4946,6 +4965,22 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     let data = null;
     let payload = null;
 
+    if (process.env.CARTERA_LAMBDA_URL) {
+      const tLambda = Date.now();
+      try {
+        const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
+        if (lambdaResult.items && lambdaResult.items.length > 0) {
+          payload = lambdaResult.items;
+          log(`Lambda respondió en ${Date.now() - tLambda}ms con ${payload.length} ítems`);
+        } else if (lambdaResult.error) {
+          log(`Lambda: ${lambdaResult.error}`);
+        }
+      } catch (errLambda) {
+        log('Lambda falló: ' + (errLambda?.message || errLambda));
+      }
+    }
+
+    if (!payload) {
     const CARTERA_FIRST_ATTEMPT_TIMEOUT_MS = 20000; // 20s: proveedor responde ~10s en Postman; evitar esperar 2 min
     const t0 = Date.now();
     log('intentando CXC sin vendedor (timeout ' + CARTERA_FIRST_ATTEMPT_TIMEOUT_MS / 1000 + 's)');
@@ -5028,6 +5063,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
         log(`CXC con vendedor falló en ${Date.now() - t2}ms: ` + (err?.message || err));
         throw err;
       }
+    }
     }
 
     if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
