@@ -211,11 +211,12 @@ export const cxc = {
     return { xml, parsed, response: soapResponse, result };
   },
 
-  async callGet(method, params = {}) {
+  async callGet(method, params = {}, options = {}) {
     ensureConfig();
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : CXC_REQUEST_TIMEOUT_MS;
     const response = await axios.get(resolveGetUrl(method), {
       params: baseParams(params),
-      timeout: CXC_REQUEST_TIMEOUT_MS,
+      timeout: timeoutMs,
     });
     const raw = response.data;
     const result = parseJsonish(raw);
@@ -234,17 +235,15 @@ export const cxc = {
     return { xml: raw, parsed: null, response: null, result };
   },
 
-  estadoCartera({ fecha, cedula, vendedor } = {}) {
-    return this.callGet('EstadoDeCuentaCartera', {
+  estadoCartera({ fecha, cedula, vendedor, timeoutMs } = {}) {
+    const params = {
       datPar_Fecha: fecha,
       strPar_Cedula: cedula,
       strPar_Vended: vendedor,
-    }).catch(() =>
-      this.call('EstadoDeCuentaCartera', {
-        datPar_Fecha: fecha,
-        strPar_Cedula: cedula,
-        strPar_Vended: vendedor,
-      })
+    };
+    const opts = typeof timeoutMs === 'number' && timeoutMs > 0 ? { timeoutMs } : {};
+    return this.callGet('EstadoDeCuentaCartera', params, opts).catch(() =>
+      this.call('EstadoDeCuentaCartera', params)
     );
   },
 

@@ -2,6 +2,8 @@
 
 Para ajustar timeouts hay que medir cuánto tarda el endpoint.
 
+**Nota:** El proveedor suele responder en ~10s (Postman). El backend hace un primer intento sin vendedor con timeout de **20s**; si falla o viene vacío, resuelve vendedor y llama de nuevo (timeout 2 min). Así se evita esperar ~3 min cuando el proveedor responde en segundos.
+
 ## 1. Probar desde tu máquina con `curl`
 
 URL del backend: `https://app.gsp.com.co`. Sustituye `CEDULA_PRUEBA` por una cédula válida.

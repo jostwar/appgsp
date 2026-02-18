@@ -4685,9 +4685,15 @@ const carteraDiagnosticHandler = async (req, res) => {
     let data = null;
     let payload = null;
 
+    const CARTERA_DIAG_FIRST_TIMEOUT_MS = 20000;
     const t0 = Date.now();
     try {
-      data = await cxc.estadoCartera({ fecha, cedula: normCedula, vendedor: resolvedSeller || undefined });
+      data = await cxc.estadoCartera({
+        fecha,
+        cedula: normCedula,
+        vendedor: resolvedSeller || undefined,
+        timeoutMs: CARTERA_DIAG_FIRST_TIMEOUT_MS,
+      });
       const ms0 = Date.now() - t0;
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
       const valid = hasValidCarteraPayload(payload);
@@ -4837,10 +4843,16 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     let data = null;
     let payload = null;
 
+    const CARTERA_FIRST_ATTEMPT_TIMEOUT_MS = 20000; // 20s: proveedor responde ~10s en Postman; evitar esperar 2 min
     const t0 = Date.now();
-    log('intentando CXC sin vendedor');
+    log('intentando CXC sin vendedor (timeout ' + CARTERA_FIRST_ATTEMPT_TIMEOUT_MS / 1000 + 's)');
     try {
-      data = await cxc.estadoCartera({ fecha, cedula: normCedula, vendedor: resolvedSeller || undefined });
+      data = await cxc.estadoCartera({
+        fecha,
+        cedula: normCedula,
+        vendedor: resolvedSeller || undefined,
+        timeoutMs: CARTERA_FIRST_ATTEMPT_TIMEOUT_MS,
+      });
       log(`CXC sin vendedor respondió en ${Date.now() - t0}ms`);
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
       if (hasValidCarteraPayload(payload)) {
