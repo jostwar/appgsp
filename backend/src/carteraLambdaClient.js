@@ -22,7 +22,7 @@ export async function estadoCarteraLambda({ cedula } = {}) {
     return { error: 'cedula requerida' };
   }
 
-  const body = {
+  const requestBody = {
     data: {
       action: 'status',
       customer_id: customerId,
@@ -31,7 +31,7 @@ export async function estadoCarteraLambda({ cedula } = {}) {
   };
 
   try {
-    const response = await axios.post(CARTERA_LAMBDA_URL, body, {
+    const response = await axios.post(CARTERA_LAMBDA_URL, requestBody, {
       headers: {
         'Content-Type': 'application/json',
       },
