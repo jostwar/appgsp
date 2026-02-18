@@ -13,7 +13,9 @@ Para ver **paso a paso** por qué no carga la cartera, usa el endpoint de diagn�
 - **URL alternativa** (cuando el servidor tenga el código actualizado):  
   `https://app.gsp.com.co/api/cxc/estado-cartera/diagnostic?cedula=TU_CEDULA`
 
-(Sustituye `TU_CEDULA` por una cédula de prueba.)
+(Sustituye `TU_CEDULA` por una cédula de prueba, ej. `901188568`.)
+
+**Sí, puedes probar el diagnóstico en Postman:** mismo request GET; la respuesta trae todos los pasos (incluido `cartera_lambda` si usas Lambda) y el `summary` final. Así compruebas que el Lambda + Fomplus devuelven saldos por cliente sin tocar la app.
 
 ## Qué devuelve la API
 
@@ -30,10 +32,12 @@ La respuesta es un JSON con:
 ### Pasos que puedes ver en `steps`
 
 1. **init** – Cedula normalizada y fecha. Si falla aquí, falta `cedula` en la URL.
-2. **cxc_sin_vendedor** – Llamada a CXC sin vendedor. Si `success: false`, mira `error` y `recommendation` (ej. timeout → subir `CXC_TIMEOUT_MS`).
-3. **resolve_vendedor** – Resolución del vendedor desde clientes. Si falla, revisar cache de clientes / ERP.
-4. **cxc_con_vendedor** – Llamada a CXC con vendedor. Si falla, mismo tipo de revisión que en paso 2.
-5. **parse_and_cupo** – Parseo del payload y búsqueda de cupo. Si todo lo anterior fue OK, aquí suele ser OK.
+2. **cartera_lambda** – (Si está configurado `CARTERA_LAMBDA_URL`.) Llamada al Lambda de cartera. Si `success: true` verás `requestedCedula`, `responseCustomerId`, `bodyKeys`; si falla, `error`. Si el Lambda responde bien, **no se llama a CXC** y el tiempo total es bajo (~500 ms).
+3. **cxc_sin_vendedor** – Llamada a CXC sin vendedor (solo si el Lambda no devolvió datos). Si `success: false`, mira `error` y `recommendation`.
+4. **cxc_post_fallback** / **cxc_post_result** – Si el GET a CXC devolvió solo `xmlns`, se intenta SOAP POST.
+5. **resolve_vendedor** – Resolución del vendedor desde clientes (si aún no hay payload).
+6. **cxc_con_vendedor** – Llamada a CXC con vendedor.
+7. **parse_and_cupo** – Parseo del payload y búsqueda de cupo.
 
 ### Cómo interpretar
 
