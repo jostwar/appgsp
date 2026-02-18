@@ -4,14 +4,14 @@ Para ajustar timeouts hay que medir cuánto tarda el endpoint.
 
 ## 1. Probar desde tu máquina con `curl`
 
-Sustituye `TU_BACKEND_URL` por la URL del backend (ej. `https://app.gsp.com.co` o `http://IP:4000`) y `CEDULA_PRUEBA` por una cédula válida.
+URL del backend: `https://app.gsp.com.co`. Sustituye `CEDULA_PRUEBA` por una cédula válida.
 
 ```bash
 # Ver tiempo en cabecera de respuesta (X-Cartera-Time-Ms, en milisegundos)
-curl -s -D - -o /dev/null "TU_BACKEND_URL/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA"
+curl -s -D - -o /dev/null "https://app.gsp.com.co/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA"
 
 # Ver respuesta JSON y tiempo
-curl -s -i "TU_BACKEND_URL/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA"
+curl -s -i "https://app.gsp.com.co/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA"
 ```
 
 En la respuesta busca la cabecera **`X-Cartera-Time-Ms`**: es el tiempo total que tardó el backend en milisegundos.
@@ -19,7 +19,7 @@ En la respuesta busca la cabecera **`X-Cartera-Time-Ms`**: es el tiempo total qu
 Con **`time`** de bash puedes medir todo (red + backend):
 
 ```bash
-time curl -s "TU_BACKEND_URL/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA" -o /tmp/out.json
+time curl -s "https://app.gsp.com.co/api/cxc/estado-cartera/summary?cedula=CEDULA_PRUEBA" -o /tmp/out.json
 cat /tmp/out.json
 ```
 

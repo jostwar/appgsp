@@ -6,9 +6,9 @@ Para ver **paso a paso** por qué no carga la cartera, usa el endpoint de diagn�
 
 - **Método:** GET  
 - **URL:**  
-  `https://TU_DOMINIO/api/cxc/estado-cartera/diagnostic?cedula=TU_CEDULA`
+  `https://app.gsp.com.co/api/cxc/estado-cartera/diagnostic?cedula=TU_CEDULA`
 
-(Sustituye `TU_DOMINIO` por tu backend, ej. `rewards.gsp.com.co` o `app.gsp.com.co`, y `TU_CEDULA` por una cédula de prueba.)
+(Sustituye `TU_CEDULA` por una cédula de prueba.)
 
 ## Qué devuelve la API
 
@@ -32,7 +32,7 @@ La respuesta es un JSON con:
 
 ### Cómo interpretar
 
-- Si **no llega respuesta** (Postman se queda cargando o 502): el problema está **antes** del backend (Apache/proxy, red, DNS). Revisar ProxyTimeout y que el backend esté arriba.
+- Si **no llega respuesta** (Postman se queda cargando o 502): el problema está **antes** del backend (Apache/proxy en app.gsp.com.co, red, DNS). Revisar ProxyTimeout y que el backend esté arriba.
 - Si **llega 200** con `steps`:
   - Algún paso con `success: false` → usar su `error` y `recommendation` para corregir (timeouts, CXC, clientes).
   - Todos `success: true` pero la app no muestra cartera → revisar que la app envíe `cedula` y que el timeout de la app (60 s) sea mayor que `totalMs`.
