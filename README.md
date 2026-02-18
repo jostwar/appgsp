@@ -53,6 +53,21 @@ npx eas build -p android --profile apk
 ```
 
 ## Deploy backend a Lightsail
+
+**Commit + deploy en un solo paso (recomendado):**
+
+```bash
+# Configura una vez (o usa .deploy.env con DEPLOY_HOST=... y opcionalmente DEPLOY_PATH=...)
+export DEPLOY_HOST=bitnami@TU_IP_LIGHTSAIL
+export DEPLOY_PATH=/home/bitnami/appgsp
+
+./scripts/commit-and-deploy.sh "mensaje de commit"
+```
+
+El script hace `git add`, `git commit` y ejecuta el deploy a Lightsail (pull, npm install, pm2 restart).
+
+**Solo deploy (sin commit):**
+
 Tras `git push origin main`, en tu máquina (con acceso SSH al instance):
 
 ```bash

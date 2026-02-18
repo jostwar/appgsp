@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
 import { useAuth } from '../store/auth';
-import { getGspCareCatalog, getGspCareStatus, getGspCareRequests, createGspCareRequest } from '../api/backend';
+import { getGspCareCatalog, getGspCareStatus, getGspCareRequests, getRewardsPoints, createGspCareRequest } from '../api/backend';
 
 const GSP_CARE_CATALOG_FALLBACK = {
   categories: [
@@ -40,6 +40,7 @@ export default function MembershipScreen() {
   const [requestLoadingId, setRequestLoadingId] = useState(null);
   const [catalog, setCatalog] = useState(GSP_CARE_CATALOG_FALLBACK);
   const [refreshing, setRefreshing] = useState(false);
+  const [clientName, setClientName] = useState('');
 
   const cedula = user?.cedula ? String(user.cedula).replace(/\D/g, '').trim() : '';
 
@@ -86,20 +87,33 @@ export default function MembershipScreen() {
     }
   }, []);
 
+  const loadClientName = useCallback(async () => {
+    if (!cedula) {
+      setClientName('');
+      return;
+    }
+    try {
+      const data = await getRewardsPoints({ cedula });
+      setClientName(String(data?.companyName || '').trim());
+    } catch (_err) {
+      setClientName('');
+    }
+  }, [cedula]);
+
   useEffect(() => {
     let mounted = true;
     setGspCareLoading(true);
-    Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests()]).finally(() => {
+    Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests(), loadClientName()]).finally(() => {
       if (mounted) setGspCareLoading(false);
     });
     return () => { mounted = false; };
-  }, [loadCatalog, loadGspCareStatus, loadRequests]);
+  }, [loadCatalog, loadGspCareStatus, loadRequests, loadClientName]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests()]);
+    await Promise.all([loadCatalog(), loadGspCareStatus(), loadRequests(), loadClientName()]);
     setRefreshing(false);
-  }, [loadCatalog, loadGspCareStatus, loadRequests]);
+  }, [loadCatalog, loadGspCareStatus, loadRequests, loadClientName]);
 
   const servicesByCategory = useMemo(() => {
     if (!catalog?.services?.length) return {};
@@ -133,8 +147,6 @@ export default function MembershipScreen() {
     },
     [cedula, loadGspCareStatus, loadRequests]
   );
-  const formatName = (value) =>
-    value ? value.replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
   const toTitleCase = (value) =>
     value
       ? value
@@ -144,24 +156,7 @@ export default function MembershipScreen() {
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ')
       : '';
-  const pickFirstLast = (value) => {
-    const tokens = formatName(value).split(' ').filter(Boolean);
-    if (tokens.length === 0) return '';
-    if (tokens.length === 1) return tokens[0];
-    return `${tokens[0]} ${tokens[tokens.length - 1]}`;
-  };
-  const memberName = (() => {
-    const firstName = user?.firstName?.trim() || '';
-    const lastName = user?.lastName?.trim() || '';
-    if (firstName || lastName) {
-      return toTitleCase(`${firstName} ${lastName}`.trim());
-    }
-    const fullName = pickFirstLast(user?.fullName);
-    if (fullName) return toTitleCase(fullName);
-    const fallbackName = pickFirstLast(user?.name);
-    if (fallbackName) return toTitleCase(fallbackName);
-    return 'Cliente GSP';
-  })();
+  const memberName = clientName ? toTitleCase(clientName) : 'Cliente GSP';
   const memberships = useMemo(
     () => [
       {

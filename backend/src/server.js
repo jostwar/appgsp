@@ -4634,6 +4634,16 @@ const hasValidCarteraPayload = (payload) =>
   (typeof payload === 'object' || Array.isArray(payload)) &&
   (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
 
+/** Si la API devuelve el array envuelto (ej. { Table: [...] }), extraerlo para sumar saldos. */
+const getCarteraItemsArray = (payload) => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload !== 'object') return [];
+  const values = Object.values(payload);
+  const arr = values.find((v) => Array.isArray(v) && v.length > 0);
+  return arr || [];
+};
+
 /**
  * Diagnóstico de cartera: siempre 200, detalle paso a paso.
  * Disponible en:
@@ -4746,8 +4756,9 @@ const carteraDiagnosticHandler = async (req, res) => {
     let saldoCartera = parseCarteraNumber(findValueByKeys(payload, CARTERA_SALDO_KEYS));
     let saldoPorVencer = parseCarteraNumber(findValueByKeys(payload, CARTERA_POR_VENCER_KEYS));
     let saldoVencido = parseCarteraNumber(findValueByKeys(payload, CARTERA_VENCIDO_KEYS));
-    if (Array.isArray(payload)) {
-      const totals = payload.reduce(
+    const diagnosticItems = getCarteraItemsArray(payload);
+    if (diagnosticItems.length > 0) {
+      const totals = diagnosticItems.reduce(
         (acc, item) => {
           const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO);
           const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido']) || item?.DAIAVEN;
@@ -4829,7 +4840,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     const t0 = Date.now();
     log('intentando CXC sin vendedor');
     try {
-      data = await cxc.estadoCartera({ fecha, cedula, vendedor: resolvedSeller || undefined });
+      data = await cxc.estadoCartera({ fecha, cedula: normCedula, vendedor: resolvedSeller || undefined });
       log(`CXC sin vendedor respondió en ${Date.now() - t0}ms`);
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
       if (hasValidCarteraPayload(payload)) {
@@ -4855,7 +4866,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       try {
         data = await cxc.estadoCartera({
           fecha,
-          cedula,
+          cedula: normCedula,
           vendedor: resolvedSeller || undefined,
         });
         log(`CXC con vendedor respondió en ${Date.now() - t2}ms`);
@@ -4889,8 +4900,9 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     let saldoVencido = parseCarteraNumber(
       findValueByKeys(payload, CARTERA_VENCIDO_KEYS)
     );
-    if (Array.isArray(payload)) {
-      const totals = payload.reduce(
+    const carteraItems = getCarteraItemsArray(payload);
+    if (carteraItems.length > 0) {
+      const totals = carteraItems.reduce(
         (acc, item) => {
           const saldo = parseCarteraNumber(
             findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO

@@ -173,14 +173,13 @@ export default function ProfileScreen({ navigation }) {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await Promise.all([
-      loadPrefs(),
       fetchOrders(),
       fetchCartera(),
       fetchLevel(),
       fetchCommercial(),
     ]);
     setIsRefreshing(false);
-  }, [loadPrefs, fetchOrders, fetchCartera, fetchLevel, fetchCommercial]);
+  }, [fetchOrders, fetchCartera, fetchLevel, fetchCommercial]);
 
   const orderItems = useMemo(
     () =>
@@ -444,12 +443,6 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Acciones rápidas</Text>
-          <Pressable
-            style={pressableStyle(styles.primaryButton)}
-            onPress={() => navigation?.navigate?.('Checkout', { url: 'https://gsp.com.co/my-account/', forceLogin: true })}
-          >
-            <Text style={styles.primaryButtonText}>Actualizar datos</Text>
-          </Pressable>
           <Pressable
             style={pressableStyle(styles.secondaryButton)}
             onPress={() => Linking.openURL('https://wa.me/573102181182')}
