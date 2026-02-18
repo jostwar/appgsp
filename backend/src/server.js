@@ -4766,6 +4766,8 @@ const carteraDiagnosticHandler = async (req, res) => {
           addStep('cartera_lambda', msLambda, true, {
             message: hasSummaryShape && !hasItems ? 'Lambda respondió con totales en raíz' : 'Lambda respondió con datos',
             items: arr.length,
+            requestedCedula: normCedula,
+            responseCustomerId: lambdaResult.data?.customer_id ?? null,
             bodyKeys: fullBody ? Object.keys(lambdaResult.data) : ['(array)'],
             firstItemKeys: firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null,
             firstItemSample: firstItem && typeof firstItem === 'object' ? { ...firstItem } : null,
