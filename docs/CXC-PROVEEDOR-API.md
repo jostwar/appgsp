@@ -41,7 +41,7 @@ CXC_EMPRESA=GSPSAS
 CXC_TOKEN=<token entregado por el proveedor>
 ```
 
-Opcional: `CXC_TIMEOUT_MS=60000` (o más si la respuesta tarda).
+Opcional: `CXC_TIMEOUT_MS=120000` (2 min) o `180000` (3 min) si el proveedor tarda más de 60 s.
 
 ## Cómo llama el backend
 

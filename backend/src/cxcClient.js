@@ -12,7 +12,7 @@ const {
   CXC_TIMEOUT_MS,
 } = process.env;
 
-const CXC_REQUEST_TIMEOUT_MS = Number(CXC_TIMEOUT_MS) || 60000;
+const CXC_REQUEST_TIMEOUT_MS = Number(CXC_TIMEOUT_MS) || 120000; // 2 min por defecto (proveedor puede tardar >60s)
 
 const SOAP_NS = CXC_SOAP_NS || 'http://tempuri.org/';
 
