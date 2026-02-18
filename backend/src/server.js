@@ -4683,10 +4683,18 @@ const getCarteraItemsArray = (payload) => {
     }
   }
   const values = Object.values(payload);
-  const arr = values.find((v) => Array.isArray(v) && v.length > 0 && v.some(hasSaldoInItem));
+  let arr = values.find((v) => Array.isArray(v) && v.length > 0 && v.some(hasSaldoInItem));
   if (arr) return arr;
   const fallback = values.find((v) => Array.isArray(v) && v.length > 0);
-  return fallback || [];
+  if (fallback) return fallback;
+  // payloadKeys: 1 → puede ser { "Result": { "Table": [...] } }; buscar array en objetos anidados
+  for (const v of values) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const nested = getCarteraItemsArray(v);
+      if (nested.length > 0) return nested;
+    }
+  }
+  return [];
 };
 
 /**
@@ -4748,9 +4756,12 @@ const carteraDiagnosticHandler = async (req, res) => {
         } catch (_e) {}
       }
       const valid = hasValidCarteraPayload(payload);
+      const payloadKeys = typeof payload === 'object' && !Array.isArray(payload) ? Object.keys(payload || {}).length : (Array.isArray(payload) ? payload.length : 0);
+      const firstKey = typeof payload === 'object' && !Array.isArray(payload) && payload && Object.keys(payload).length > 0 ? Object.keys(payload)[0] : null;
       addStep('cxc_sin_vendedor', ms0, valid, {
         message: valid ? 'CXC respondió con datos' : 'CXC respondió pero payload vacío o inválido',
-        payloadKeys: typeof payload === 'object' && !Array.isArray(payload) ? Object.keys(payload || {}).length : (Array.isArray(payload) ? payload.length : 0),
+        payloadKeys,
+        ...(firstKey ? { firstKey } : {}),
       });
       if (!valid) payload = null;
     } catch (err) {
