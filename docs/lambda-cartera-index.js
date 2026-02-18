@@ -1,11 +1,13 @@
 /**
  * Lambda fom-cartera — Consulta de cartera (SOAP Fomplus)
- * Compatible con el body: { data: { action, customer_id }, tool_name: "cartera" }
+ * Body: { data: { action, customer_id }, tool_name: "cartera" }
  *
- * En AWS: Node 18+ o 20; subir como index.js (CommonJS, sin "type": "module").
- *
+ * En AWS Lambda:
+ *   - Runtime: Node.js 20.x (evitar Node 24; puede dar Runtime.Unknown en Init).
+ *   - Handler: index.handler
+ *   - Archivo: index.js (código de este fichero).
+ *   - Timeout: 35 segundos.
  * Variables de entorno: FOM_HOST, FOM_SOAP_PATH, FOM_SOAP_ACTION_CARTERA, FOMPLUS_TOKEN, FOM_BASEDATOS, SOAP_TIMEOUT_MS
- * Timeout de la función = 35 segundos.
  */
 
 function resp(statusCode, body) {
@@ -30,7 +32,7 @@ function parseEvent(event) {
       payload = event;
     }
     return payload.data && typeof payload.data === "object" ? payload.data : payload;
-  } catch {
+  } catch (e) {
     return null;
   }
 }
@@ -68,14 +70,14 @@ function getItems(payload) {
       try {
         const arr = JSON.parse(t);
         return Array.isArray(arr) ? arr : [];
-      } catch {
+      } catch (e) {
         return [];
       }
     }
     if (t.startsWith("{")) {
       try {
         return getItems(JSON.parse(t));
-      } catch {
+      } catch (e) {
         return [];
       }
     }
@@ -160,7 +162,7 @@ function extractSoapResult(xml) {
   if (inner.startsWith("{") || inner.startsWith("[")) {
     try {
       return JSON.parse(inner);
-    } catch {
+    } catch (e) {
       return inner;
     }
   }
@@ -270,8 +272,8 @@ exports.handler = async function (event) {
     let customer_id;
     try {
       const d = parseEvent(event);
-      customer_id = d?.customer_id;
-    } catch {
+      customer_id = d && d.customer_id;
+    } catch (e2) {
       customer_id = undefined;
     }
     return resp(200, {
