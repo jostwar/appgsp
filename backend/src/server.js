@@ -4698,6 +4698,13 @@ const getCarteraItemsArray = (payload) => {
   return [];
 };
 
+/** True si el objeto es respuesta Lambda con totales en raíz (saldo, saldo_por_vencer, saldo_vencido). */
+const hasLambdaCarteraSummaryShape = (data) => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const keys = new Set(Object.keys(data).map((k) => normalizeField(k)));
+  return keys.has('saldo') || keys.has('saldoporvencer') || keys.has('saldovencido');
+};
+
 /**
  * Diagnóstico de cartera: siempre 200, detalle paso a paso.
  * Disponible en:
@@ -4744,14 +4751,20 @@ const carteraDiagnosticHandler = async (req, res) => {
       try {
         const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
         const msLambda = Date.now() - tLambda;
-        if (lambdaResult.items && lambdaResult.items.length > 0) {
+        const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
+        const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
+        if (hasItems || hasSummaryShape) {
           const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
-          const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
-          payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
+          if (hasItems) {
+            const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
+            payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
+          } else {
+            payload = lambdaResult.data;
+          }
           const arr = getCarteraItemsArray(payload);
           const firstItem = arr[0];
           addStep('cartera_lambda', msLambda, true, {
-            message: 'Lambda respondió con datos',
+            message: hasSummaryShape && !hasItems ? 'Lambda respondió con totales en raíz' : 'Lambda respondió con datos',
             items: arr.length,
             bodyKeys: fullBody ? Object.keys(lambdaResult.data) : ['(array)'],
             firstItemKeys: firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null,
@@ -4983,11 +4996,17 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       const tLambda = Date.now();
       try {
         const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
-        if (lambdaResult.items && lambdaResult.items.length > 0) {
+        const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
+        const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
+        if (hasItems || hasSummaryShape) {
           const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
-          const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
-          payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
-          log(`Lambda respondió en ${Date.now() - tLambda}ms con ${payload ? getCarteraItemsArray(payload).length : 0} ítems`);
+          if (hasItems) {
+            const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
+            payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
+          } else {
+            payload = lambdaResult.data;
+          }
+          log(`Lambda respondió en ${Date.now() - tLambda}ms${hasSummaryShape && !hasItems ? ' (totales en raíz)' : ` con ${getCarteraItemsArray(payload).length} ítems`}`);
         } else if (lambdaResult.error) {
           log(`Lambda: ${lambdaResult.error}`);
         }
