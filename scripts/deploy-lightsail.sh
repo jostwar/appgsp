@@ -18,4 +18,6 @@ DEPLOY_PATH="${DEPLOY_PATH:-/home/bitnami/appgsp}"
 
 echo "Deploy a $DEPLOY_HOST (path: $DEPLOY_PATH)"
 ssh "$DEPLOY_HOST" "cd $DEPLOY_PATH && git pull origin main && cd backend && npm install --omit=dev && pm2 restart appgsp-backend"
+echo "Configurando Apache (ProxyTimeout para evitar 502)..."
+ssh "$DEPLOY_HOST" "sudo bash $DEPLOY_PATH/scripts/setup-apache-proxy-timeout.sh" || echo "  (Si falla, ejecuta en el servidor: sudo bash $DEPLOY_PATH/scripts/setup-apache-proxy-timeout.sh)"
 echo "Deploy listo."
