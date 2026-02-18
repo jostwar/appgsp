@@ -98,7 +98,7 @@ export function getWooOrders({ cedula, customerId, email, page, perPage } = {}) 
 export function getCarteraSummary({ cedula, vendedor } = {}) {
   return request('/api/cxc/estado-cartera/summary', {
     params: { cedula, vendedor },
-    timeoutMs: 90000, // backend + CXC pueden tardar ~70s; la app debe esperar más que eso
+    timeoutMs: 120000, // backend + CXC pueden tardar >70s; la app debe esperar al menos 2 min
   });
 }
 
