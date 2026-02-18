@@ -863,6 +863,8 @@ const formatDateTime = (value, { endOfDay = false } = {}) => {
   return parsed.toISOString();
 };
 const formatDateTimeNow = () => new Date().toISOString();
+/** Fecha de hoy YYYY-MM-DD para datPar_Fecha en estado de cartera (el proveedor exige la fecha de la consulta). */
+const getCarteraFechaConsulta = () => formatDateOnly(new Date()) || new Date().toISOString().slice(0, 10);
 
 const parseCarteraNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -4634,14 +4636,57 @@ const hasValidCarteraPayload = (payload) =>
   (typeof payload === 'object' || Array.isArray(payload)) &&
   (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
 
-/** Si la API devuelve el array envuelto (ej. { Table: [...] }), extraerlo para sumar saldos. */
+/** Claves típicas donde el proveedor envuelve el array de documentos ( .NET / SQL / JSON ). */
+const CARTERA_ARRAY_WRAPPER_KEYS = [
+  'Table', 'Data', 'Result', 'Results', 'Rows', 'Items', 'Documentos',
+  'EstadoDeCuentaCarteraResult', 'estadoDeCuentaCarteraResult',
+  'List', 'Records', 'Detalle', 'Cuentas',
+];
+
+const hasSaldoInItem = (item) => {
+  if (!item || typeof item !== 'object') return false;
+  const saldo = item.SALDO ?? item.saldo ?? item.Saldo
+    ?? findValueByKeys(item, CARTERA_SALDO_KEYS);
+  return saldo !== null && saldo !== undefined && String(saldo).trim() !== '';
+};
+
+/** Si la API devuelve el array envuelto (ej. { Table: [...] }) o con otra clave, extraerlo para sumar saldos. */
 const getCarteraItemsArray = (payload) => {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_e) {
+        return [];
+      }
+    }
+    if (trimmed.startsWith('{')) {
+      try {
+        return getCarteraItemsArray(JSON.parse(trimmed));
+      } catch (_e) {
+        return [];
+      }
+    }
+    return [];
+  }
   if (typeof payload !== 'object') return [];
+  const normalizeKey = (k) => String(k || '').toLowerCase().replace(/_/g, '');
+  const wrapperSet = new Set(CARTERA_ARRAY_WRAPPER_KEYS.map(normalizeKey));
+  for (const [key, value] of Object.entries(payload)) {
+    if (Array.isArray(value) && value.length > 0) {
+      if (wrapperSet.has(normalizeKey(key))) return value;
+      if (value.some(hasSaldoInItem)) return value;
+    }
+  }
   const values = Object.values(payload);
-  const arr = values.find((v) => Array.isArray(v) && v.length > 0);
-  return arr || [];
+  const arr = values.find((v) => Array.isArray(v) && v.length > 0 && v.some(hasSaldoInItem));
+  if (arr) return arr;
+  const fallback = values.find((v) => Array.isArray(v) && v.length > 0);
+  return fallback || [];
 };
 
 /**
@@ -4678,7 +4723,7 @@ const carteraDiagnosticHandler = async (req, res) => {
     }
 
     const normCedula = normalizeId(cedula);
-    const fecha = formatDateTimeNow();
+    const fecha = getCarteraFechaConsulta();
     addStep('init', Date.now() - startMs, true, { cedula: normCedula, fecha });
 
     let resolvedSeller = String(vendedor || '').trim();
@@ -4696,6 +4741,12 @@ const carteraDiagnosticHandler = async (req, res) => {
       });
       const ms0 = Date.now() - t0;
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+      if (typeof payload === 'string' && payload.trim()) {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed != null) payload = parsed;
+        } catch (_e) {}
+      }
       const valid = hasValidCarteraPayload(payload);
       addStep('cxc_sin_vendedor', ms0, valid, {
         message: valid ? 'CXC respondió con datos' : 'CXC respondió pero payload vacío o inválido',
@@ -4734,6 +4785,12 @@ const carteraDiagnosticHandler = async (req, res) => {
         });
         const ms2 = Date.now() - t2;
         payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+        if (typeof payload === 'string' && payload.trim()) {
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed != null) payload = parsed;
+          } catch (_e) {}
+        }
         const valid = hasValidCarteraPayload(payload);
         addStep('cxc_con_vendedor', ms2, valid, {
           message: valid ? 'CXC respondió con datos' : 'Payload vacío o inválido',
@@ -4827,7 +4884,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const normCedula = normalizeId(cedula);
-    const fecha = formatDateTimeNow();
+    const fecha = getCarteraFechaConsulta();
 
     if (!debug) {
       const cacheKeyByCedula = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
@@ -4855,6 +4912,12 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       });
       log(`CXC sin vendedor respondió en ${Date.now() - t0}ms`);
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+      if (typeof payload === 'string' && payload.trim()) {
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed != null) payload = parsed;
+        } catch (_e) {}
+      }
       if (hasValidCarteraPayload(payload)) {
         log('CXC respondió sin vendedor');
       } else {
@@ -4883,6 +4946,12 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
         });
         log(`CXC con vendedor respondió en ${Date.now() - t2}ms`);
         payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+        if (typeof payload === 'string' && payload.trim()) {
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed != null) payload = parsed;
+          } catch (_e) {}
+        }
       } catch (err) {
         log(`CXC con vendedor falló en ${Date.now() - t2}ms: ` + (err?.message || err));
         throw err;

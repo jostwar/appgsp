@@ -217,6 +217,7 @@ export const cxc = {
     const response = await axios.get(resolveGetUrl(method), {
       params: baseParams(params),
       timeout: timeoutMs,
+      headers: { Accept: 'application/json' },
     });
     const raw = response.data;
     const result = parseJsonish(raw);
