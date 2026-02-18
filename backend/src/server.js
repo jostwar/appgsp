@@ -352,6 +352,7 @@ const ensureDataFiles = () => {
   ensureJsonFile(weeklyProductPath, null);
   ensureJsonFile(bannersPath, []);
   ensureJsonFile(gspCarePath, []);
+  ensureJsonFile(gspCareRequestsPath, []);
   ensureJsonFile(pushHistoryPath, []);
   ensureJsonFile(adminUsersPath, { users: [], roles: defaultAdminRoles() });
 };
@@ -3221,6 +3222,7 @@ const adminAuth = async (req, res, next) => {
       return res.status(401).send('Autenticación requerida.');
     }
 
+    const adminData = loadAdminUsers();
     const fixedUser = process.env.ADMIN_PORTAL_USER;
     const fixedPass = process.env.ADMIN_PORTAL_PASS;
     if (fixedUser && fixedPass) {
@@ -3228,11 +3230,10 @@ const adminAuth = async (req, res, next) => {
         credentials.username === fixedUser &&
         credentials.password === fixedPass
       ) {
-        const { roles } = loadAdminUsers();
         req.adminUser = buildAdminSession({
           username: fixedUser,
           roleId: 'admin',
-          roles,
+          roles: adminData.roles,
           source: 'env',
         });
         return next();
@@ -3241,7 +3242,7 @@ const adminAuth = async (req, res, next) => {
       return res.status(401).send('Credenciales inválidas.');
     }
 
-    const { users, roles } = loadAdminUsers();
+    const { users, roles } = adminData;
     const normalizedUsername = String(credentials.username || '').trim().toLowerCase();
     const matchedUser = users.find(
       (user) => String(user.username || '').trim().toLowerCase() === normalizedUsername
@@ -3274,7 +3275,7 @@ const adminAuth = async (req, res, next) => {
     req.adminUser = buildAdminSession({
       username: credentials.username,
       roleId: 'admin',
-      roles: loadAdminUsers().roles,
+      roles: adminData.roles,
       source: 'wp',
     });
     return next();
@@ -4621,13 +4622,22 @@ const carteraSummaryCache = new Map();
 const getCarteraSummaryCacheKey = (cedula, vendedor) =>
   `${normalizeId(cedula)}:${String(vendedor || '').trim()}`;
 
+const CARTERA_SUMMARY_EMPTY = {
+  cupoCredito: 0,
+  saldoCartera: 0,
+  saldoPorVencer: 0,
+  saldoVencido: 0,
+};
+
 const hasValidCarteraPayload = (payload) =>
   payload &&
   (typeof payload === 'object' || Array.isArray(payload)) &&
   (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
 
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
+  const startMs = Date.now();
   const log = (msg) => console.log('[cartera/summary]', new Date().toISOString(), msg);
+  const logMs = (label) => log(`${label} (${Date.now() - startMs}ms total)`);
   try {
     const { cedula, vendedor, debug } = req.query;
     if (!cedula) {
@@ -4640,7 +4650,8 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       const cacheKeyByCedula = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
       const cached = carteraSummaryCache.get(cacheKeyByCedula);
       if (cached && Date.now() < cached.expiresAt) {
-        log('cache hit');
+        logMs('cache hit');
+        res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
         return res.json(cached.payload);
       }
     }
@@ -4649,9 +4660,11 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     let data = null;
     let payload = null;
 
+    const t0 = Date.now();
     log('intentando CXC sin vendedor');
     try {
       data = await cxc.estadoCartera({ fecha, cedula, vendedor: resolvedSeller || undefined });
+      log(`CXC sin vendedor respondió en ${Date.now() - t0}ms`);
       payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
       if (hasValidCarteraPayload(payload)) {
         log('CXC respondió sin vendedor');
@@ -4659,17 +4672,19 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
         payload = null;
       }
     } catch (err) {
-      log('CXC sin vendedor falló: ' + (err?.message || err));
+      log(`CXC sin vendedor falló en ${Date.now() - t0}ms: ` + (err?.message || err));
     }
 
     if (!payload) {
+      const t1 = Date.now();
       log('resolviendo vendedor');
       try {
         resolvedSeller = String(await resolveSellerFromClients(cedula) || '').trim();
-        log('vendedor=' + (resolvedSeller || '(vacío)'));
+        log(`resolveSeller en ${Date.now() - t1}ms, vendedor=` + (resolvedSeller || '(vacío)'));
       } catch (err) {
-        log('resolveSeller falló: ' + (err?.message || err));
+        log(`resolveSeller falló en ${Date.now() - t1}ms: ` + (err?.message || err));
       }
+      const t2 = Date.now();
       log('llamando CXC con vendedor');
       try {
         data = await cxc.estadoCartera({
@@ -4677,22 +4692,23 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
           cedula,
           vendedor: resolvedSeller || undefined,
         });
+        log(`CXC con vendedor respondió en ${Date.now() - t2}ms`);
         payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
       } catch (err) {
-        log('CXC con vendedor falló: ' + (err?.message || err));
+        log(`CXC con vendedor falló en ${Date.now() - t2}ms: ` + (err?.message || err));
         throw err;
       }
     }
 
     if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      log('payload inválido');
-      return res.status(502).json({
-        error: 'No se pudo obtener estado de cartera',
-        details: 'El servicio no devolvió datos.',
-      });
+      logMs('payload inválido, respondiendo con ceros');
+      res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
+      return res.json(CARTERA_SUMMARY_EMPTY);
     }
 
     if (debug) {
+      logMs('debug response');
+      res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
       return res.json({ payload, resolvedSeller, data });
     }
     let cupoCredito = parseCarteraNumber(
@@ -4781,13 +4797,15 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
         }
       }
     }
+    const totalMs = Date.now() - startMs;
+    log(`ok en ${totalMs}ms`);
+    res.setHeader('X-Cartera-Time-Ms', String(totalMs));
     return res.json(summaryPayload);
   } catch (error) {
-    console.error('[cartera/summary] ERROR', error?.message || error, error?.response?.data || '', error?.stack || '');
-    return res.status(500).json({
-      error: 'No se pudo consultar estado de cartera',
-      details: error?.response?.data || error?.message,
-    });
+    const totalMs = Date.now() - startMs;
+    console.error('[cartera/summary] ERROR', totalMs + 'ms', error?.message || error, error?.response?.data || '', error?.stack || '');
+    res.setHeader('X-Cartera-Time-Ms', String(totalMs));
+    return res.json(CARTERA_SUMMARY_EMPTY);
   }
 });
 

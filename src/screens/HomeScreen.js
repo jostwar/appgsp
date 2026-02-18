@@ -339,20 +339,6 @@ export default function HomeScreen() {
     []
   );
 
-  const sliderImagesFallback = useMemo(
-    () => [
-      'https://gsp.com.co/wp-content/uploads/2026/01/SMART-HOME-scaled.jpg',
-      'https://gsp.com.co/wp-content/uploads/2026/01/SWICHES-Y-REDES-1-scaled.png',
-      'https://gsp.com.co/wp-content/uploads/2026/01/CABLEADO-ESTRUCTURADO-1-1-scaled.jpg',
-      'https://gsp.com.co/wp-content/uploads/2026/01/CCTV-1-scaled.jpg',
-      'https://gsp.com.co/wp-content/uploads/2026/01/SISTEMA-DE-ALARMA-DE-INTRUSION-2-1-scaled.png',
-      'https://gsp.com.co/wp-content/uploads/2026/01/VIDEO-INTERCOM-1-scaled.jpg',
-      'https://gsp.com.co/wp-content/uploads/2026/01/CAMARAS-DE-SEGURIDAD-1-scaled.png',
-      'https://gsp.com.co/wp-content/uploads/2026/01/ACCESO-scaled.jpg',
-    ],
-    []
-  );
-
   const categoryTabs = useMemo(
     () => ['Todo', 'Alarmas', 'Cámaras', 'Acceso', 'Redes', 'UPS', 'Video'],
     []
@@ -420,12 +406,10 @@ export default function HomeScreen() {
 
   const sliderImages = useMemo(
     () =>
-      banners.length > 0
-        ? banners
-            .map((b) => (typeof b === 'string' ? b : b?.imageUrl))
-            .filter(Boolean)
-        : sliderImagesFallback,
-    [banners, sliderImagesFallback]
+      banners
+        .map((b) => (typeof b === 'string' ? b : b?.imageUrl))
+        .filter(Boolean),
+    [banners]
   );
 
   const loadLocation = useCallback(async () => {
@@ -453,10 +437,9 @@ export default function HomeScreen() {
   }, [loadLocation]);
 
   useEffect(() => {
+    if (sliderImages.length <= 1) return;
     const interval = setInterval(() => {
-      if (!sliderRef.current || windowWidth === 0) {
-        return;
-      }
+      if (!sliderRef.current || windowWidth === 0) return;
       sliderIndex.current =
         (sliderIndex.current + 1) % sliderImages.length;
       sliderRef.current.scrollTo({
@@ -465,7 +448,6 @@ export default function HomeScreen() {
       });
       setActiveSlide(sliderIndex.current);
     }, 3500);
-
     return () => clearInterval(interval);
   }, [sliderImages.length]);
 
@@ -752,50 +734,52 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        <View style={styles.sliderWrapper}>
-          <ScrollView
-            ref={sliderRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sliderContent}
-            style={{ width: windowWidth }}
-            snapToInterval={windowWidth}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            onMomentumScrollEnd={(event) => {
-              const offsetX = event.nativeEvent.contentOffset.x;
-              if (windowWidth) {
-                sliderIndex.current = Math.round(offsetX / windowWidth);
-                setActiveSlide(sliderIndex.current);
-              }
-            }}
-          >
-            {sliderImages.map((image, index) => (
-              <View
-                key={`${image}-${index}`}
-                style={[styles.slide, { width: windowWidth }]}
-              >
-                <Image
-                  source={{ uri: image }}
-                  style={styles.slideImage}
-                  resizeMode="cover"
+        {sliderImages.length > 0 ? (
+          <View style={styles.sliderWrapper}>
+            <ScrollView
+              ref={sliderRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sliderContent}
+              style={{ width: windowWidth }}
+              snapToInterval={windowWidth}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onMomentumScrollEnd={(event) => {
+                const offsetX = event.nativeEvent.contentOffset.x;
+                if (windowWidth) {
+                  sliderIndex.current = Math.round(offsetX / windowWidth);
+                  setActiveSlide(sliderIndex.current);
+                }
+              }}
+            >
+              {sliderImages.map((image, index) => (
+                <View
+                  key={`${image}-${index}`}
+                  style={[styles.slide, { width: windowWidth }]}
+                >
+                  <Image
+                    source={{ uri: image }}
+                    style={styles.slideImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.sliderDots}>
+              {sliderImages.map((_, index) => (
+                <View
+                  key={`dot-${index}`}
+                  style={[
+                    styles.sliderDot,
+                    activeSlide === index && styles.sliderDotActive,
+                  ]}
                 />
-              </View>
-            ))}
-          </ScrollView>
-          <View style={styles.sliderDots}>
-            {sliderImages.map((_, index) => (
-              <View
-                key={`dot-${index}`}
-                style={[
-                  styles.sliderDot,
-                  activeSlide === index && styles.sliderDotActive,
-                ]}
-              />
-            ))}
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={styles.quickActionsRow}>
           {quickActions.map((action) => (

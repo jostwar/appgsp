@@ -9,7 +9,10 @@ const {
   CXC_SOAP_NS,
   CXC_VENTAS_SOAP_NS,
   CXC_VENTAS_SOAP_ACTION,
+  CXC_TIMEOUT_MS,
 } = process.env;
+
+const CXC_REQUEST_TIMEOUT_MS = Number(CXC_TIMEOUT_MS) || 60000;
 
 const SOAP_NS = CXC_SOAP_NS || 'http://tempuri.org/';
 
@@ -182,7 +185,7 @@ export const cxc = {
         'Content-Type': 'text/xml; charset=utf-8',
         SOAPAction: getSoapAction(method, SOAP_NS),
       },
-      timeout: 20000,
+      timeout: CXC_REQUEST_TIMEOUT_MS,
     });
 
     const xml = response.data;
@@ -200,7 +203,7 @@ export const cxc = {
         'Content-Type': 'text/xml; charset=utf-8',
         SOAPAction: getSoapAction(method, ventasNs, CXC_VENTAS_SOAP_ACTION),
       },
-      timeout: 20000,
+      timeout: CXC_REQUEST_TIMEOUT_MS,
     });
 
     const xml = response.data;
@@ -212,7 +215,7 @@ export const cxc = {
     ensureConfig();
     const response = await axios.get(resolveGetUrl(method), {
       params: baseParams(params),
-      timeout: 20000,
+      timeout: CXC_REQUEST_TIMEOUT_MS,
     });
     const raw = response.data;
     const result = parseJsonish(raw);
@@ -224,7 +227,7 @@ export const cxc = {
     const targetUrl = baseUrl || CXC_VENTAS_URL || CXC_API_URL;
     const response = await axios.get(resolveGetUrl(method, targetUrl), {
       params,
-      timeout: 20000,
+      timeout: CXC_REQUEST_TIMEOUT_MS,
     });
     const raw = response.data;
     const result = parseJsonish(raw);
