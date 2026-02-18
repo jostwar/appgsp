@@ -4766,7 +4766,7 @@ const carteraDiagnosticHandler = async (req, res) => {
       if (!valid) payload = null;
       const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
       if (payload && itemsFromGet.length === 0 && firstKey === 'xmlns') {
-        addStep('cxc_post_fallback', 0, true, { message: 'GET devolvió solo xmlns; intentando SOAP POST' });
+        addStep('cxc_post_fallback', 0, true, { message: 'GET devolvió solo xmlns; intentando SOAP POST (timeout 30s)' });
         const tPost = Date.now();
         try {
           data = await cxc.estadoCartera({
@@ -4774,6 +4774,7 @@ const carteraDiagnosticHandler = async (req, res) => {
             cedula: normCedula,
             vendedor: resolvedSeller || undefined,
             usePost: true,
+            timeoutMs: 30000,
           });
           const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
           if (typeof payloadPost === 'string' && payloadPost.trim()) {
@@ -4971,13 +4972,14 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
       const firstKeySummary = typeof payload === 'object' && !Array.isArray(payload) && payload && Object.keys(payload).length > 0 ? Object.keys(payload)[0] : null;
       if (payload && itemsFromGet.length === 0 && firstKeySummary === 'xmlns') {
-        log('GET devolvió solo xmlns; intentando SOAP POST');
+        log('GET devolvió solo xmlns; intentando SOAP POST (timeout 30s)');
         try {
           data = await cxc.estadoCartera({
             fecha,
             cedula: normCedula,
             vendedor: resolvedSeller || undefined,
             usePost: true,
+            timeoutMs: 30000,
           });
           const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
           if (typeof payloadPost === 'string' && payloadPost.trim()) {

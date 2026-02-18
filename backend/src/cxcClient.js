@@ -177,15 +177,16 @@ const baseVentasParams = (params = {}) => {
 };
 
 export const cxc = {
-  async call(method, params = {}) {
+  async call(method, params = {}, options = {}) {
     ensureConfig();
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : CXC_REQUEST_TIMEOUT_MS;
     const payload = buildEnvelope(method, baseParams(params), SOAP_NS);
     const response = await axios.post(resolveServiceUrl(method), payload, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
         SOAPAction: getSoapAction(method, SOAP_NS),
       },
-      timeout: CXC_REQUEST_TIMEOUT_MS,
+      timeout: timeoutMs,
     });
 
     const xml = response.data;
@@ -243,7 +244,8 @@ export const cxc = {
       strPar_Vended: vendedor,
     };
     if (usePost) {
-      return this.call('EstadoDeCuentaCartera', params);
+      const postTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 30000;
+      return this.call('EstadoDeCuentaCartera', params, { timeoutMs: postTimeout });
     }
     const opts = typeof timeoutMs === 'number' && timeoutMs > 0 ? { timeoutMs } : {};
     return this.callGet('EstadoDeCuentaCartera', params, opts).catch(() =>
