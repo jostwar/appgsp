@@ -4634,6 +4634,166 @@ const hasValidCarteraPayload = (payload) =>
   (typeof payload === 'object' || Array.isArray(payload)) &&
   (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
 
+/**
+ * Diagnóstico de cartera para Postman: siempre 200, detalle paso a paso.
+ * GET /api/cxc/estado-cartera/diagnostic?cedula=XXX
+ * Respuesta: { request, steps[], summary, totalMs, recommendation }
+ */
+app.get('/api/cxc/estado-cartera/diagnostic', async (req, res) => {
+  const startMs = Date.now();
+  const steps = [];
+  const addStep = (name, ms, success, extra = {}) => {
+    steps.push({ step: name, ms, success, ...extra });
+  };
+
+  const out = {
+    diagnostic: true,
+    request: {
+      cedula: req.query.cedula || null,
+      vendedor: req.query.vendedor || null,
+    },
+    steps,
+    summary: null,
+    totalMs: 0,
+    recommendation: '',
+  };
+
+  try {
+    const { cedula, vendedor } = req.query;
+    if (!cedula) {
+      out.totalMs = Date.now() - startMs;
+      out.recommendation = 'Falta cedula en query. La app debe enviar ?cedula=XXX.';
+      return res.status(200).json(out);
+    }
+
+    const normCedula = normalizeId(cedula);
+    const fecha = formatDateTimeNow();
+    addStep('init', Date.now() - startMs, true, { cedula: normCedula, fecha });
+
+    let resolvedSeller = String(vendedor || '').trim();
+    let data = null;
+    let payload = null;
+
+    const t0 = Date.now();
+    try {
+      data = await cxc.estadoCartera({ fecha, cedula: normCedula, vendedor: resolvedSeller || undefined });
+      const ms0 = Date.now() - t0;
+      payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+      const valid = hasValidCarteraPayload(payload);
+      addStep('cxc_sin_vendedor', ms0, valid, {
+        message: valid ? 'CXC respondió con datos' : 'CXC respondió pero payload vacío o inválido',
+        payloadKeys: typeof payload === 'object' && !Array.isArray(payload) ? Object.keys(payload || {}).length : (Array.isArray(payload) ? payload.length : 0),
+      });
+      if (!valid) payload = null;
+    } catch (err) {
+      const ms0 = Date.now() - t0;
+      const msg = err?.message || String(err);
+      const code = err?.response?.status || err?.code;
+      addStep('cxc_sin_vendedor', ms0, false, {
+        error: msg,
+        code: code || null,
+        recommendation: msg.includes('timeout') ? 'Subir CXC_TIMEOUT_MS en el servidor (ej. 90000).' : 'Revisar CXC_API_URL, CXC_TOKEN, CXC_EMPRESA y conectividad al servicio CXC.',
+      });
+    }
+
+    if (!payload) {
+      const t1 = Date.now();
+      try {
+        resolvedSeller = String(await resolveSellerFromClients(cedula) || '').trim();
+        addStep('resolve_vendedor', Date.now() - t1, true, { vendedor: resolvedSeller || '(vacío)' });
+      } catch (err) {
+        addStep('resolve_vendedor', Date.now() - t1, false, {
+          error: err?.message || String(err),
+          recommendation: 'Revisar clients-cache y/o servicio de clientes (ERP/Woo).',
+        });
+      }
+
+      const t2 = Date.now();
+      try {
+        data = await cxc.estadoCartera({
+          fecha,
+          cedula: normCedula,
+          vendedor: resolvedSeller || undefined,
+        });
+        const ms2 = Date.now() - t2;
+        payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
+        const valid = hasValidCarteraPayload(payload);
+        addStep('cxc_con_vendedor', ms2, valid, {
+          message: valid ? 'CXC respondió con datos' : 'Payload vacío o inválido',
+        });
+        if (!valid) payload = null;
+      } catch (err) {
+        const ms2 = Date.now() - t2;
+        const msg = err?.message || String(err);
+        addStep('cxc_con_vendedor', ms2, false, {
+          error: msg,
+          code: err?.response?.status || err?.code,
+          recommendation: msg.includes('timeout') ? 'Aumentar CXC_TIMEOUT_MS y/o ProxyTimeout en Apache.' : 'Revisar servicio CXC.',
+        });
+      }
+    }
+
+    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
+      out.summary = CARTERA_SUMMARY_EMPTY;
+      out.totalMs = Date.now() - startMs;
+      out.recommendation = out.recommendation || 'CXC no devolvió datos válidos. Revisar los pasos con success:false arriba.';
+      res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
+      return res.status(200).json(out);
+    }
+
+    let cupoCredito = parseCarteraNumber(findValueByKeys(payload, CARTERA_CUPO_KEYS));
+    let saldoCartera = parseCarteraNumber(findValueByKeys(payload, CARTERA_SALDO_KEYS));
+    let saldoPorVencer = parseCarteraNumber(findValueByKeys(payload, CARTERA_POR_VENCER_KEYS));
+    let saldoVencido = parseCarteraNumber(findValueByKeys(payload, CARTERA_VENCIDO_KEYS));
+    if (Array.isArray(payload)) {
+      const totals = payload.reduce(
+        (acc, item) => {
+          const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO);
+          const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido']) || item?.DAIAVEN;
+          const dias = Number(daysRaw || 0);
+          acc.saldoCartera += saldo;
+          if (dias > 0) acc.saldoVencido += saldo;
+          else acc.saldoPorVencer += saldo;
+          return acc;
+        },
+        { saldoCartera: 0, saldoPorVencer: 0, saldoVencido: 0 }
+      );
+      if (totals.saldoCartera > 0) saldoCartera = totals.saldoCartera;
+      if (totals.saldoPorVencer > 0 || totals.saldoVencido > 0) {
+        saldoPorVencer = totals.saldoPorVencer;
+        saldoVencido = totals.saldoVencido;
+      }
+    }
+    const t3 = Date.now();
+    if (!cupoCredito) {
+      try {
+        const cachedClient = await findClientInfo({ cedula: normCedula, vendedor: resolvedSeller || '', useRemoteFallback: false });
+        cupoCredito = parseCarteraNumber(cachedClient?.info?.cupo);
+        if (!cupoCredito) {
+          const remoteClient = await findClientInfo({ cedula: normCedula, vendedor: resolvedSeller || '', useRemoteFallback: true });
+          cupoCredito = parseCarteraNumber(remoteClient?.info?.cupo);
+        }
+      } catch (_e) { /* ignore */ }
+    }
+    addStep('parse_and_cupo', Date.now() - t3, true);
+
+    out.summary = { cupoCredito, saldoCartera, saldoPorVencer, saldoVencido };
+    out.totalMs = Date.now() - startMs;
+    const failed = steps.some((s) => s.success === false);
+    out.recommendation = failed
+      ? 'Revisar el paso con success:false. Si es timeout: subir CXC_TIMEOUT_MS y ProxyTimeout en Apache.'
+      : `Todo OK. Tiempo total ${out.totalMs}ms. Si la app no muestra cartera, revisar que la app envíe cedula y que el timeout de la app (60s) sea mayor que totalMs.`;
+    res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
+    return res.status(200).json(out);
+  } catch (err) {
+    out.totalMs = Date.now() - startMs;
+    out.recommendation = 'Excepción inesperada: ' + (err?.message || String(err));
+    steps.push({ step: 'exception', ms: 0, success: false, error: err?.message, stack: err?.stack });
+    res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
+    return res.status(200).json(out);
+  }
+});
+
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
   const startMs = Date.now();
   const log = (msg) => console.log('[cartera/summary]', new Date().toISOString(), msg);
