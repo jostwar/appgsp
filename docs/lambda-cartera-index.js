@@ -1,13 +1,11 @@
 /**
- * Lambda fom-cartera — Consulta de cartera (API real CXC/Fomplus)
- * Compatible con el body que envía el backend: { data: { action, customer_id }, tool_name: "cartera" }
+ * Lambda fom-cartera — Consulta de cartera (SOAP Fomplus)
+ * Compatible con el body: { data: { action, customer_id }, tool_name: "cartera" }
  *
- * En AWS: crear función Node 18+; subir este archivo como index.mjs O usar index.js con "type": "module" en package.json.
+ * En AWS: Node 18+; subir como index.mjs o index.js con "type": "module".
  *
- * Variables de entorno en la Lambda:
- *   CXC_API_URL   — Base URL del servicio (sin /EstadoDeCuentaCartera al final)
- *   CXC_TOKEN    — Token (strPar_Token)
- *   CXC_EMPRESA  — Empresa/base (strPar_Basedatos)
+ * Variables de entorno (las que ya tienes en la Lambda):
+ *   FOM_HOST, FOM_SOAP_PATH, FOM_SOAP_ACTION_CARTERA, FOMPLUS_TOKEN, FOM_BASEDATOS, SOAP_TIMEOUT_MS
  */
 
 function resp(statusCode, body) {
@@ -122,43 +120,95 @@ function totalsFromItems(items) {
   return { saldo, porVencer, vencido, cupo };
 }
 
-/** Llama a la API CXC EstadoDeCuentaCartera (mismo contrato que el backend Node) */
-async function fetchCarteraFromCxc(customer_id) {
-  const baseUrl = (process.env.CXC_API_URL || "").replace(/\/$/, "");
-  if (!baseUrl) throw new Error("CXC_API_URL no configurada en Lambda");
-  const token = process.env.CXC_TOKEN || "";
-  const empresa = process.env.CXC_EMPRESA || "";
-  if (!token) throw new Error("CXC_TOKEN no configurado en Lambda");
-  if (!empresa) throw new Error("CXC_EMPRESA no configurada en Lambda");
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Construye el SOAP envelope para EstadoDeCuentaCartera (igual que el backend Node) */
+function buildSoapEnvelope(params) {
+  const method = "EstadoDeCuentaCartera";
+  const ns = "http://tempuri.org/";
+  const entries = Object.entries(params || {});
+  const bodyParams = entries
+    .map(([key, value]) => `<${key}>${escapeXml(value)}</${key}>`)
+    .join("");
+  return [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">',
+    "<soap:Body>",
+    `<${method} xmlns="${ns}">`,
+    bodyParams,
+    `</${method}>`,
+    "</soap:Body>",
+    "</soap:Envelope>",
+  ].join("");
+}
+
+/** Extrae el contenido de EstadoDeCuentaCarteraResult del XML SOAP (puede ser JSON o texto) */
+function extractSoapResult(xml) {
+  const str = String(xml || "");
+  const match = str.match(
+    /<[^>]*EstadoDeCuentaCarteraResult[^>]*>([\s\S]*?)<\/[^>]*EstadoDeCuentaCarteraResult>/i
+  );
+  if (!match) return null;
+  const inner = (match[1] || "").trim();
+  if (inner.startsWith("{") || inner.startsWith("[")) {
+    try {
+      return JSON.parse(inner);
+    } catch {
+      return inner;
+    }
+  }
+  return inner;
+}
+
+/** Llama a Fomplus por SOAP (usa FOM_HOST, FOMPLUS_TOKEN, FOM_BASEDATOS, etc.) */
+async function fetchCarteraFromFomplus(customer_id) {
+  const host = (process.env.FOM_HOST || "").replace(/\/$/, "");
+  const path = process.env.FOM_SOAP_PATH || "/srvCxcPed.asmx";
+  const soapAction = process.env.FOM_SOAP_ACTION_CARTERA || "http://tempuri.org/EstadoDeCuentaCartera";
+  const token = process.env.FOMPLUS_TOKEN || "";
+  const basedatos = process.env.FOM_BASEDATOS || "";
+  const timeoutMs = Number(process.env.SOAP_TIMEOUT_MS) || 28000;
+
+  if (!host) throw new Error("FOM_HOST no configurada en Lambda");
+  if (!token) throw new Error("FOMPLUS_TOKEN no configurado en Lambda");
+  if (!basedatos) throw new Error("FOM_BASEDATOS no configurada en Lambda");
 
   const fecha = new Date().toISOString().slice(0, 10);
-  const url = `${baseUrl}/EstadoDeCuentaCartera`;
-  const params = new URLSearchParams({
-    strPar_Basedatos: empresa,
+  const envelope = buildSoapEnvelope({
+    strPar_Basedatos: basedatos,
     strPar_Token: token,
     datPar_Fecha: fecha,
     strPar_Cedula: String(customer_id),
     strPar_Vended: "",
   });
-  const fullUrl = `${url}?${params.toString()}`;
 
-  const res = await fetch(fullUrl, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
+  const url = `${host}${path.startsWith("/") ? path : "/" + path}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+      SOAPAction: soapAction,
+    },
+    body: envelope,
+    signal: controller.signal,
   });
+  clearTimeout(timeoutId);
 
-  if (!res.ok) throw new Error(`CXC API: ${res.status} ${res.statusText}`);
-  const raw = await res.text();
-  let data = raw;
-  const trimmed = (raw || "").trim();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = raw;
-    }
-  }
-  return data;
+  if (!res.ok) throw new Error(`Fomplus SOAP: ${res.status} ${res.statusText}`);
+  const xml = await res.text();
+  const result = extractSoapResult(xml);
+  if (result === null) throw new Error("Fomplus no devolvió EstadoDeCuentaCarteraResult");
+  return result;
 }
 
 export async function handler(event) {
@@ -185,7 +235,7 @@ export async function handler(event) {
   }
 
   try {
-    const apiPayload = await fetchCarteraFromCxc(customer_id);
+    const apiPayload = await fetchCarteraFromFomplus(customer_id);
     const items = getItems(apiPayload);
 
     let saldo = 0, saldo_por_vencer = 0, saldo_vencido = 0, cupo = 0;
