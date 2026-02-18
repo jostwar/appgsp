@@ -4635,11 +4635,12 @@ const hasValidCarteraPayload = (payload) =>
   (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
 
 /**
- * Diagnóstico de cartera para Postman: siempre 200, detalle paso a paso.
- * GET /api/cxc/estado-cartera/diagnostic?cedula=XXX
- * Respuesta: { request, steps[], summary, totalMs, recommendation }
+ * Diagnóstico de cartera: siempre 200, detalle paso a paso.
+ * Disponible en:
+ *   GET /api/cxc/estado-cartera/diagnostic?cedula=XXX
+ *   GET /api/cxc/estado-cartera/summary?cedula=XXX&diagnostic=1  (mismo resultado, ruta que ya existe en producción)
  */
-app.get('/api/cxc/estado-cartera/diagnostic', async (req, res) => {
+const carteraDiagnosticHandler = async (req, res) => {
   const startMs = Date.now();
   const steps = [];
   const addStep = (name, ms, success, extra = {}) => {
@@ -4792,9 +4793,14 @@ app.get('/api/cxc/estado-cartera/diagnostic', async (req, res) => {
     res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
     return res.status(200).json(out);
   }
-});
+};
+
+app.get('/api/cxc/estado-cartera/diagnostic', carteraDiagnosticHandler);
 
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
+  if (req.query.diagnostic === '1' || req.query.diagnostic === 'true') {
+    return carteraDiagnosticHandler(req, res);
+  }
   const startMs = Date.now();
   const log = (msg) => console.log('[cartera/summary]', new Date().toISOString(), msg);
   const logMs = (label) => log(`${label} (${Date.now() - startMs}ms total)`);

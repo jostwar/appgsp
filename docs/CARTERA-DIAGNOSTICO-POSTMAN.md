@@ -2,10 +2,15 @@
 
 Para ver **paso a paso** por qué no carga la cartera, usa el endpoint de diagnóstico. **Siempre responde 200** (nunca 502/500 desde el backend), así puedes ver el comportamiento aunque falle algo en el camino.
 
+**Si ves "Cannot GET /api/cxc/estado-cartera/diagnostic"** es que el servidor tiene código antiguo. Despliega los últimos cambios y usa la URL con `summary?...&diagnostic=1` (abajo); así obtienes el mismo diagnóstico.
+
 ## Request en Postman
 
 - **Método:** GET  
-- **URL:**  
+- **URL (usa esta; funciona aunque el servidor no tenga la ruta /diagnostic):**  
+  `https://app.gsp.com.co/api/cxc/estado-cartera/summary?cedula=TU_CEDULA&diagnostic=1`
+
+- **URL alternativa** (cuando el servidor tenga el código actualizado):  
   `https://app.gsp.com.co/api/cxc/estado-cartera/diagnostic?cedula=TU_CEDULA`
 
 (Sustituye `TU_CEDULA` por una cédula de prueba.)
