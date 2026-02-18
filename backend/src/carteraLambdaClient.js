@@ -1,6 +1,6 @@
 /**
  * Cliente para el endpoint Lambda de cartera (AWS).
- * GET con Content-Type: application/json y params: data (JSON), tool_name.
+ * POST con Content-Type: application/json y body: { data: { action, customer_id }, tool_name }.
  * Sustituto/alternativa cuando el proveedor directo no devuelve datos desde el servidor.
  */
 import axios from 'axios';
@@ -22,18 +22,16 @@ export async function estadoCarteraLambda({ cedula } = {}) {
     return { error: 'cedula requerida' };
   }
 
-  const dataParam = JSON.stringify({
-    action: 'status',
-    customer_id: customerId,
-  });
+  const body = {
+    data: {
+      action: 'status',
+      customer_id: customerId,
+    },
+    tool_name: 'cartera',
+  };
 
   try {
-    const response = await axios.get(CARTERA_LAMBDA_URL, {
-      params: {
-        data: dataParam,
-        tool_name: 'cartera',
-        customer_id: customerId,
-      },
+    const response = await axios.post(CARTERA_LAMBDA_URL, body, {
       headers: {
         'Content-Type': 'application/json',
       },
