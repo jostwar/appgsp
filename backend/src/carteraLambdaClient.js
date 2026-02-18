@@ -44,15 +44,31 @@ export async function estadoCarteraLambda({ cedula } = {}) {
       return { error: 'Lambda respondió sin body válido', data: body };
     }
 
+    const hasSaldo = (item) => {
+      if (!item || typeof item !== 'object') return false;
+      const v = item.SALDO ?? item.saldo ?? item.Saldo;
+      return v !== null && v !== undefined && String(v).trim() !== '';
+    };
+    const findArray = (obj) => {
+      if (!obj) return null;
+      if (Array.isArray(obj)) return obj.some(hasSaldo) ? obj : null;
+      if (typeof obj !== 'object') return null;
+      const keys = ['items', 'data', 'result', 'Table', 'Data', 'Result', 'Body', 'documents', 'Rows', 'Records', 'Detalle'];
+      for (const k of keys) {
+        const v = obj[k];
+        if (Array.isArray(v) && v.length > 0 && v.some(hasSaldo)) return v;
+        if (Array.isArray(v) && v.length > 0) return v;
+      }
+      for (const v of Object.values(obj)) {
+        const found = findArray(v);
+        if (found) return found;
+      }
+      return null;
+    };
+
     const items = Array.isArray(body)
       ? body
-      : Array.isArray(body?.items)
-        ? body.items
-        : Array.isArray(body?.data)
-          ? body.data
-          : Array.isArray(body?.result)
-            ? body.result
-            : [];
+      : findArray(body) || [];
 
     return { data: body, items };
   } catch (err) {

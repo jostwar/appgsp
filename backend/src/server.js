@@ -4745,8 +4745,10 @@ const carteraDiagnosticHandler = async (req, res) => {
         const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
         const msLambda = Date.now() - tLambda;
         if (lambdaResult.items && lambdaResult.items.length > 0) {
-          payload = lambdaResult.items;
-          addStep('cartera_lambda', msLambda, true, { message: 'Lambda respondió con datos', items: payload.length });
+          const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
+          const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
+          payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
+          addStep('cartera_lambda', msLambda, true, { message: 'Lambda respondió con datos', items: getCarteraItemsArray(payload).length });
         } else {
           addStep('cartera_lambda', msLambda, false, { message: lambdaResult.error || 'Sin ítems', error: lambdaResult.error });
         }
@@ -4970,8 +4972,10 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       try {
         const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
         if (lambdaResult.items && lambdaResult.items.length > 0) {
-          payload = lambdaResult.items;
-          log(`Lambda respondió en ${Date.now() - tLambda}ms con ${payload.length} ítems`);
+          const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
+          const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
+          payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
+          log(`Lambda respondió en ${Date.now() - tLambda}ms con ${payload ? getCarteraItemsArray(payload).length : 0} ítems`);
         } else if (lambdaResult.error) {
           log(`Lambda: ${lambdaResult.error}`);
         }
