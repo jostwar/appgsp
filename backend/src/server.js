@@ -4748,9 +4748,21 @@ const carteraDiagnosticHandler = async (req, res) => {
           const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
           const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
           payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
-          addStep('cartera_lambda', msLambda, true, { message: 'Lambda respondió con datos', items: getCarteraItemsArray(payload).length });
+          const arr = getCarteraItemsArray(payload);
+          const firstItem = arr[0];
+          addStep('cartera_lambda', msLambda, true, {
+            message: 'Lambda respondió con datos',
+            items: arr.length,
+            bodyKeys: fullBody ? Object.keys(lambdaResult.data) : ['(array)'],
+            firstItemKeys: firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null,
+            firstItemSample: firstItem && typeof firstItem === 'object' ? { ...firstItem } : null,
+          });
         } else {
-          addStep('cartera_lambda', msLambda, false, { message: lambdaResult.error || 'Sin ítems', error: lambdaResult.error });
+          addStep('cartera_lambda', msLambda, false, {
+            message: lambdaResult.error || 'Sin ítems',
+            error: lambdaResult.error,
+            bodyKeys: lambdaResult.data && typeof lambdaResult.data === 'object' ? Object.keys(lambdaResult.data) : null,
+          });
         }
       } catch (errLambda) {
         addStep('cartera_lambda', Date.now() - tLambda, false, { error: errLambda?.message || String(errLambda) });
