@@ -252,17 +252,17 @@ export const cxc = {
     );
   },
 
-  listadoClientes({ vendedor, filas = 50, pagina = 1 } = {}) {
-    return this.callGet('ListadoClientes', {
-      strPar_Vended: vendedor,
+  listadoClientes({ vendedor, cedula, filas = 50, pagina = 1 } = {}) {
+    const params = {
+      strPar_Vended: vendedor ?? '',
       intPar_Filas: filas,
       intPar_Pagina: pagina,
-    }).catch(() =>
-      this.call('ListadoClientes', {
-        strPar_Vended: vendedor,
-        intPar_Filas: filas,
-        intPar_Pagina: pagina,
-      })
+    };
+    if (cedula != null && String(cedula).trim() !== '') {
+      params.strPar_Cedula = String(cedula).trim();
+    }
+    return this.callGet('ListadoClientes', params).catch(() =>
+      this.call('ListadoClientes', params)
     );
   },
 

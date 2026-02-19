@@ -162,7 +162,7 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.shippingValue}>Se calcula en el checkout</Text>
         </View>
         <View style={styles.pointsRow}>
-          <Text style={styles.pointsLabel}>Cashback estimado</Text>
+          <Text style={styles.pointsLabel}>Rewards estimado</Text>
           <Text style={styles.pointsValue}>{formatCop(estimatedCashback)}</Text>
         </View>
         <Pressable

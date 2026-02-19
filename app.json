@@ -3,12 +3,14 @@
     "name": "GSP Pro",
     "slug": "gsp",
     "scheme": "exp+gsp",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "1.0.1",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "updates": { "enabled": false },
+    "updates": {
+      "enabled": false
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,7 +19,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "co.com.gsp.app",
-      "infoPlist": { "ITSAppUsesNonExemptEncryption": false }
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +31,9 @@
       "edgeToEdgeEnabled": true,
       "package": "co.com.gsp.app"
     },
-    "web": { "favicon": "./assets/favicon.png" },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "extra": {},
     "owner": "jostwars-organization"
   }

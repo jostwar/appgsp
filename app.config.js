@@ -1,17 +1,14 @@
 const base = require('./app.json');
 
-const PROJECT_ID = 'e45648a5-c13e-4633-a255-4d906ddb758c';
+const PROJECT_ID = '725160a9-7d25-4e8b-b248-f7e63df8fed7';
 
 module.exports = () => {
   const isEasBuild = process.env.EAS_BUILD === 'true' || process.env.EAS_BUILD === true;
   const config = JSON.parse(JSON.stringify(base.expo));
 
-  // En local (expo start): sin projectId ni owner para que Expo Go NO busque
-  // actualizaciones EAS y cargue directo desde Metro (evita "new update available, downloading").
-  if (isEasBuild) {
-    config.extra = { ...config.extra, eas: { projectId: PROJECT_ID } };
-  } else {
-    config.extra = { ...config.extra, eas: {} };
+  // projectId siempre presente para que "eas build" pueda enlazar el proyecto (lee la config sin EAS_BUILD).
+  config.extra = { ...config.extra, eas: { projectId: PROJECT_ID } };
+  if (!isEasBuild) {
     delete config.owner;
     // Evitar que el cliente busque/descargue OTA: no comprobar y URL que no devuelve updates.
     config.updates = {

@@ -50,3 +50,10 @@ Opcional: `CXC_TIMEOUT_MS=120000` (2 min) o `180000` (3 min) si el proveedor tar
 - **Internamente:** GET a `CXC_API_URL/EstadoDeCuentaCartera` con `baseParams()` que añade `strPar_Basedatos` y `strPar_Token`, más `datPar_Fecha`, `strPar_Cedula`, `strPar_Vended`.
 
 Si el GET falla, el cliente hace fallback a una llamada SOAP al mismo método (por compatibilidad con otras configuraciones).
+
+## ListadoClientes (SOAP)
+
+- **Método:** `ListadoClientes` (GET o POST SOAP).
+- **Parámetros:** `strPar_Basedatos`, `strPar_Token`, `strPar_Vended`, `strPar_Cedula` (opcional), `intPar_Filas`, `intPar_Pagina`.
+- **`strPar_Cedula`:** El proveedor admite filtrar por cédula para devolver solo el cliente indicado (CLI_CEDULA, CLI_NOMBRE, cupo, etc.), optimizando la búsqueda.
+- **En el backend:** `cxc.listadoClientes({ vendedor, cedula, filas, pagina })`. Si se pasa `cedula`, se envía `strPar_Cedula` y se usa menos filas por página cuando se busca un cliente concreto.

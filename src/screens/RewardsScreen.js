@@ -81,7 +81,7 @@ export default function RewardsScreen() {
       {
         id: '1',
         title: 'Acumula',
-        description: 'Compra productos y acumula cashback por cada pedido.',
+        description: 'Compra productos y acumula rewards por cada pedido.',
       },
       {
         id: '3',
@@ -256,14 +256,14 @@ export default function RewardsScreen() {
       setCashbackRequestStatus('idle');
       Alert.alert(
         'Solicitud enviada',
-        'Tu solicitud será validada y recibirás vía correo la NC correspondiente al cashback solicitado.',
+        'Tu solicitud será validada y recibirás vía correo la NC correspondiente a los rewards solicitados.',
         [{ text: 'Entendido' }]
       );
     } catch (err) {
       setCashbackRequestStatus('idle');
       Alert.alert(
         'Error',
-        err?.message || 'No se pudo enviar la solicitud de cashback. Intenta de nuevo.'
+        err?.message || 'No se pudo enviar la solicitud de rewards. Intenta de nuevo.'
       );
     }
   };
@@ -287,7 +287,7 @@ export default function RewardsScreen() {
               style={styles.pointsLogo}
               resizeMode="contain"
             />
-            <Text style={styles.pointsLabel}>Saldo de cashback</Text>
+            <Text style={styles.pointsLabel}>Saldo de rewards</Text>
           </View>
           {pointsStatus === 'loading' ? (
             <Text style={styles.pointsHint}>Consultando compras...</Text>
@@ -320,7 +320,7 @@ export default function RewardsScreen() {
               )}
               {isMaxLevel ? null : (
                 <Text style={styles.pointsHint}>
-                  Al cumplir {nextLevelLabel} ganarías ${formatCop(nextLevelCashback)} de cashback
+                  Al cumplir {nextLevelLabel} ganarías ${formatCop(nextLevelCashback)} de rewards
                 </Text>
               )}
             </>
@@ -364,7 +364,7 @@ export default function RewardsScreen() {
               onPress={handleRequestCashback}
             >
               <Text style={styles.primaryButtonText}>
-                {cashbackRequestStatus === 'loading' ? 'Enviando…' : 'Solicitar cashback'}
+                {cashbackRequestStatus === 'loading' ? 'Enviando…' : 'Solicitar rewards'}
               </Text>
             </Pressable>
             {carteraState === 'error' ? (
@@ -379,7 +379,7 @@ export default function RewardsScreen() {
               </>
             ) : hasOverdueBalance ? (
               <Text style={styles.pointsHint}>
-                Tienes saldo vencido. Contacta a cartera para solicitar cashback.
+                Tienes saldo vencido. Contacta a cartera para solicitar rewards.
               </Text>
             ) : null}
           </View>
@@ -395,7 +395,7 @@ export default function RewardsScreen() {
           />
           <Text style={styles.sectionTitle}>Rewards</Text>
           <Text style={styles.sectionSubtitle}>
-            Acumula cashback en cada compra y redímelo para tus próximas compras en GSP.
+            Acumula rewards en cada compra y redímelo para tus próximas compras en GSP.
           </Text>
           {rewardsError ? (
             <Text style={styles.inlineError}>{rewardsError}</Text>
@@ -411,7 +411,7 @@ export default function RewardsScreen() {
                 ) : null}
                 <Text style={styles.rewardTitle}>{reward.title}</Text>
                 <Text style={styles.rewardPoints}>
-                  Cashback requerido ${formatCop(Number(reward.points || 0) * 10)}
+                  Rewards requerido ${formatCop(Number(reward.points || 0) * 10)}
                 </Text>
                 <Text style={styles.rewardValue}>{reward.value}</Text>
                 <Pressable style={pressableStyle(styles.secondaryButton)}>
@@ -458,7 +458,7 @@ export default function RewardsScreen() {
           </View>
           <View style={styles.notesCard}>
             <Text style={styles.noteText}>
-              El cashback se redime para compras futuras de productos disponibles.
+              Los rewards se redimen para compras futuras de productos disponibles.
             </Text>
           </View>
         </View>
@@ -493,9 +493,9 @@ export default function RewardsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>T&C</Text>
           <Text style={styles.termsText}>
-            Rewards GSP: Acumula cashback en cada compra y redímelo para tus próximas
-            compras en GSP. El cashback no es dinero en efectivo, no es transferible
-            y no aplica para pagos de cartera ni abonos a cuenta. El cashback es válido
+            Rewards GSP: Acumula rewards en cada compra y redímelo para tus próximas
+            compras en GSP. Los rewards no son dinero en efectivo, no son transferibles
+            y no aplican para pagos de cartera ni abonos a cuenta. Los rewards son válidos
             únicamente para compras futuras de productos disponibles y bajo las
             condiciones y vigencia informadas. Al participar en Rewards GSP aceptas
             estos términos.

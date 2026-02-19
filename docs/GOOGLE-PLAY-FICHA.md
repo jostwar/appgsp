@@ -15,7 +15,7 @@ GSP Pro
 ## 2. Descripción breve (80 caracteres máx.)
 
 ```
-App para clientes GSP: productos, cartera, rewards, cashback y membresía GSP Care.
+App para clientes GSP: productos, cartera, rewards y membresía GSP Care.
 ```
 
 Alternativa más corta:
@@ -34,7 +34,7 @@ GSP Pro es la aplicación oficial para clientes de GSP. Conéctate con tu cuenta
 • Catálogo de productos: busca y explora el portafolio de productos GSP.
 • Carrito y compras: agrega productos y continúa tu compra en la tienda web cuando lo prefieras.
 • Cartera: consulta tu estado de cuenta y saldos.
-• Rewards y cashback: acumula cashback en tus compras y solicita tu canje; recibirás la Nota Crédito por correo.
+• Rewards: acumula rewards en tus compras y solicita tu canje; recibirás la Nota Crédito por correo.
 • GSP Care: si tienes membresía, consulta tus servicios disponibles, solicita soporte técnico y revisa el estado de tus solicitudes.
 • Perfil y contacto comercial: datos de tu cuenta y de tu asesor.
 
@@ -48,7 +48,7 @@ Descarga GSP Pro y lleva el canal de GSP en tu bolsillo.
 ```
 Primera versión pública de GSP Pro.
 
-Incluye: catálogo de productos, cartera, programa Rewards con solicitud de cashback, membresía GSP Care con solicitud de servicios y notificaciones.
+Incluye: catálogo de productos, cartera, programa Rewards con solicitud de canje, membresía GSP Care con solicitud de servicios y notificaciones.
 ```
 
 ---
@@ -94,7 +94,7 @@ GSP es responsable del tratamiento de los datos personales que recopilamos a tra
 Para dar acceso a la app y a los servicios (cartera, rewards, GSP Care, compras), podemos recopilar y procesar: identificación (cédula/NIT), nombre, datos de contacto (correo, teléfono), datos de compras y de uso de la app. Si lo autorizas, también usamos el token de notificaciones push para enviarte mensajes sobre tu cuenta y la app.
 
 3. Finalidad  
-Usamos tus datos para: autenticación, consulta de cartera y rewards, gestión de solicitudes de cashback y de servicios GSP Care, y para mejorar nuestros productos y la experiencia en la app.
+Usamos tus datos para: autenticación, consulta de cartera y rewards, gestión de solicitudes de rewards y de servicios GSP Care, y para mejorar nuestros productos y la experiencia en la app.
 
 4. Base legal  
 El tratamiento se basa en la ejecución del contrato o relación comercial contigo y, cuando aplique, en tu consentimiento (por ejemplo, para notificaciones push).

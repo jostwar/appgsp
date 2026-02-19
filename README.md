@@ -42,7 +42,7 @@ Ruta: `/admin/rewards`
 - `GET /health` salud del backend
 - `GET /api/home/offers` ofertas en home
 - `GET /api/home/weekly` producto de la semana
-- `POST /api/cxc/points` ventas/cashback por cédula
+- `POST /api/cxc/points` ventas/rewards por cédula
 - `GET /api/cxc/estado-cartera/summary?cedula=...` estado de cartera
 - `POST /api/push/register` registro de token push
 - `POST /admin/notifications/send` envío de push desde portal
@@ -51,6 +51,26 @@ Ruta: `/admin/rewards`
 ```
 npx eas build -p android --profile apk
 ```
+
+## Deploy a Google Play
+
+1. **Sesión EAS** (solo la primera vez o si caducó):
+   ```bash
+   npx eas login
+   ```
+   Si el proyecto no está vinculado: `npx eas init` y elige la org/cuenta.
+
+2. **Generar AAB para producción** (versión se auto-incrementa con el perfil `production`):
+   ```bash
+   npx eas build -p android --profile production
+   ```
+   El build corre en los servidores de Expo. Al terminar, el AAB queda en el dashboard y te da un enlace para descargar.
+
+3. **Subir a Play Console**:
+   - **Opción A:** Desde la web de EAS, en el build completado, usa **Submit to Google Play** (requiere tener configurado el servicio de cuentas de Play en EAS).
+   - **Opción B:** Descarga el AAB desde [expo.dev](https://expo.dev) → tu proyecto → Builds, y súbelo manualmente en [Play Console](https://play.google.com/console) → Tu app → Producción (o una pista de pruebas) → Crear nueva versión → Subir el AAB.
+
+4. En Play Console, rellena “Novedades de esta versión” y envía a revisión. Textos sugeridos en `docs/GOOGLE-PLAY-FICHA.md`.
 
 ## Deploy backend a Lightsail
 

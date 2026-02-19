@@ -191,7 +191,7 @@ const ADMIN_SECTION_LABELS = {
   inicio: 'Inicio',
   clientes: 'Buscar cliente',
   premios: 'Premios',
-  'solicitudes-cashback': 'Solicitudes cashback',
+  'solicitudes-cashback': 'Solicitudes rewards',
   notificaciones: 'Notificaciones',
   ofertas: 'Ofertas',
   'producto-semana': 'Producto semana',
@@ -705,13 +705,13 @@ const extractPagination = (data) => {
   };
 };
 
-const fetchListadoClientes = async ({ pagina, vendedor }) => {
+const fetchListadoClientes = async ({ pagina, vendedor, cedula } = {}) => {
   const clientesData = await cxc
     .listadoClientes({
-      filas: 2000,
+      filas: cedula ? 100 : 2000,
       pagina,
-      fecha: formatDateTime(new Date()),
       vendedor,
+      cedula: cedula ? normalizeId(cedula) : undefined,
     })
     .catch(() => null);
   const clientesPayload = clientesData
@@ -752,7 +752,7 @@ const findClientInfo = async ({ cedula, vendedor, useRemoteFallback = true }) =>
       vendedor: 'cache',
     };
   }
-  const firstPage = await fetchListadoClientes({ pagina: 1, vendedor });
+  const firstPage = await fetchListadoClientes({ pagina: 1, vendedor, cedula: normalized });
   let clientInfo = firstPage.data ? buildClientInfo(firstPage.data, cedula) : null;
   let pagesScanned = 1;
   const baseMeta = firstPage.meta;
@@ -766,7 +766,7 @@ const findClientInfo = async ({ cedula, vendedor, useRemoteFallback = true }) =>
 
   const maxPages = Math.min(baseMeta.pages, 20);
   for (let page = 2; page <= maxPages; page += 1) {
-    const pageData = await fetchListadoClientes({ pagina: page, vendedor: '' });
+    const pageData = await fetchListadoClientes({ pagina: page, vendedor: '', cedula: normalized });
     pagesScanned = page;
     clientInfo = pageData.data ? buildClientInfo(pageData.data, cedula) : null;
     if (clientInfo) {
@@ -1239,7 +1239,7 @@ const renderRewardsPortal = ({
   const steps = [
     {
       title: 'Acumula',
-      description: 'Compra productos y acumula cashback por cada pedido.',
+      description: 'Compra productos y acumula rewards por cada pedido.',
     },
     {
       title: 'Elige',
@@ -1248,13 +1248,13 @@ const renderRewardsPortal = ({
     { title: 'Canjea', description: 'Solicita el canje y recibe confirmación.' },
   ];
   const activity = [
-    { title: 'Canje $500.000 cashback', points: '-$500.000', date: '21 ene 2026' },
+    { title: 'Canje $500.000 rewards', points: '-$500.000', date: '21 ene 2026' },
     { title: 'Canje bono gasolina', points: '-$80.000', date: '10 ene 2026' },
   ];
   const termsText =
-    'Rewards GSP: Acumula cashback en cada compra y redímelo para tus próximas ' +
-    'compras en GSP. El cashback no es dinero en efectivo, no es transferible ' +
-    'y no aplica para pagos de cartera ni abonos a cuenta. El cashback es válido ' +
+    'Rewards GSP: Acumula rewards en cada compra y redímelo para tus próximas ' +
+    'compras en GSP. Los rewards no son dinero en efectivo, no son transferibles ' +
+    'y no aplican para pagos de cartera ni abonos a cuenta. Los rewards son válidos ' +
     'únicamente para compras futuras de productos disponibles y bajo las ' +
     'condiciones y vigencia informadas. Al participar en Rewards GSP aceptas ' +
     'estos términos.';
@@ -1747,7 +1747,7 @@ const renderRewardsPortal = ({
             </p>
             <div class="totals">
               <div class="item">
-                <span>Cashback estimado</span>
+                <span>Rewards estimado</span>
                 <strong>${cashbackValue}</strong>
               </div>
               <div class="item">
@@ -1964,7 +1964,7 @@ const renderRewardsPortal = ({
               }
               ${
                 cedula
-                  ? `<div class="label">Cashback estimado: <strong>${cashbackValue}</strong></div>`
+                  ? `<div class="label">Rewards estimado: <strong>${cashbackValue}</strong></div>`
                   : ''
               }
               ${
@@ -1975,7 +1975,7 @@ const renderRewardsPortal = ({
             </div>
             ${
               cedula
-                ? `<div class="label" style="margin-top:16px;">Rebate y cashback mensual</div>
+                ? `<div class="label" style="margin-top:16px;">Rebate y rewards mensual</div>
                    <div class="muted" style="margin-top:4px;">
                      Compras actualizadas: ${formatDateLabel(monthlyUpdatedAt)}
                    </div>
@@ -1988,7 +1988,7 @@ const renderRewardsPortal = ({
                                <th>Compras</th>
                                <th>Nivel</th>
                                <th>Rebate</th>
-                               <th>Cashback</th>
+                               <th>Rewards</th>
                              </tr>
                            </thead>
                            <tbody>
@@ -2027,8 +2027,8 @@ const renderRewardsPortal = ({
             <div class="pill"><span class="dot"></span>Nivel ${levelValue}</div>
             <div class="value">${cashbackValue}</div>
             <div class="muted">Rebate ${rebateValue}% · Compras mensuales antes de IVA</div>
-            <div class="muted">Falta ${remainingForRebate} para recibir cashback</div>
-            <div class="muted">Al cumplir nivel 1 ganarías ${baseLevelCashback} de cashback</div>
+            <div class="muted">Falta ${remainingForRebate} para recibir rewards</div>
+            <div class="muted">Al cumplir nivel 1 ganarías ${baseLevelCashback} de rewards</div>
             <div class="muted">Avance nivel 1: ${progressPercent}% · Meta $${formatNumber(
               BASE_LEVEL_GOAL
             )}</div>
@@ -2099,9 +2099,9 @@ const renderRewardsPortal = ({
           ${
             showSolicitudesCashback
               ? `<div id="solicitudes-cashback" class="card">
-            <h2 class="section-title">Solicitudes de cashback</h2>
+            <h2 class="section-title">Solicitudes de rewards</h2>
             <p class="section-subtitle">
-              Lista de solicitudes de cashback. Cierra cada una con el número y monto de la NC generada en el ERP.
+              Lista de solicitudes de rewards. Cierra cada una con el número y monto de la NC generada en el ERP.
             </p>
             ${notificationStatus === 'closed'
               ? '<div class="alert" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">Solicitud cerrada correctamente.</div>'
@@ -2138,7 +2138,7 @@ const renderRewardsPortal = ({
                       </div>`
                       )
                       .join('')
-                  : '<div class="alert">No hay solicitudes de cashback.</div>'
+                  : '<div class="alert">No hay solicitudes de rewards.</div>'
               }
             </div>
           </div>`
@@ -4138,9 +4138,9 @@ app.post('/api/cashback/request', async (req, res) => {
   saveCashbackRequests(requests);
   try {
     await sendPushToCedula(norm, {
-      title: 'Solicitud de cashback',
+      title: 'Solicitud de rewards',
       body:
-        'Tu solicitud será validada y recibirás vía correo la NC correspondiente al cashback solicitado.',
+        'Tu solicitud será validada y recibirás vía correo la NC correspondiente a los rewards solicitados.',
       data: { screen: 'Rewards' },
     });
   } catch (_err) {
@@ -4951,7 +4951,7 @@ app.post('/api/cxc/points', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      error: 'No se pudo calcular cashback desde CxC',
+      error: 'No se pudo calcular rewards desde CxC',
       details: error?.response?.data || error?.message,
     });
   }
