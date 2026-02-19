@@ -7,7 +7,7 @@ import axios from 'axios';
 const CARTERA_LAMBDA_URL =
   process.env.CARTERA_LAMBDA_URL ||
   'https://rue2usb4cwm63vhvmebk7ydf6y0ekuln.lambda-url.us-west-2.on.aws/';
-const CARTERA_LAMBDA_TIMEOUT_MS = Number(process.env.CARTERA_LAMBDA_TIMEOUT_MS) || 30000;
+const CARTERA_LAMBDA_TIMEOUT_MS = Number(process.env.CARTERA_LAMBDA_TIMEOUT_MS) || 130000;
 
 function parseNum(v) {
   if (typeof v === 'number') return v;
