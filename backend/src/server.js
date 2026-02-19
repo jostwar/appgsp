@@ -864,9 +864,6 @@ const formatDateTime = (value, { endOfDay = false } = {}) => {
   return parsed.toISOString();
 };
 const formatDateTimeNow = () => new Date().toISOString();
-/** Fecha de hoy YYYY-MM-DD para datPar_Fecha en estado de cartera (el proveedor exige la fecha de la consulta). */
-const getCarteraFechaConsulta = () => formatDateOnly(new Date()) || new Date().toISOString().slice(0, 10);
-
 const parseCarteraNumber = (value) => {
   if (typeof value === 'number') return value;
   const raw = String(value || '').replace(/[^\d.-]/g, '');
@@ -4632,603 +4629,60 @@ const CARTERA_SUMMARY_EMPTY = {
   saldoVencido: 0,
 };
 
-const hasValidCarteraPayload = (payload) =>
-  payload &&
-  (typeof payload === 'object' || Array.isArray(payload)) &&
-  (Array.isArray(payload) && payload.length > 0 || Object.keys(payload).length > 0);
-
-/** Claves típicas donde el proveedor envuelve el array de documentos ( .NET / SQL / JSON ). */
-const CARTERA_ARRAY_WRAPPER_KEYS = [
-  'Table', 'Data', 'Result', 'Results', 'Rows', 'Items', 'Documentos',
-  'EstadoDeCuentaCarteraResult', 'estadoDeCuentaCarteraResult',
-  'List', 'Records', 'Detalle', 'Cuentas',
-];
-
-const hasSaldoInItem = (item) => {
-  if (!item || typeof item !== 'object') return false;
-  const saldo = item.SALDO ?? item.saldo ?? item.Saldo
-    ?? findValueByKeys(item, CARTERA_SALDO_KEYS);
-  return saldo !== null && saldo !== undefined && String(saldo).trim() !== '';
-};
-
-/** Si la API devuelve el array envuelto (ej. { Table: [...] }) o con otra clave, extraerlo para sumar saldos. */
-const getCarteraItemsArray = (payload) => {
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
-  if (typeof payload === 'string') {
-    const trimmed = payload.trim();
-    if (trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (_e) {
-        return [];
-      }
-    }
-    if (trimmed.startsWith('{')) {
-      try {
-        return getCarteraItemsArray(JSON.parse(trimmed));
-      } catch (_e) {
-        return [];
-      }
-    }
-    return [];
-  }
-  if (typeof payload !== 'object') return [];
-  const normalizeKey = (k) => String(k || '').toLowerCase().replace(/_/g, '');
-  const wrapperSet = new Set(CARTERA_ARRAY_WRAPPER_KEYS.map(normalizeKey));
-  for (const [key, value] of Object.entries(payload)) {
-    if (Array.isArray(value) && value.length > 0) {
-      if (wrapperSet.has(normalizeKey(key))) return value;
-      if (value.some(hasSaldoInItem)) return value;
-    }
-  }
-  const values = Object.values(payload);
-  let arr = values.find((v) => Array.isArray(v) && v.length > 0 && v.some(hasSaldoInItem));
-  if (arr) return arr;
-  const fallback = values.find((v) => Array.isArray(v) && v.length > 0);
-  if (fallback) return fallback;
-  // payloadKeys: 1 → puede ser { "Result": { "Table": [...] } }; buscar array en objetos anidados
-  for (const v of values) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const nested = getCarteraItemsArray(v);
-      if (nested.length > 0) return nested;
-    }
-  }
-  return [];
-};
-
-/** True si el objeto es respuesta Lambda con totales (en raíz o en summary). */
-const hasLambdaCarteraSummaryShape = (data) => {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-  const keys = new Set(Object.keys(data).map((k) => normalizeField(k)));
-  if (keys.has('saldo') || keys.has('saldoporvencer') || keys.has('saldovencido')) return true;
-  const summary = data.summary && typeof data.summary === 'object' ? data.summary : null;
-  if (summary && (summary.saldo_total != null || summary.saldo_por_vencer != null || summary.saldo_vencido != null)) return true;
-  return false;
-};
-
-/**
- * Diagnóstico de cartera: siempre 200, detalle paso a paso.
- * Disponible en:
- *   GET /api/cxc/estado-cartera/diagnostic?cedula=XXX
- *   GET /api/cxc/estado-cartera/summary?cedula=XXX&diagnostic=1  (mismo resultado, ruta que ya existe en producción)
- */
-const carteraDiagnosticHandler = async (req, res) => {
-  const startMs = Date.now();
-  const steps = [];
-  const addStep = (name, ms, success, extra = {}) => {
-    steps.push({ step: name, ms, success, ...extra });
-  };
-
-  const out = {
-    diagnostic: true,
-    request: {
-      cedula: req.query.cedula || null,
-      vendedor: req.query.vendedor || null,
-    },
-    steps,
-    summary: null,
-    totalMs: 0,
-    recommendation: '',
-  };
-
-  try {
-    const { cedula, vendedor } = req.query;
-    if (!cedula) {
-      out.totalMs = Date.now() - startMs;
-      out.recommendation = 'Falta cedula en query. La app debe enviar ?cedula=XXX.';
-      return res.status(200).json(out);
-    }
-
-    const normCedula = normalizeId(cedula);
-    const fecha = getCarteraFechaConsulta();
-    addStep('init', Date.now() - startMs, true, { cedula: normCedula, fecha });
-
-    let resolvedSeller = String(vendedor || '').trim();
-    let data = null;
-    let payload = null;
-
-    if (process.env.CARTERA_LAMBDA_URL) {
-      const tLambda = Date.now();
-      try {
-        const lambdaResult = await estadoCarteraLambda({
-          cedula: normCedula,
-          fecha: getCarteraFechaConsulta(),
-          vendedor: resolvedSeller || '',
-        });
-        const msLambda = Date.now() - tLambda;
-        const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
-        const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
-        if (hasItems || hasSummaryShape) {
-          const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
-          if (hasItems) {
-            const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
-            payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
-          } else {
-            payload = lambdaResult.data;
-          }
-          const arr = getCarteraItemsArray(payload);
-          const firstItem = arr[0];
-          addStep('cartera_lambda', msLambda, true, {
-            message: hasSummaryShape && !hasItems ? 'Lambda respondió con totales en raíz' : 'Lambda respondió con datos',
-            items: arr.length,
-            requestedCedula: normCedula,
-            responseCustomerId: lambdaResult.data?.customer_id ?? lambdaResult.data?.request?.customer_id ?? null,
-            bodyKeys: fullBody ? Object.keys(lambdaResult.data) : ['(array)'],
-            firstItemKeys: firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null,
-            firstItemSample: firstItem && typeof firstItem === 'object' ? { ...firstItem } : null,
-          });
-        } else {
-          addStep('cartera_lambda', msLambda, false, {
-            message: lambdaResult.error || 'Sin ítems',
-            error: lambdaResult.error,
-            bodyKeys: lambdaResult.data && typeof lambdaResult.data === 'object' ? Object.keys(lambdaResult.data) : null,
-          });
-        }
-      } catch (errLambda) {
-        addStep('cartera_lambda', Date.now() - tLambda, false, { error: errLambda?.message || String(errLambda) });
-      }
-    }
-
-    if (!payload) {
-    const CARTERA_DIAG_FIRST_TIMEOUT_MS = 20000;
-    const t0 = Date.now();
-    try {
-      data = await cxc.estadoCartera({
-        fecha,
-        cedula: normCedula,
-        vendedor: resolvedSeller || undefined,
-        timeoutMs: CARTERA_DIAG_FIRST_TIMEOUT_MS,
-      });
-      const ms0 = Date.now() - t0;
-      payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-      if (typeof payload === 'string' && payload.trim()) {
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed != null) payload = parsed;
-        } catch (_e) {}
-      }
-      const valid = hasValidCarteraPayload(payload);
-      const payloadKeys = typeof payload === 'object' && !Array.isArray(payload) ? Object.keys(payload || {}).length : (Array.isArray(payload) ? payload.length : 0);
-      const firstKey = typeof payload === 'object' && !Array.isArray(payload) && payload && Object.keys(payload).length > 0 ? Object.keys(payload)[0] : null;
-      addStep('cxc_sin_vendedor', ms0, valid, {
-        message: valid ? 'CXC respondió con datos' : 'CXC respondió pero payload vacío o inválido',
-        payloadKeys,
-        ...(firstKey ? { firstKey } : {}),
-      });
-      if (!valid) payload = null;
-      const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
-      if (payload && itemsFromGet.length === 0 && firstKey === 'xmlns') {
-        addStep('cxc_post_fallback', 0, true, { message: 'GET devolvió solo xmlns; intentando SOAP POST (timeout 30s)' });
-        const tPost = Date.now();
-        try {
-          data = await cxc.estadoCartera({
-            fecha,
-            cedula: normCedula,
-            vendedor: resolvedSeller || undefined,
-            usePost: true,
-            timeoutMs: 30000,
-          });
-          const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-          if (typeof payloadPost === 'string' && payloadPost.trim()) {
-            try {
-              const parsed = JSON.parse(payloadPost);
-              if (parsed != null) payload = parsed;
-            } catch (_e) {}
-          } else if (payloadPost && (Array.isArray(payloadPost) || typeof payloadPost === 'object')) {
-            payload = payloadPost;
-          }
-          addStep('cxc_post_result', Date.now() - tPost, getCarteraItemsArray(payload).length > 0, { items: getCarteraItemsArray(payload).length });
-        } catch (errPost) {
-          addStep('cxc_post_result', Date.now() - tPost, false, { error: errPost?.message || String(errPost) });
-        }
-      }
-    } catch (err) {
-      const ms0 = Date.now() - t0;
-      const msg = err?.message || String(err);
-      const code = err?.response?.status || err?.code;
-      addStep('cxc_sin_vendedor', ms0, false, {
-        error: msg,
-        code: code || null,
-        recommendation: msg.includes('timeout') ? 'Subir CXC_TIMEOUT_MS en el servidor (ej. 90000).' : 'Revisar CXC_API_URL, CXC_TOKEN, CXC_EMPRESA y conectividad al servicio CXC.',
-      });
-    }
-
-    if (!payload) {
-      const t1 = Date.now();
-      try {
-        resolvedSeller = String(await resolveSellerFromClients(cedula) || '').trim();
-        addStep('resolve_vendedor', Date.now() - t1, true, { vendedor: resolvedSeller || '(vacío)' });
-      } catch (err) {
-        addStep('resolve_vendedor', Date.now() - t1, false, {
-          error: err?.message || String(err),
-          recommendation: 'Revisar clients-cache y/o servicio de clientes (ERP/Woo).',
-        });
-      }
-
-      const t2 = Date.now();
-      try {
-        data = await cxc.estadoCartera({
-          fecha,
-          cedula: normCedula,
-          vendedor: resolvedSeller || undefined,
-        });
-        const ms2 = Date.now() - t2;
-        payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-        if (typeof payload === 'string' && payload.trim()) {
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed != null) payload = parsed;
-          } catch (_e) {}
-        }
-        const valid = hasValidCarteraPayload(payload);
-        addStep('cxc_con_vendedor', ms2, valid, {
-          message: valid ? 'CXC respondió con datos' : 'Payload vacío o inválido',
-        });
-        if (!valid) payload = null;
-      } catch (err) {
-        const ms2 = Date.now() - t2;
-        const msg = err?.message || String(err);
-        addStep('cxc_con_vendedor', ms2, false, {
-          error: msg,
-          code: err?.response?.status || err?.code,
-          recommendation: msg.includes('timeout') ? 'Aumentar CXC_TIMEOUT_MS y/o ProxyTimeout en Apache.' : 'Revisar servicio CXC.',
-        });
-      }
-    }
-    }
-
-    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      out.summary = CARTERA_SUMMARY_EMPTY;
-      out.totalMs = Date.now() - startMs;
-      out.recommendation = out.recommendation || 'CXC no devolvió datos válidos. Revisar los pasos con success:false arriba.';
-      res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
-      return res.status(200).json(out);
-    }
-
-    let cupoCredito = parseCarteraNumber(findValueByKeys(payload, CARTERA_CUPO_KEYS));
-    let saldoCartera = parseCarteraNumber(findValueByKeys(payload, CARTERA_SALDO_KEYS));
-    let saldoPorVencer = parseCarteraNumber(findValueByKeys(payload, CARTERA_POR_VENCER_KEYS));
-    let saldoVencido = parseCarteraNumber(findValueByKeys(payload, CARTERA_VENCIDO_KEYS));
-    const diagnosticItems = getCarteraItemsArray(payload);
-    if (diagnosticItems.length > 0) {
-      const totals = diagnosticItems.reduce(
-        (acc, item) => {
-          const porVencerDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_POR_VENCER_KEYS));
-          const vencidoDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_VENCIDO_KEYS));
-          const tienePorVencerVencido = porVencerDoc > 0 || vencidoDoc > 0;
-          if (tienePorVencerVencido) {
-            acc.saldoPorVencer += Math.max(0, porVencerDoc);
-            acc.saldoVencido += Math.max(0, vencidoDoc);
-            acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
-          } else {
-            const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO || item?.saldo || item?.saldo);
-            const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido', 'dias_vencidos']) || item?.DAIAVEN;
-            const dias = Number(daysRaw || 0);
-            acc.saldoCartera += saldo;
-            if (dias > 0) acc.saldoVencido += saldo;
-            else acc.saldoPorVencer += saldo;
-          }
-          return acc;
-        },
-        { saldoCartera: 0, saldoPorVencer: 0, saldoVencido: 0 }
-      );
-      if (totals.saldoCartera > 0) saldoCartera = totals.saldoCartera;
-      if (totals.saldoPorVencer > 0 || totals.saldoVencido > 0) {
-        saldoPorVencer = totals.saldoPorVencer;
-        saldoVencido = totals.saldoVencido;
-      }
-    }
-    const t3 = Date.now();
-    if (!cupoCredito) {
-      try {
-        const cachedClient = await findClientInfo({ cedula: normCedula, vendedor: resolvedSeller || '', useRemoteFallback: false });
-        cupoCredito = parseCarteraNumber(cachedClient?.info?.cupo);
-        if (!cupoCredito) {
-          const remoteClient = await findClientInfo({ cedula: normCedula, vendedor: resolvedSeller || '', useRemoteFallback: true });
-          cupoCredito = parseCarteraNumber(remoteClient?.info?.cupo);
-        }
-      } catch (_e) { /* ignore */ }
-    }
-    addStep('parse_and_cupo', Date.now() - t3, true);
-
-    out.summary = { cupoCredito, saldoCartera, saldoPorVencer, saldoVencido };
-    out.totalMs = Date.now() - startMs;
-    const failed = steps.some((s) => s.success === false);
-    out.recommendation = failed
-      ? 'Revisar el paso con success:false. Si es timeout: subir CXC_TIMEOUT_MS y ProxyTimeout en Apache.'
-      : `Todo OK. Tiempo total ${out.totalMs}ms. Si la app no muestra cartera, revisar que la app envíe cedula y que el timeout de la app (60s) sea mayor que totalMs.`;
-    res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
-    return res.status(200).json(out);
-  } catch (err) {
-    out.totalMs = Date.now() - startMs;
-    out.recommendation = 'Excepción inesperada: ' + (err?.message || String(err));
-    steps.push({ step: 'exception', ms: 0, success: false, error: err?.message, stack: err?.stack });
-    res.setHeader('X-Cartera-Time-Ms', String(out.totalMs));
-    return res.status(200).json(out);
-  }
-};
-
-app.get('/api/cxc/estado-cartera/diagnostic', carteraDiagnosticHandler);
-
 app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
-  if (req.query.diagnostic === '1' || req.query.diagnostic === 'true') {
-    return carteraDiagnosticHandler(req, res);
-  }
   const startMs = Date.now();
   const log = (msg) => console.log('[cartera/summary]', new Date().toISOString(), msg);
-  const logMs = (label) => log(`${label} (${Date.now() - startMs}ms total)`);
   try {
     const { cedula, vendedor, debug } = req.query;
     if (!cedula) {
       return res.status(400).json({ error: 'cedula es requerida' });
     }
     const normCedula = normalizeId(cedula);
-    const fecha = getCarteraFechaConsulta();
 
     if (!debug) {
-      const cacheKeyByCedula = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
-      const cached = carteraSummaryCache.get(cacheKeyByCedula);
+      const cacheKey = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
+      const cached = carteraSummaryCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
-        logMs('cache hit');
+        log('cache hit');
         res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
         return res.json(cached.payload);
       }
     }
 
-    let resolvedSeller = String(vendedor || '').trim();
-    let data = null;
-    let payload = null;
+    const result = await estadoCarteraLambda({ cedula: normCedula });
 
-    if (process.env.CARTERA_LAMBDA_URL) {
-      const tLambda = Date.now();
-      try {
-        const lambdaResult = await estadoCarteraLambda({
-          cedula: normCedula,
-          fecha: getCarteraFechaConsulta(),
-          vendedor: resolvedSeller || '',
-        });
-        const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
-        const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
-        if (hasItems || hasSummaryShape) {
-          const fullBody = lambdaResult.data && typeof lambdaResult.data === 'object';
-          if (hasItems) {
-            const itemsFromBody = fullBody ? getCarteraItemsArray(lambdaResult.data) : [];
-            payload = fullBody && itemsFromBody.length > 0 ? lambdaResult.data : lambdaResult.items;
-          } else {
-            payload = lambdaResult.data;
-          }
-          log(`Lambda respondió en ${Date.now() - tLambda}ms${hasSummaryShape && !hasItems ? ' (totales en raíz)' : ` con ${getCarteraItemsArray(payload).length} ítems`}`);
-        } else if (lambdaResult.error) {
-          log(`Lambda: ${lambdaResult.error}`);
-        }
-      } catch (errLambda) {
-        log('Lambda falló: ' + (errLambda?.message || errLambda));
-      }
-    }
-
-    if (!payload) {
-    const CARTERA_FIRST_ATTEMPT_TIMEOUT_MS = 20000; // 20s: proveedor responde ~10s en Postman; evitar esperar 2 min
-    const t0 = Date.now();
-    log('intentando CXC sin vendedor (timeout ' + CARTERA_FIRST_ATTEMPT_TIMEOUT_MS / 1000 + 's)');
-    try {
-      data = await cxc.estadoCartera({
-        fecha,
-        cedula: normCedula,
-        vendedor: resolvedSeller || undefined,
-        timeoutMs: CARTERA_FIRST_ATTEMPT_TIMEOUT_MS,
-      });
-      log(`CXC sin vendedor respondió en ${Date.now() - t0}ms`);
-      payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-      if (typeof payload === 'string' && payload.trim()) {
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed != null) payload = parsed;
-        } catch (_e) {}
-      }
-      if (hasValidCarteraPayload(payload)) {
-        log('CXC respondió sin vendedor');
-      } else {
-        payload = null;
-      }
-      const itemsFromGet = payload ? getCarteraItemsArray(payload) : [];
-      const firstKeySummary = typeof payload === 'object' && !Array.isArray(payload) && payload && Object.keys(payload).length > 0 ? Object.keys(payload)[0] : null;
-      if (payload && itemsFromGet.length === 0 && firstKeySummary === 'xmlns') {
-        log('GET devolvió solo xmlns; intentando SOAP POST (timeout 30s)');
-        try {
-          data = await cxc.estadoCartera({
-            fecha,
-            cedula: normCedula,
-            vendedor: resolvedSeller || undefined,
-            usePost: true,
-            timeoutMs: 30000,
-          });
-          const payloadPost = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-          if (typeof payloadPost === 'string' && payloadPost.trim()) {
-            try {
-              const parsed = JSON.parse(payloadPost);
-              if (parsed != null) payload = parsed;
-            } catch (_e) {}
-          } else if (payloadPost && (Array.isArray(payloadPost) || typeof payloadPost === 'object')) {
-            payload = payloadPost;
-          }
-          log(`SOAP POST respondió, items=${getCarteraItemsArray(payload).length}`);
-        } catch (errPost) {
-          log('SOAP POST falló: ' + (errPost?.message || errPost));
-        }
-      }
-    } catch (err) {
-      log(`CXC sin vendedor falló en ${Date.now() - t0}ms: ` + (err?.message || err));
-    }
-
-    if (!payload) {
-      const t1 = Date.now();
-      log('resolviendo vendedor');
-      try {
-        resolvedSeller = String(await resolveSellerFromClients(cedula) || '').trim();
-        log(`resolveSeller en ${Date.now() - t1}ms, vendedor=` + (resolvedSeller || '(vacío)'));
-      } catch (err) {
-        log(`resolveSeller falló en ${Date.now() - t1}ms: ` + (err?.message || err));
-      }
-      const t2 = Date.now();
-      log('llamando CXC con vendedor');
-      try {
-        data = await cxc.estadoCartera({
-          fecha,
-          cedula: normCedula,
-          vendedor: resolvedSeller || undefined,
-        });
-        log(`CXC con vendedor respondió en ${Date.now() - t2}ms`);
-        payload = parseMaybeJson(data?.result ?? data?.response ?? data?.parsed ?? {});
-        if (typeof payload === 'string' && payload.trim()) {
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed != null) payload = parsed;
-          } catch (_e) {}
-        }
-      } catch (err) {
-        log(`CXC con vendedor falló en ${Date.now() - t2}ms: ` + (err?.message || err));
-        throw err;
-      }
-    }
-    }
-
-    if (!payload || (typeof payload !== 'object' && !Array.isArray(payload))) {
-      logMs('payload inválido, respondiendo con ceros');
+    if (result.error) {
+      log('Lambda: ' + result.error);
       res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
       return res.json(CARTERA_SUMMARY_EMPTY);
     }
 
+    const summaryPayload = result.summary || CARTERA_SUMMARY_EMPTY;
+
     if (debug) {
-      logMs('debug response');
       res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
-      return res.json({ payload, resolvedSeller, data });
+      return res.json({ ...summaryPayload, _from: 'lambda' });
     }
-    let cupoCredito = parseCarteraNumber(
-      findValueByKeys(payload, CARTERA_CUPO_KEYS)
-    );
-    let saldoCartera = parseCarteraNumber(
-      findValueByKeys(payload, CARTERA_SALDO_KEYS)
-    );
-    let saldoPorVencer = parseCarteraNumber(
-      findValueByKeys(payload, CARTERA_POR_VENCER_KEYS)
-    );
-    let saldoVencido = parseCarteraNumber(
-      findValueByKeys(payload, CARTERA_VENCIDO_KEYS)
-    );
-    const carteraItems = getCarteraItemsArray(payload);
-    if (carteraItems.length > 0) {
-      const totals = carteraItems.reduce(
-        (acc, item) => {
-          const porVencerDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_POR_VENCER_KEYS));
-          const vencidoDoc = parseCarteraNumber(findValueByKeys(item, CARTERA_VENCIDO_KEYS));
-          const tienePorVencerVencido = porVencerDoc > 0 || vencidoDoc > 0;
-          if (tienePorVencerVencido) {
-            acc.saldoPorVencer += Math.max(0, porVencerDoc);
-            acc.saldoVencido += Math.max(0, vencidoDoc);
-            acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
-          } else {
-            const saldo = parseCarteraNumber(
-              findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO || item?.saldo
-            );
-            const daysRaw =
-              findValueByKeys(item, [
-                'daiaven',
-                'diasvenc',
-                'dias_venc',
-                'dias_vencimiento',
-                'diasvencido',
-                'dias_vencido',
-                'dias_vencidos',
-              ]) || item?.DAIAVEN;
-            const dias = Number(daysRaw || 0);
-            acc.saldoCartera += saldo;
-            if (dias > 0) {
-              acc.saldoVencido += saldo;
-            } else {
-              acc.saldoPorVencer += saldo;
-            }
-          }
-          return acc;
-        },
-        { saldoCartera: 0, saldoPorVencer: 0, saldoVencido: 0 }
-      );
-      if (totals.saldoCartera > 0) {
-        saldoCartera = totals.saldoCartera;
-      }
-      if (totals.saldoPorVencer > 0 || totals.saldoVencido > 0) {
-        saldoPorVencer = totals.saldoPorVencer;
-        saldoVencido = totals.saldoVencido;
+
+    const cacheKey = getCarteraSummaryCacheKey(normCedula, String(vendedor || '').trim());
+    carteraSummaryCache.set(cacheKey, {
+      payload: summaryPayload,
+      expiresAt: Date.now() + CARTERA_SUMMARY_CACHE_TTL_MS,
+    });
+    if (carteraSummaryCache.size > 500) {
+      const now = Date.now();
+      for (const [k, v] of carteraSummaryCache.entries()) {
+        if (v.expiresAt < now) carteraSummaryCache.delete(k);
       }
     }
-    if (!cupoCredito) {
-      const cachedClient = await findClientInfo({
-        cedula,
-        vendedor: resolvedSeller || '',
-        useRemoteFallback: false,
-      });
-      const cachedCupo = parseCarteraNumber(cachedClient?.info?.cupo);
-      if (cachedCupo) {
-        cupoCredito = cachedCupo;
-      } else {
-        const remoteClient = await findClientInfo({
-          cedula,
-          vendedor: resolvedSeller || '',
-          useRemoteFallback: true,
-        });
-        const remoteCupo = parseCarteraNumber(remoteClient?.info?.cupo);
-        if (remoteCupo) {
-          cupoCredito = remoteCupo;
-        }
-      }
-    }
-    const summaryPayload = {
-      cupoCredito,
-      saldoCartera,
-      saldoPorVencer,
-      saldoVencido,
-    };
-    if (!debug) {
-      const cacheKey = getCarteraSummaryCacheKey(normCedula, resolvedSeller);
-      carteraSummaryCache.set(cacheKey, {
-        payload: summaryPayload,
-        expiresAt: Date.now() + CARTERA_SUMMARY_CACHE_TTL_MS,
-      });
-      if (carteraSummaryCache.size > 500) {
-        const now = Date.now();
-        for (const [k, v] of carteraSummaryCache.entries()) {
-          if (v.expiresAt < now) carteraSummaryCache.delete(k);
-        }
-      }
-    }
+
     const totalMs = Date.now() - startMs;
-    log(`ok en ${totalMs}ms`);
+    log('ok en ' + totalMs + 'ms');
     res.setHeader('X-Cartera-Time-Ms', String(totalMs));
     return res.json(summaryPayload);
   } catch (error) {
     const totalMs = Date.now() - startMs;
-    console.error('[cartera/summary] ERROR', totalMs + 'ms', error?.message || error, error?.response?.data || '', error?.stack || '');
+    console.error('[cartera/summary] ERROR', totalMs + 'ms', error?.message || error);
     res.setHeader('X-Cartera-Time-Ms', String(totalMs));
     return res.json(CARTERA_SUMMARY_EMPTY);
   }

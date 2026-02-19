@@ -1,87 +1,63 @@
 /**
- * Cliente para el endpoint Lambda de cartera (AWS).
- * POST con Content-Type: application/json y body: { data: { action, customer_id, fecha?, vendedor? }, tool_name }.
- * Compatible con Lambda que devuelve totales en raíz o en summary (saldo_total, saldo_por_vencer, saldo_vencido).
+ * Estado de cartera: solo llama a la Lambda del usuario.
+ * POST a CARTERA_LAMBDA_URL con { data: { action, customer_id }, tool_name: "cartera" }.
  */
 import axios from 'axios';
 
-const CARTERA_LAMBDA_URL = process.env.CARTERA_LAMBDA_URL || '';
-const CARTERA_LAMBDA_TIMEOUT_MS = Number(process.env.CARTERA_LAMBDA_TIMEOUT_MS) || 25000;
+const CARTERA_LAMBDA_URL =
+  process.env.CARTERA_LAMBDA_URL ||
+  'https://rue2usb4cwm63vhvmebk7ydf6y0ekuln.lambda-url.us-west-2.on.aws/';
+const CARTERA_LAMBDA_TIMEOUT_MS = Number(process.env.CARTERA_LAMBDA_TIMEOUT_MS) || 30000;
+
+function parseNum(v) {
+  if (typeof v === 'number') return v;
+  const raw = String(v || '').replace(/[^\d.-]/g, '');
+  return raw ? (Number.parseFloat(raw) || 0) : 0;
+}
 
 /**
- * Obtiene estado de cartera desde el Lambda.
- * @param {{ cedula: string, fecha?: string, vendedor?: string }} params
- * @returns {Promise<{ data?: unknown, items?: Array, error?: string }>}
+ * Llama a la Lambda y devuelve { summary: { cupoCredito, saldoCartera, saldoPorVencer, saldoVencido } } o { error }.
+ * @param {{ cedula: string }} opts
  */
-export async function estadoCarteraLambda({ cedula, fecha, vendedor } = {}) {
-  if (!CARTERA_LAMBDA_URL) {
-    return { error: 'CARTERA_LAMBDA_URL no configurada' };
-  }
-  const customerId = String(cedula || '').replace(/\D/g, '').trim();
-  if (!customerId) {
-    return { error: 'cedula requerida' };
-  }
-
-  const requestBody = {
-    data: {
-      action: 'status',
-      customer_id: customerId,
-      fecha: fecha || new Date().toISOString().slice(0, 10),
-      vendedor: String(vendedor || '').trim(),
-    },
-    tool_name: 'cartera',
-  };
+export async function estadoCarteraLambda({ cedula } = {}) {
+  const customer_id = String(cedula || '').replace(/\D/g, '').trim();
+  if (!customer_id) return { error: 'cedula requerida' };
 
   try {
-    const response = await axios.post(CARTERA_LAMBDA_URL, requestBody, {
-      headers: {
-        'Content-Type': 'application/json',
+    const res = await axios.post(
+      CARTERA_LAMBDA_URL,
+      {
+        data: { action: 'status', customer_id },
+        tool_name: 'cartera',
       },
-      timeout: CARTERA_LAMBDA_TIMEOUT_MS,
-    });
-
-    const body = response.data;
-    if (!body || typeof body !== 'object') {
-      return { error: 'Lambda respondió sin body válido', data: body };
-    }
-    if (body.ok === false) {
-      return { error: body.message || 'Lambda respondió con ok: false', data: body };
-    }
-
-    const hasSaldo = (item) => {
-      if (!item || typeof item !== 'object') return false;
-      const v = item.SALDO ?? item.saldo ?? item.Saldo;
-      return v !== null && v !== undefined && String(v).trim() !== '';
-    };
-    const findArray = (obj) => {
-      if (!obj) return null;
-      if (Array.isArray(obj)) return obj.some(hasSaldo) ? obj : null;
-      if (typeof obj !== 'object') return null;
-      const keys = ['data', 'items', 'result', 'Table', 'Data', 'Result', 'Body', 'documents', 'Rows', 'Records', 'Detalle'];
-      for (const k of keys) {
-        const v = obj[k];
-        if (Array.isArray(v) && v.length > 0 && v.some(hasSaldo)) return v;
-        if (Array.isArray(v) && v.length > 0) return v;
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: CARTERA_LAMBDA_TIMEOUT_MS,
       }
-      for (const v of Object.values(obj)) {
-        const found = findArray(v);
-        if (found) return found;
-      }
-      return null;
-    };
+    );
 
-    const items = Array.isArray(body)
-      ? body
-      : findArray(body) || [];
+    const body = res.data;
+    if (!body || typeof body !== 'object') return { error: 'Lambda sin body válido' };
+    if (body.ok === false) return { error: body.message || 'Lambda ok: false' };
 
-    return { data: body, items };
-  } catch (err) {
-    const message = err?.response?.data?.error || err?.response?.data?.message || err?.message || String(err);
-    const code = err?.response?.status;
+    let cupoCredito = 0, saldoCartera = 0, saldoPorVencer = 0, saldoVencido = 0;
+
+    const s = body.summary && typeof body.summary === 'object' ? body.summary : body;
+    cupoCredito = parseNum(s.cupo);
+    saldoCartera = parseNum(s.saldo_total ?? s.saldo);
+    saldoPorVencer = parseNum(s.saldo_por_vencer);
+    saldoVencido = parseNum(s.saldo_vencido);
+
     return {
-      error: message,
-      code,
-      details: err?.response?.data,
+      summary: {
+        cupoCredito,
+        saldoCartera,
+        saldoPorVencer,
+        saldoVencido,
+      },
     };
+  } catch (err) {
+    const msg = err?.response?.data?.message ?? err?.message ?? String(err);
+    return { error: msg };
   }
 }
