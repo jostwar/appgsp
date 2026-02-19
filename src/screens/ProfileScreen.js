@@ -46,18 +46,7 @@ export default function ProfileScreen({ navigation }) {
     return `${tokens[0]} ${tokens[tokens.length - 1]}`;
   };
   const { user, signOut } = useAuth();
-  const displayName = (() => {
-    const firstName = user?.firstName?.trim() || '';
-    const lastName = user?.lastName?.trim() || '';
-    if (firstName || lastName) {
-      return toTitleCase(`${firstName} ${lastName}`.trim());
-    }
-    const fullName = pickFirstLast(user?.fullName);
-    if (fullName) return toTitleCase(fullName);
-    const fallbackName = pickFirstLast(user?.name);
-    if (fallbackName) return toTitleCase(fallbackName);
-    return 'Usuario GSP';
-  })();
+  const [clientNameFromApi, setClientNameFromApi] = useState('');
   const [orders, setOrders] = useState([]);
   const [ordersStatus, setOrdersStatus] = useState('idle');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -68,6 +57,26 @@ export default function ProfileScreen({ navigation }) {
   const [levelState, setLevelState] = useState('idle');
   const [customerLevel, setCustomerLevel] = useState('Sin nivel');
   const [companyName, setCompanyName] = useState('');
+  const displayName = useMemo(() => {
+    const firstName = user?.firstName?.trim() || '';
+    const lastName = user?.lastName?.trim() || '';
+    if (firstName || lastName) {
+      return toTitleCase(`${firstName} ${lastName}`.trim());
+    }
+    const fullName = pickFirstLast(user?.fullName);
+    if (fullName) return toTitleCase(fullName);
+    const fallbackName = pickFirstLast(user?.name);
+    if (fallbackName) return toTitleCase(fallbackName);
+    const terceroName = (clientNameFromApi || '').trim();
+    if (terceroName) return toTitleCase(pickFirstLast(terceroName));
+    return 'Usuario GSP';
+  }, [
+    user?.firstName,
+    user?.lastName,
+    user?.fullName,
+    user?.name,
+    clientNameFromApi,
+  ]);
   const levelColors = {
     'Blue Partner': '#3B82F6',
     'Purple Partner': '#8B5CF6',
@@ -118,6 +127,8 @@ export default function ProfileScreen({ navigation }) {
   const fetchLevel = useCallback(async () => {
     if (!user?.cedula) {
       setCustomerLevel('Sin nivel');
+      setCompanyName('');
+      setClientNameFromApi('');
       setLevelState('missing');
       return;
     }
@@ -126,10 +137,12 @@ export default function ProfileScreen({ navigation }) {
       const data = await getRewardsPoints({ cedula: user.cedula });
       setCustomerLevel(data?.level || 'Sin nivel');
       setCompanyName(String(data?.companyName || '').trim());
+      setClientNameFromApi(String(data?.name || '').trim());
       setLevelState('ready');
     } catch (_error) {
       setCustomerLevel('Sin nivel');
       setCompanyName('');
+      setClientNameFromApi('');
       setLevelState('error');
     }
   }, [user?.cedula]);

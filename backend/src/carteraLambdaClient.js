@@ -36,17 +36,25 @@ export async function estadoCarteraLambda({ cedula } = {}) {
       }
     );
 
-    const body = res.data;
+    let body = res.data;
     if (!body || typeof body !== 'object') return { error: 'Lambda sin body válido' };
+    // Lambda con API Gateway devuelve { statusCode, headers, body: string }; el payload real está en body
+    if (typeof body.body === 'string') {
+      try {
+        body = JSON.parse(body.body);
+      } catch (e) {
+        return { error: 'Lambda body no es JSON válido' };
+      }
+    }
     if (body.ok === false) return { error: body.message || 'Lambda ok: false' };
 
     let cupoCredito = 0, saldoCartera = 0, saldoPorVencer = 0, saldoVencido = 0;
 
     const s = body.summary && typeof body.summary === 'object' ? body.summary : body;
-    cupoCredito = parseNum(s.cupo);
-    saldoCartera = parseNum(s.saldo_total ?? s.saldo);
-    saldoPorVencer = parseNum(s.saldo_por_vencer);
-    saldoVencido = parseNum(s.saldo_vencido);
+    cupoCredito = parseNum(s.cupo ?? s.cupo_credito ?? s.cupoCredito);
+    saldoCartera = parseNum(s.saldo_total ?? s.saldoTotal ?? s.saldo);
+    saldoPorVencer = parseNum(s.saldo_por_vencer ?? s.saldoPorVencer);
+    saldoVencido = parseNum(s.saldo_vencido ?? s.saldoVencido);
 
     return {
       summary: {

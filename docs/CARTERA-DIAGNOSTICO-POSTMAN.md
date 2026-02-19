@@ -1,6 +1,7 @@
 # Estado de cartera (Postman)
 
-El estado de cartera se obtiene **solo** llamando a la Lambda del usuario.
+- **Saldos** (saldo cartera, por vencer, vencido): se obtienen de la **Lambda** del usuario (que consulta `EstadoDeCuentaCartera` en cartera.fomplus.com).
+- **Cupo crédito**: viene del servicio **ListadoClientes** en `https://cartera.fomplus.com/srvCxcPed.asmx` (mismo origen que CLI_NOMBRE y CLI_CEDULA).
 
 ## Request
 

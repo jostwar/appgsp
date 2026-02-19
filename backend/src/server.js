@@ -534,6 +534,8 @@ const CLIENT_SELLER_KEYS = [
 ];
 const CLIENT_CUPO_KEYS = [
   'cupo',
+  'cupo_cliente',
+  'cli_cupo',
   'credito',
   'creditolimit',
   'cupo_credito',
@@ -4649,7 +4651,14 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       }
     }
 
-    const result = await estadoCarteraLambda({ cedula: normCedula });
+    const [result, clientRes] = await Promise.all([
+      estadoCarteraLambda({ cedula: normCedula }),
+      findClientInfo({
+        cedula: normCedula,
+        vendedor: String(vendedor || '').trim(),
+        useRemoteFallback: true,
+      }),
+    ]);
 
     if (result.error) {
       log('Lambda: ' + result.error);
@@ -4657,7 +4666,17 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
       return res.json(CARTERA_SUMMARY_EMPTY);
     }
 
-    const summaryPayload = result.summary || CARTERA_SUMMARY_EMPTY;
+    const summaryPayload = { ...(result.summary || CARTERA_SUMMARY_EMPTY) };
+
+    // Cupo Cliente viene de ListadoClientes (srvCxcPed.asmx), no de EstadoDeCuentaCartera
+    const listadoCupoRaw = clientRes?.info?.cupo;
+    if (listadoCupoRaw != null && listadoCupoRaw !== '') {
+      const parsed =
+        typeof listadoCupoRaw === 'number'
+          ? listadoCupoRaw
+          : Number.parseFloat(String(listadoCupoRaw).replace(/[^\d.-]/g, '')) || 0;
+      if (Number.isFinite(parsed)) summaryPayload.cupoCredito = parsed;
+    }
 
     if (debug) {
       res.setHeader('X-Cartera-Time-Ms', String(Date.now() - startMs));
