@@ -4698,11 +4698,14 @@ const getCarteraItemsArray = (payload) => {
   return [];
 };
 
-/** True si el objeto es respuesta Lambda con totales en raíz (saldo, saldo_por_vencer, saldo_vencido). */
+/** True si el objeto es respuesta Lambda con totales (en raíz o en summary). */
 const hasLambdaCarteraSummaryShape = (data) => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const keys = new Set(Object.keys(data).map((k) => normalizeField(k)));
-  return keys.has('saldo') || keys.has('saldoporvencer') || keys.has('saldovencido');
+  if (keys.has('saldo') || keys.has('saldoporvencer') || keys.has('saldovencido')) return true;
+  const summary = data.summary && typeof data.summary === 'object' ? data.summary : null;
+  if (summary && (summary.saldo_total != null || summary.saldo_por_vencer != null || summary.saldo_vencido != null)) return true;
+  return false;
 };
 
 /**
@@ -4749,7 +4752,11 @@ const carteraDiagnosticHandler = async (req, res) => {
     if (process.env.CARTERA_LAMBDA_URL) {
       const tLambda = Date.now();
       try {
-        const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
+        const lambdaResult = await estadoCarteraLambda({
+          cedula: normCedula,
+          fecha: getCarteraFechaConsulta(),
+          vendedor: resolvedSeller || '',
+        });
         const msLambda = Date.now() - tLambda;
         const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
         const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
@@ -4767,7 +4774,7 @@ const carteraDiagnosticHandler = async (req, res) => {
             message: hasSummaryShape && !hasItems ? 'Lambda respondió con totales en raíz' : 'Lambda respondió con datos',
             items: arr.length,
             requestedCedula: normCedula,
-            responseCustomerId: lambdaResult.data?.customer_id ?? null,
+            responseCustomerId: lambdaResult.data?.customer_id ?? lambdaResult.data?.request?.customer_id ?? null,
             bodyKeys: fullBody ? Object.keys(lambdaResult.data) : ['(array)'],
             firstItemKeys: firstItem && typeof firstItem === 'object' ? Object.keys(firstItem) : null,
             firstItemSample: firstItem && typeof firstItem === 'object' ? { ...firstItem } : null,
@@ -4916,8 +4923,8 @@ const carteraDiagnosticHandler = async (req, res) => {
             acc.saldoVencido += Math.max(0, vencidoDoc);
             acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
           } else {
-            const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO);
-            const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido']) || item?.DAIAVEN;
+            const saldo = parseCarteraNumber(findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO || item?.saldo || item?.saldo);
+            const daysRaw = findValueByKeys(item, ['daiaven', 'diasvenc', 'dias_venc', 'dias_vencimiento', 'diasvencido', 'dias_vencido', 'dias_vencidos']) || item?.DAIAVEN;
             const dias = Number(daysRaw || 0);
             acc.saldoCartera += saldo;
             if (dias > 0) acc.saldoVencido += saldo;
@@ -4997,7 +5004,11 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
     if (process.env.CARTERA_LAMBDA_URL) {
       const tLambda = Date.now();
       try {
-        const lambdaResult = await estadoCarteraLambda({ cedula: normCedula });
+        const lambdaResult = await estadoCarteraLambda({
+          cedula: normCedula,
+          fecha: getCarteraFechaConsulta(),
+          vendedor: resolvedSeller || '',
+        });
         const hasItems = lambdaResult.items && lambdaResult.items.length > 0;
         const hasSummaryShape = lambdaResult.data && hasLambdaCarteraSummaryShape(lambdaResult.data);
         if (hasItems || hasSummaryShape) {
@@ -5139,7 +5150,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
             acc.saldoCartera += Math.max(0, porVencerDoc) + Math.max(0, vencidoDoc);
           } else {
             const saldo = parseCarteraNumber(
-              findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO
+              findValueByKeys(item, CARTERA_SALDO_KEYS) || item?.SALDO || item?.saldo
             );
             const daysRaw =
               findValueByKeys(item, [
@@ -5149,6 +5160,7 @@ app.get('/api/cxc/estado-cartera/summary', async (req, res) => {
                 'dias_vencimiento',
                 'diasvencido',
                 'dias_vencido',
+                'dias_vencidos',
               ]) || item?.DAIAVEN;
             const dias = Number(daysRaw || 0);
             acc.saldoCartera += saldo;

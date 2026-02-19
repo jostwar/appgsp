@@ -1,7 +1,7 @@
 /**
  * Cliente para el endpoint Lambda de cartera (AWS).
- * POST con Content-Type: application/json y body: { data: { action, customer_id }, tool_name }.
- * Sustituto/alternativa cuando el proveedor directo no devuelve datos desde el servidor.
+ * POST con Content-Type: application/json y body: { data: { action, customer_id, fecha?, vendedor? }, tool_name }.
+ * Compatible con Lambda que devuelve totales en raíz o en summary (saldo_total, saldo_por_vencer, saldo_vencido).
  */
 import axios from 'axios';
 
@@ -10,10 +10,10 @@ const CARTERA_LAMBDA_TIMEOUT_MS = Number(process.env.CARTERA_LAMBDA_TIMEOUT_MS) 
 
 /**
  * Obtiene estado de cartera desde el Lambda.
- * @param {{ cedula: string }} params - cedula/NIT del cliente
- * @returns {Promise<{ data?: unknown, items?: Array<{ SALDO?: number, DAIAVEN?: number }>, error?: string }>}
+ * @param {{ cedula: string, fecha?: string, vendedor?: string }} params
+ * @returns {Promise<{ data?: unknown, items?: Array, error?: string }>}
  */
-export async function estadoCarteraLambda({ cedula } = {}) {
+export async function estadoCarteraLambda({ cedula, fecha, vendedor } = {}) {
   if (!CARTERA_LAMBDA_URL) {
     return { error: 'CARTERA_LAMBDA_URL no configurada' };
   }
@@ -26,6 +26,8 @@ export async function estadoCarteraLambda({ cedula } = {}) {
     data: {
       action: 'status',
       customer_id: customerId,
+      fecha: fecha || new Date().toISOString().slice(0, 10),
+      vendedor: String(vendedor || '').trim(),
     },
     tool_name: 'cartera',
   };
@@ -55,7 +57,7 @@ export async function estadoCarteraLambda({ cedula } = {}) {
       if (!obj) return null;
       if (Array.isArray(obj)) return obj.some(hasSaldo) ? obj : null;
       if (typeof obj !== 'object') return null;
-      const keys = ['items', 'data', 'result', 'Table', 'Data', 'Result', 'Body', 'documents', 'Rows', 'Records', 'Detalle'];
+      const keys = ['data', 'items', 'result', 'Table', 'Data', 'Result', 'Body', 'documents', 'Rows', 'Records', 'Detalle'];
       for (const k of keys) {
         const v = obj[k];
         if (Array.isArray(v) && v.length > 0 && v.some(hasSaldo)) return v;
