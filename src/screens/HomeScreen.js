@@ -646,7 +646,9 @@ export default function HomeScreen() {
             ) : null}
             {searchResults.map((item, index) => {
               const imageUrl =
-                item?.image && item.image !== 'null' ? item.image : null;
+                (item?.image && item.image !== 'null' ? item.image : null) ||
+                item?.images?.[0]?.src ||
+                null;
               return (
               <Pressable
                 key={`${item?.id || index}`}
