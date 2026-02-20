@@ -8,15 +8,18 @@ const PRODUCTS_FIELDS =
   'id,name,slug,sku,price,regular_price,sale_price,permalink,images,categories,attributes,tags,stock_status,stock_quantity';
 const productsCache = new Map();
 const categoriesCache = { data: null, expiresAt: 0 };
+const brandOptionsCache = { data: null, expiresAt: 0 };
+
+const getAuthHeaders = () => {
+  if (!key || !secret) return {};
+  const credentials = btoa(`${key}:${secret}`);
+  return { Authorization: `Basic ${credentials}` };
+};
 
 const normalize = (value) => String(value || '').toLowerCase().trim();
 
-const buildUrl = (path, { auth = true, params = {} } = {}) => {
+const buildUrl = (path, { params = {} } = {}) => {
   const url = new URL(path, baseUrl);
-  if (auth) {
-    url.searchParams.set('consumer_key', key);
-    url.searchParams.set('consumer_secret', secret);
-  }
   Object.entries(params).forEach(([param, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       url.searchParams.set(param, String(value));
@@ -142,17 +145,12 @@ const resolveBrandTerm = async (brandName) => {
   }
 
   const taxonomyEndpoints = [
-    buildUrl('/wp-json/wp/v2/product_brand', {
-      auth: false,
-      params: { per_page: '100', search: brandName },
-    }),
-    buildUrl('/wp-json/wc/v3/products/brands', {
-      params: { per_page: '100', search: brandName },
-    }),
+    { url: buildUrl('/wp-json/wp/v2/product_brand', { params: { per_page: '100', search: brandName } }), auth: false },
+    { url: buildUrl('/wp-json/wc/v3/products/brands', { params: { per_page: '100', search: brandName } }), auth: true },
   ];
 
-  for (const url of taxonomyEndpoints) {
-    const response = await fetch(url.toString());
+  for (const { url, auth } of taxonomyEndpoints) {
+    const response = await fetch(url.toString(), auth ? { headers: getAuthHeaders() } : {});
     if (!response.ok) continue;
     const terms = await response.json();
     const match = matchTermByName(terms, brandName);
@@ -169,7 +167,7 @@ const resolveBrandTerm = async (brandName) => {
 
 export async function fetchProducts({
   page = 1,
-  perPage = 50,
+  perPage = 20,
   categoryId,
   brandName,
   search,
@@ -187,8 +185,6 @@ export async function fetchProducts({
 
   const request = async (extraParams = {}) => {
     const url = new URL('/wp-json/wc/v3/products', baseUrl);
-    url.searchParams.set('consumer_key', key);
-    url.searchParams.set('consumer_secret', secret);
     url.searchParams.set('per_page', String(perPage));
     url.searchParams.set('page', String(page));
     url.searchParams.set('status', 'publish');
@@ -205,7 +201,7 @@ export async function fetchProducts({
         url.searchParams.set(param, String(value));
       }
     });
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error('No se pudieron cargar productos.');
     }
@@ -281,12 +277,10 @@ export async function fetchCategories() {
     return categoriesCache.data;
   }
   const url = new URL('/wp-json/wc/v3/products/categories', baseUrl);
-  url.searchParams.set('consumer_key', key);
-  url.searchParams.set('consumer_secret', secret);
   url.searchParams.set('per_page', '100');
   url.searchParams.set('hide_empty', 'false');
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { headers: getAuthHeaders() });
   if (!response.ok) {
     throw new Error('No se pudieron cargar categorías.');
   }
@@ -300,11 +294,15 @@ export async function fetchBrandOptions() {
   if (!hasWooCredentials()) {
     return [];
   }
+  const now = Date.now();
+  if (brandOptionsCache.data && brandOptionsCache.expiresAt > now) {
+    return brandOptionsCache.data;
+  }
 
   const attrsUrl = buildUrl('/wp-json/wc/v3/products/attributes', {
     params: { per_page: '100' },
   });
-  const attrsResponse = await fetch(attrsUrl.toString());
+  const attrsResponse = await fetch(attrsUrl.toString(), { headers: getAuthHeaders() });
   if (attrsResponse.ok) {
     const attributes = await attrsResponse.json();
     const brandAttr = findBrandAttr(attributes);
@@ -313,11 +311,13 @@ export async function fetchBrandOptions() {
         `/wp-json/wc/v3/products/attributes/${brandAttr.id}/terms`,
         { params: { per_page: '100' } }
       );
-      const termsResponse = await fetch(termsUrl.toString());
+      const termsResponse = await fetch(termsUrl.toString(), { headers: getAuthHeaders() });
       if (termsResponse.ok) {
         const terms = await termsResponse.json();
         const names = extractNames(terms);
         if (names.length > 0) {
+          brandOptionsCache.data = names;
+          brandOptionsCache.expiresAt = now + WC_CACHE_TTL_MS;
           return names;
         }
       }
@@ -325,27 +325,28 @@ export async function fetchBrandOptions() {
   }
 
   const fallbackEndpoints = [
-    buildUrl('/wp-json/wp/v2/product_brand', {
-      auth: false,
-      params: { per_page: '100', hide_empty: 'true' },
-    }),
-    buildUrl('/wp-json/wc/v3/products/brands', {
-      params: { per_page: '100', hide_empty: 'true' },
-    }),
+    { url: buildUrl('/wp-json/wp/v2/product_brand', { params: { per_page: '100', hide_empty: 'true' } }), auth: false },
+    { url: buildUrl('/wp-json/wc/v3/products/brands', { params: { per_page: '100', hide_empty: 'true' } }), auth: true },
   ];
 
-  for (const url of fallbackEndpoints) {
-    const response = await fetch(url.toString());
+  for (const { url, auth } of fallbackEndpoints) {
+    const response = await fetch(url.toString(), auth ? { headers: getAuthHeaders() } : {});
     if (!response.ok) continue;
     const data = await response.json();
     const names = extractNames(data);
     if (names.length > 0) {
+      brandOptionsCache.data = names;
+      brandOptionsCache.expiresAt = now + WC_CACHE_TTL_MS;
       return names;
     }
   }
 
+  brandOptionsCache.data = [];
+  brandOptionsCache.expiresAt = now + WC_CACHE_TTL_MS;
   return [];
 }
+
+const SKU_PATTERN = /^[A-Z0-9\-]+$/i;
 
 export async function searchProducts(query, { perPage = 12 } = {}) {
   if (!hasWooCredentials()) {
@@ -357,8 +358,6 @@ export async function searchProducts(query, { perPage = 12 } = {}) {
   }
   const request = async (extraParams = {}) => {
     const url = new URL('/wp-json/wc/v3/products', baseUrl);
-    url.searchParams.set('consumer_key', key);
-    url.searchParams.set('consumer_secret', secret);
     url.searchParams.set('per_page', String(perPage));
     url.searchParams.set('page', '1');
     url.searchParams.set('status', 'publish');
@@ -369,20 +368,17 @@ export async function searchProducts(query, { perPage = 12 } = {}) {
         url.searchParams.set(param, String(value));
       }
     });
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error('No se pudieron cargar productos.');
     }
     return response.json();
   };
 
-  const [bySearch, bySku] = await Promise.all([
-    request({ search: trimmed }),
-    request({ sku: trimmed }),
-  ]);
-  const merged = [...bySearch, ...bySku];
+  const isSku = SKU_PATTERN.test(trimmed);
+  const list = await request(isSku ? { sku: trimmed } : { search: trimmed });
   const unique = new Map();
-  merged.forEach((product) => {
+  (Array.isArray(list) ? list : []).forEach((product) => {
     if (product?.id) {
       unique.set(product.id, product);
     }
@@ -396,12 +392,10 @@ export async function createOrder(lineItems) {
   }
 
   const url = new URL('/wp-json/wc/v3/orders', baseUrl);
-  url.searchParams.set('consumer_key', key);
-  url.searchParams.set('consumer_secret', secret);
 
   const response = await fetch(url.toString(), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({
       status: 'pending',
       line_items: lineItems,
