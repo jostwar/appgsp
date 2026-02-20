@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { colors, spacing } from '../theme';
-import { runSearch } from '../api/aiSearch';
+import { fetchProducts, searchProducts } from '../api/woocommerce';
 
 export default function SearchScreen({ route }) {
   const tabBarHeight = useBottomTabBarHeight();
@@ -20,10 +20,7 @@ export default function SearchScreen({ route }) {
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState('idle');
   const [results, setResults] = useState([]);
-  const [raw, setRaw] = useState(null);
-  const [rawText, setRawText] = useState('');
   const [error, setError] = useState('');
-  const [debugInfo, setDebugInfo] = useState('');
   const debounceRef = useRef(null);
   const pressableStyle = (baseStyle) => ({ pressed }) => [
     baseStyle,
@@ -42,80 +39,34 @@ export default function SearchScreen({ route }) {
   };
 
   const normalizedResults = useMemo(() => {
-    if (Array.isArray(results)) return results;
-    if (Array.isArray(results?.items)) return results.items;
-    if (Array.isArray(results?.results)) return results.results;
-    if (Array.isArray(results?.products)) return results.products;
-    if (typeof results?.products === 'string') {
-      try {
-        const parsedProducts = JSON.parse(results.products);
-        return Array.isArray(parsedProducts) ? parsedProducts : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    return [];
+    return Array.isArray(results) ? results : [];
   }, [results]);
 
-  const parseSearchPayload = (payload) => {
-    if (!payload) return null;
-    if (typeof payload === 'string') {
-      try {
-        return JSON.parse(payload);
-      } catch (error) {
-        return payload;
-      }
-    }
-    return payload;
-  };
-
-  const extractResults = (payload) => {
-    if (!payload) return [];
-    if (Array.isArray(payload)) return payload;
-    if (Array.isArray(payload.results)) return payload.results;
-    if (Array.isArray(payload.items)) return payload.items;
-    if (Array.isArray(payload.products)) return payload.products;
-    if (typeof payload.products === 'string') {
-      try {
-        const parsedProducts = JSON.parse(payload.products);
-        return Array.isArray(parsedProducts) ? parsedProducts : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    return [];
-  };
+  const mapToShape = (list) =>
+    (list || []).map((p) => ({
+      id: p?.id,
+      name: p?.name,
+      price: p?.price,
+      images: p?.images,
+      sku: p?.sku,
+      link: p?.permalink,
+    }));
 
   const handleSearch = async (overrideQuery) => {
     const safeQuery = (overrideQuery ?? query).trim();
-    if (!safeQuery) return;
+    if (safeQuery.length < 2) return;
     setStatus('loading');
     setError('');
-    setDebugInfo('');
     try {
-      const data = await runSearch(safeQuery);
-      const parsedResponse = data?.parsed ?? data;
-      const bodyPayload = parsedResponse?.body ?? parsedResponse?.data ?? null;
-      const parsedBody = parseSearchPayload(bodyPayload);
-      const parsedRaw = parseSearchPayload(data?.raw);
-      const parsed =
-        parsedBody ||
-        parsedResponse?.results ||
-        parsedResponse?.items ||
-        parsedResponse?.data ||
-        parsedRaw ||
-        data;
-      const list = extractResults(parsed);
-      setResults(list);
-      setRaw(parsed);
-      setRawText(data?.raw || '');
+      let list = await searchProducts(safeQuery);
+      if (!list?.length) {
+        list = await fetchProducts({ search: safeQuery, page: 1, perPage: 20 });
+      }
+      setResults(mapToShape(list || []));
       setStatus('ready');
     } catch (err) {
       setStatus('error');
       setError('No se pudo completar la búsqueda.');
-      setDebugInfo(
-        `${err?.status || 'ERR'} ${String(err?.payload || err?.message || '')}`
-      );
     }
   };
 
@@ -173,9 +124,6 @@ export default function SearchScreen({ route }) {
       {status === 'error' ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
-          {debugInfo ? (
-            <Text style={styles.errorDebug}>{debugInfo}</Text>
-          ) : null}
         </View>
       ) : null}
 
@@ -194,21 +142,21 @@ export default function SearchScreen({ route }) {
         ]}
         renderItem={({ item }) => (
           <View style={styles.resultCard}>
-            {(item?.image || item?.images?.[0]?.src) ? (
+            {item?.images?.[0]?.src ? (
               <Image
-                source={{ uri: item.image || item?.images?.[0]?.src }}
+                source={{ uri: item.images[0].src }}
                 style={styles.resultImage}
               />
             ) : null}
             <Text style={styles.resultTitle}>
-              {item?.name || item?.title || 'Resultado'}
+              {item?.name || 'Resultado'}
             </Text>
+            {item?.sku ? (
+              <Text style={styles.resultText}>{item.sku}</Text>
+            ) : null}
             {item?.price ? (
               <Text style={styles.resultPrice}>{formatCop(item.price)}</Text>
             ) : null}
-            <Text style={styles.resultText}>
-              {item?.description || item?.summary || ''}
-            </Text>
             {item?.link ? (
               <Pressable
                 style={pressableStyle(styles.secondaryButton)}
@@ -219,14 +167,6 @@ export default function SearchScreen({ route }) {
             ) : null}
           </View>
         )}
-        ListFooterComponent={
-          status === 'ready' && rawText && normalizedResults.length === 0 ? (
-            <View style={styles.rawCard}>
-              <Text style={styles.resultTitle}>Respuesta</Text>
-              <Text style={styles.resultText}>{rawText}</Text>
-            </View>
-          ) : null
-        }
       />
     </View>
   );
