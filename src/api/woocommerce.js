@@ -5,7 +5,7 @@ const secret = process.env.EXPO_PUBLIC_WC_SECRET;
 const WC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos (menos requests a WooCommerce)
 // Campos mínimos para listado; reduce mucho el payload y acelera la carga
 const PRODUCTS_FIELDS =
-  'id,name,slug,sku,price,regular_price,sale_price,permalink,images,categories,attributes,tags';
+  'id,name,slug,sku,price,regular_price,sale_price,permalink,images,categories,attributes,tags,stock_status,stock_quantity';
 const productsCache = new Map();
 const categoriesCache = { data: null, expiresAt: 0 };
 
