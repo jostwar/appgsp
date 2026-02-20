@@ -346,7 +346,7 @@ export async function fetchBrandOptions() {
   return [];
 }
 
-const SKU_PATTERN = /^[A-Z0-9\-]+$/i;
+const looksLikeSku = (q) => /^[A-Z0-9]+(-[A-Z0-9]+){1,}$/i.test(q.trim());
 
 export async function searchProducts(query, { perPage = 12 } = {}) {
   if (!hasWooCredentials()) {
@@ -375,8 +375,16 @@ export async function searchProducts(query, { perPage = 12 } = {}) {
     return response.json();
   };
 
-  const isSku = SKU_PATTERN.test(trimmed);
-  const list = await request(isSku ? { sku: trimmed } : { search: trimmed });
+  let list;
+  if (looksLikeSku(trimmed)) {
+    list = await request({ sku: trimmed });
+  } else {
+    const [bySearch, bySku] = await Promise.all([
+      request({ search: trimmed }),
+      request({ sku: trimmed }),
+    ]);
+    list = [...(bySearch || []), ...(bySku || [])];
+  }
   const unique = new Map();
   (Array.isArray(list) ? list : []).forEach((product) => {
     if (product?.id) {

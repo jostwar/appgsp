@@ -260,7 +260,7 @@ export default function ProductsScreen({ route, navigation }) {
     setSearchStatus('loading');
     fetchProducts({
       page: 1,
-      perPage: 50,
+      perPage: 20,
       search: query,
       categoryId: selectedCategoryId !== 'all' ? selectedCategoryId : undefined,
       brandName: activeBrandName || undefined,
