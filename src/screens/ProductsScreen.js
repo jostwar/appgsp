@@ -1000,12 +1000,7 @@ export default function ProductsScreen({ route, navigation }) {
           ) : null
         }
         renderItem={({ item }) => {
-          const image =
-            item.images && item.images.length > 0
-              ? item.images[0].src
-              : item.image && item.image !== 'null'
-                ? item.image
-                : null;
+          const image = item.images?.[0]?.src || item.image || null;
           const productUrl = item.permalink || item.link;
           const isVariable = item.type === 'variable';
           const isExternal = item.type === 'external';

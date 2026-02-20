@@ -42,15 +42,21 @@ export default function SearchScreen({ route }) {
     return Array.isArray(results) ? results : [];
   }, [results]);
 
-  const mapToShape = (list) =>
-    (list || []).map((p) => ({
-      id: p?.id,
-      name: p?.name,
-      price: p?.price,
-      images: p?.images,
-      sku: p?.sku,
-      link: p?.permalink,
-    }));
+  const getImage = (item) =>
+    item.images?.[0]?.src || item.image || null;
+
+  const mapToShape = (item) => ({
+    id: item.id,
+    name: item.name || item.title || '',
+    price: item.price || '',
+    sku: item.sku || '',
+    images: item.images?.length
+      ? item.images
+      : item.image
+        ? [{ src: item.image }]
+        : [],
+    link: item.permalink || item.link || '',
+  });
 
   const handleSearch = async (overrideQuery) => {
     const safeQuery = (overrideQuery ?? query).trim();
@@ -62,7 +68,7 @@ export default function SearchScreen({ route }) {
       if (!list?.length) {
         list = await fetchProducts({ search: safeQuery, page: 1, perPage: 20 });
       }
-      setResults(mapToShape(list || []));
+      setResults((list || []).map(mapToShape));
       setStatus('ready');
     } catch (err) {
       setStatus('error');
@@ -142,9 +148,9 @@ export default function SearchScreen({ route }) {
         ]}
         renderItem={({ item }) => (
           <View style={styles.resultCard}>
-            {item?.images?.[0]?.src ? (
+            {getImage(item) ? (
               <Image
-                source={{ uri: item.images[0].src }}
+                source={{ uri: getImage(item) }}
                 style={styles.resultImage}
               />
             ) : null}
