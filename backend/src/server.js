@@ -2101,7 +2101,7 @@ const renderRewardsPortal = ({
               ? `<div id="solicitudes-cashback" class="card">
             <h2 class="section-title">Solicitudes de rewards</h2>
             <p class="section-subtitle">
-              Lista de solicitudes de rewards. Cierra cada una con el número y monto de la NC generada en el ERP.
+              Lista de solicitudes de rewards. Cierra con NC (número y monto) o rechaza sin NC (p. ej. por cartera u otro motivo).
             </p>
             ${notificationStatus === 'closed'
               ? '<div class="alert" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">Solicitud cerrada correctamente.</div>'
@@ -2121,19 +2121,30 @@ const renderRewardsPortal = ({
                             <strong>Fecha:</strong> ${escapeHtml((r.createdAt || '').slice(0, 10))}
                           </div>
                           <span class="label" style="padding:4px 8px;border-radius:6px;background:${
-                            r.status === 'completed' ? 'rgba(16,185,129,0.2)' : 'rgba(251,191,36,0.2)'
-                          };">${r.status === 'completed' ? 'Cerrada' : 'Pendiente'}</span>
+                            r.status === 'completed' ? 'rgba(16,185,129,0.2)' : r.status === 'rejected' ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'
+                          };">${r.status === 'completed' ? 'Cerrada con NC' : r.status === 'rejected' ? 'Rechazada' : 'Pendiente'}</span>
                         </div>
                         ${
                           r.status === 'completed'
                             ? `<div class="label">NC: ${escapeHtml(String(r.ncNumber || ''))} · Monto NC: $${formatNumber(Number(r.ncAmount) || 0)}</div>`
-                            : `<form method="post" action="/admin/cashback/close" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+                            : r.status === 'rejected'
+                            ? `<div class="label">Rechazada sin NC${r.rejectReason ? ' · ' + escapeHtml(r.rejectReason) : ''}</div>`
+                            : `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+                            <form method="post" action="/admin/cashback/close" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
                             <input type="hidden" name="requestId" value="${escapeHtml(r.id)}" />
                             <input type="hidden" name="section" value="solicitudes-cashback" />
                             <input type="text" name="ncNumber" placeholder="Nº documento NC" required style="min-width:140px;" />
                             <input type="number" name="ncAmount" placeholder="Monto NC" required min="0" step="1" style="min-width:120px;" />
                             <button type="submit">Cerrar con NC</button>
-                          </form>`
+                          </form>
+                            <form method="post" action="/admin/cashback/close" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
+                            <input type="hidden" name="requestId" value="${escapeHtml(r.id)}" />
+                            <input type="hidden" name="section" value="solicitudes-cashback" />
+                            <input type="hidden" name="closeWithoutNc" value="1" />
+                            <input type="text" name="reason" placeholder="Motivo (opcional)" style="min-width:160px;" />
+                            <button type="submit" style="background:rgba(239,68,68,0.15);color:#ef4444;">Rechazar sin NC</button>
+                          </form>
+                          </div>`
                         }
                       </div>`
                       )
@@ -3529,8 +3540,14 @@ app.post(
     const requestId = String(req.body?.requestId || '').trim();
     const ncNumber = String(req.body?.ncNumber || '').trim();
     const ncAmount = Math.max(0, Number(req.body?.ncAmount) || 0);
+    const closeWithoutNc = Boolean(
+      req.body?.closeWithoutNc === '1' ||
+      req.body?.closeWithoutNc === 'true' ||
+      req.body?.closeWithoutNc === true
+    );
+    const reason = String(req.body?.reason || '').trim();
     const section = String(req.body?.section || 'solicitudes-cashback').trim() || 'solicitudes-cashback';
-    if (!requestId || !ncNumber) {
+    if (!requestId) {
       return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
     }
     const requests = loadCashbackRequests();
@@ -3538,13 +3555,26 @@ app.post(
     if (index < 0) {
       return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
     }
-    requests[index] = {
-      ...requests[index],
-      status: 'completed',
-      ncNumber,
-      ncAmount,
-      completedAt: new Date().toISOString(),
-    };
+    if (closeWithoutNc) {
+      requests[index] = {
+        ...requests[index],
+        status: 'rejected',
+        closedWithoutNc: true,
+        rejectReason: reason || undefined,
+        completedAt: new Date().toISOString(),
+      };
+    } else {
+      if (!ncNumber) {
+        return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=error`);
+      }
+      requests[index] = {
+        ...requests[index],
+        status: 'completed',
+        ncNumber,
+        ncAmount,
+        completedAt: new Date().toISOString(),
+      };
+    }
     saveCashbackRequests(requests);
     return res.redirect(`/admin/rewards?section=${encodeURIComponent(section)}&notify=closed`);
   }

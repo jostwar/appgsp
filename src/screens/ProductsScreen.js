@@ -414,16 +414,17 @@ export default function ProductsScreen({ route, navigation }) {
           perPage: 20,
           brandName,
         });
-        const [cats, data] = await Promise.all([categoriesPromise, productsPromise]);
+        const brandsPromise = fetchBrandOptions().catch(() => []);
+        const [cats, data, brands] = await Promise.all([
+          categoriesPromise,
+          productsPromise,
+          brandsPromise,
+        ]);
         setCategories(cats);
         setProducts(data.map(normalizeProduct));
-        fetchBrandOptions()
-          .then((brands) => {
-            if (brands.length > 0) {
-              setBrandOptions(normalizeBrandOptions(brands));
-            }
-          })
-          .catch(() => null);
+        if (Array.isArray(brands) && brands.length > 0) {
+          setBrandOptions(normalizeBrandOptions(brands));
+        }
         setPage(1);
         setHasMore(data.length === 20);
         setStatus('ready');

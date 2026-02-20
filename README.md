@@ -25,6 +25,16 @@ EXPO_PUBLIC_WC_SECRET=
 EXPO_PUBLIC_BACKEND_URL=
 ```
 
+## Optimización carga de productos (WooCommerce)
+
+La pantalla de productos hace menos peso y carga más rápido con:
+
+- **Payload reducido:** Las peticiones a `/wp-json/wc/v3/products` usan `_fields` para pedir solo los datos necesarios (id, name, price, images, categories, etc.) y no el objeto completo.
+- **Caché en app:** Productos y categorías se cachean 5 minutos en memoria; al volver a la pestaña no se repiten las mismas peticiones.
+- **Carga en paralelo:** Categorías, primera página de productos y opciones de marca se piden a la vez (`Promise.all`), no en cadena.
+
+Si sigue yendo lenta, se puede añadir un proxy en el backend (`GET /api/woo/products`) que llame a WooCommerce, cachee en servidor y devuelva los datos a la app (una sola fuente de caché para todos los usuarios).
+
 ## Backend (local)
 ```
 cd backend

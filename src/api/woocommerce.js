@@ -2,7 +2,10 @@ const baseUrl = process.env.EXPO_PUBLIC_WC_URL || 'https://gsp.com.co';
 const key = process.env.EXPO_PUBLIC_WC_KEY;
 const secret = process.env.EXPO_PUBLIC_WC_SECRET;
 
-const WC_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutos
+const WC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos (menos requests a WooCommerce)
+// Campos mínimos para listado; reduce mucho el payload y acelera la carga
+const PRODUCTS_FIELDS =
+  'id,name,slug,sku,price,regular_price,sale_price,permalink,images,categories,attributes,tags';
 const productsCache = new Map();
 const categoriesCache = { data: null, expiresAt: 0 };
 
@@ -188,6 +191,7 @@ export async function fetchProducts({
     url.searchParams.set('page', String(page));
     url.searchParams.set('status', 'publish');
     url.searchParams.set('stock_status', 'instock');
+    url.searchParams.set('_fields', PRODUCTS_FIELDS);
     if (categoryId) {
       url.searchParams.set('category', String(categoryId));
     }
@@ -354,6 +358,7 @@ export async function searchProducts(query, { perPage = 12 } = {}) {
     url.searchParams.set('page', '1');
     url.searchParams.set('status', 'publish');
     url.searchParams.set('stock_status', 'instock');
+    url.searchParams.set('_fields', PRODUCTS_FIELDS);
     Object.entries(extraParams).forEach(([param, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         url.searchParams.set(param, String(value));
