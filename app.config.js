@@ -1,6 +1,6 @@
 const base = require('./app.json');
 
-const PROJECT_ID = '725160a9-7d25-4e8b-b248-f7e63df8fed7';
+const PROJECT_ID = 'e45648a5-c13e-4633-a255-4d906ddb758c';
 
 module.exports = () => {
   const isEasBuild = process.env.EAS_BUILD === 'true' || process.env.EAS_BUILD === true;
