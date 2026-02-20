@@ -1,0 +1,11 @@
+---
+description: Aplicar cambios = commit. Siempre hacer commit tras modificar código.
+alwaysApply: true
+---
+
+# Aplicar cambios (Git commit)
+
+- **Aplicar cambios** significa hacer **commit**: después de modificar archivos, siempre ejecutar `git add` de los archivos afectados y `git commit` con un mensaje claro que describa el cambio.
+- Hacerlo **al terminar** las modificaciones, sin que el usuario tenga que pedirlo.
+- No hacer push salvo que el usuario lo pida; solo add + commit.
+- Excluir archivos que no deban versionarse (por ejemplo carpetas duplicadas o generadas, y `.env` si está en .gitignore).
