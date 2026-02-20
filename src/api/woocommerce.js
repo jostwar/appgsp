@@ -172,12 +172,14 @@ export async function fetchProducts({
   perPage = 50,
   categoryId,
   brandName,
+  search,
 } = {}) {
   if (!hasWooCredentials()) {
     return [];
   }
 
-  const cacheKey = `p:${page}:${perPage}:${categoryId || ''}:${(brandName || '').trim()}`;
+  const searchTrimmed = typeof search === 'string' ? search.trim() : '';
+  const cacheKey = `p:${page}:${perPage}:${categoryId || ''}:${(brandName || '').trim()}:${searchTrimmed}`;
   const cached = productsCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data;
@@ -194,6 +196,9 @@ export async function fetchProducts({
     url.searchParams.set('_fields', PRODUCTS_FIELDS);
     if (categoryId) {
       url.searchParams.set('category', String(categoryId));
+    }
+    if (searchTrimmed) {
+      url.searchParams.set('search', searchTrimmed);
     }
     Object.entries(extraParams).forEach(([param, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -218,7 +223,7 @@ export async function fetchProducts({
     return Array.from(unique.values());
   };
 
-  if (brandName) {
+  if (brandName && !searchTrimmed) {
     const brandTerm = await resolveBrandTerm(brandName);
     const params = { search: brandName };
     if (brandTerm?.id) {
@@ -240,7 +245,7 @@ export async function fetchProducts({
     }
   }
 
-  const fallbackData = await runRequest();
+  const fallbackData = await runRequest(searchTrimmed ? { search: searchTrimmed } : {});
   const result = filterProductsByBrand(fallbackData, brandName);
   productsCache.set(cacheKey, {
     data: result,

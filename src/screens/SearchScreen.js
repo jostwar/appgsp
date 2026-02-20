@@ -194,8 +194,11 @@ export default function SearchScreen({ route }) {
         ]}
         renderItem={({ item }) => (
           <View style={styles.resultCard}>
-            {item?.image ? (
-              <Image source={{ uri: item.image }} style={styles.resultImage} />
+            {(item?.image || item?.images?.[0]?.src) ? (
+              <Image
+                source={{ uri: item.image || item?.images?.[0]?.src }}
+                style={styles.resultImage}
+              />
             ) : null}
             <Text style={styles.resultTitle}>
               {item?.name || item?.title || 'Resultado'}

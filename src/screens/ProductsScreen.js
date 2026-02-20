@@ -70,6 +70,8 @@ export default function ProductsScreen({ route, navigation }) {
   const [selectedCategoryName, setSelectedCategoryName] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchStatus, setSearchStatus] = useState('idle');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -107,6 +109,22 @@ export default function ProductsScreen({ route, navigation }) {
     setAppliedMaxPrice(null);
     setSortOption('recomendado');
   }, []);
+
+  const clearAllFilters = useCallback((reload = false) => {
+    setSelectedCategoryId('all');
+    setSelectedCategoryName(null);
+    setSelectedBrand('Todas');
+    setActiveBrandName(null);
+    setSearchResults([]);
+    setSearchStatus('idle');
+    resetAppliedFilters();
+    updateSearch('', { immediate: true });
+    setShowFiltersDrawer(false);
+    setShowCategoryMenu(false);
+    setShowBrandMenu(false);
+    setShowPortfolioMenu(false);
+    if (reload) load(null);
+  }, [resetAppliedFilters, updateSearch, load]);
   const initialCategoryName = route?.params?.categoryName;
   const initialBrandName = route?.params?.brandName;
   const initialSearchQuery = route?.params?.searchQuery;
@@ -231,13 +249,74 @@ export default function ProductsScreen({ route, navigation }) {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => {
+    const query = String(debouncedQuery || '').trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    setSearchStatus('loading');
+    fetchProducts({
+      page: 1,
+      perPage: 50,
+      search: query,
+      categoryId: selectedCategoryId !== 'all' ? selectedCategoryId : undefined,
+      brandName: activeBrandName || undefined,
+    })
+      .then((data) => {
+        if (!cancelled) {
+          setSearchResults((data || []).map(normalizeProduct));
+          setSearchStatus('ready');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSearchResults([]);
+          setSearchStatus('ready');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, selectedCategoryId, activeBrandName, normalizeProduct]);
+
   const searchedProducts = useMemo(() => {
     const query = normalizeText(debouncedQuery);
     if (!query || query.length < 2) return filteredProducts;
+    if (searchStatus === 'ready' && searchResults.length >= 0) {
+      let list = searchResults;
+      if (selectedCategoryId !== 'all' || selectedCategoryName) {
+        const normalizedCategoryName = normalizeText(selectedCategoryName);
+        list = list.filter((p) =>
+          selectedCategoryId !== 'all'
+            ? p._categoryIds?.includes(selectedCategoryId)
+            : p._categoryNames?.includes(normalizedCategoryName)
+        );
+      }
+      if (activeBrandName) {
+        const targetBrand = normalizeText(activeBrandName);
+        list = list.filter((p) => {
+          const brand = getBrandLabel(p);
+          return brand && normalizeText(brand) === targetBrand;
+        });
+      }
+      return list;
+    }
     return filteredProducts.filter((product) =>
       product._searchText?.includes(query)
     );
-  }, [filteredProducts, debouncedQuery, normalizeText]);
+  }, [
+    filteredProducts,
+    debouncedQuery,
+    normalizeText,
+    searchStatus,
+    searchResults,
+    selectedCategoryId,
+    selectedCategoryName,
+    activeBrandName,
+  ]);
 
   const displayedProducts = useMemo(() => {
     let list = searchedProducts;
@@ -394,8 +473,9 @@ export default function ProductsScreen({ route, navigation }) {
           navSearchRef.current = false;
         }
         navigation?.setParams?.({ categoryName: null, brandName: null, searchQuery: null, _ts: null });
+        clearAllFilters();
       };
-    }, [updateSearch, navigation])
+    }, [updateSearch, navigation, clearAllFilters])
   );
 
   const load = useCallback(
@@ -559,6 +639,18 @@ export default function ProductsScreen({ route, navigation }) {
                 <Ionicons name="close" size={18} color={colors.textMain} />
               </Pressable>
             </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                { marginHorizontal: spacing.md, marginBottom: spacing.sm },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                clearAllFilters(true);
+              }}
+            >
+              <Text style={styles.primaryButtonText}>Limpiar filtros</Text>
+            </Pressable>
             <ScrollView
               contentContainerStyle={styles.drawerContent}
               keyboardShouldPersistTaps="handled"
@@ -881,6 +973,32 @@ export default function ProductsScreen({ route, navigation }) {
           </View>
         }
         keyExtractor={(item) => String(item.id)}
+        ListEmptyComponent={
+          displayedProducts.length === 0 ? (
+            <View style={[styles.center, { paddingVertical: spacing.xxl }]}>
+              {searchStatus === 'loading' && String(debouncedQuery || '').trim().length >= 2 ? (
+                <>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={[styles.centerText, { marginTop: spacing.sm }]}>Buscando...</Text>
+                </>
+              ) : searchStatus === 'ready' && String(debouncedQuery || '').trim().length >= 2 ? (
+                <>
+                  <Text style={styles.centerTitle}>Sin resultados</Text>
+                  <Text style={styles.centerText}>
+                    No hay resultados para "{String(debouncedQuery).trim()}".
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.centerTitle}>No hay productos</Text>
+                  <Text style={styles.centerText}>
+                    No hay productos con los filtros actuales. Prueba cambiando la búsqueda o los filtros.
+                  </Text>
+                </>
+              )}
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => {
           const image =
             item.images && item.images.length > 0
