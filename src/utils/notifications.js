@@ -3,12 +3,15 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 
+// Fallback al projectId del proyecto EAS por si Constants no lo expone (p. ej. en algunos entornos)
+const EAS_PROJECT_ID_FALLBACK = 'e45648a5-c13e-4633-a255-4d906ddb758c';
+
 const getExpoProjectId = () =>
   Constants?.expoConfig?.extra?.eas?.projectId ||
   Constants?.easConfig?.projectId ||
   Constants?.manifest?.extra?.eas?.projectId ||
   Constants?.manifest2?.extra?.eas?.projectId ||
-  null;
+  EAS_PROJECT_ID_FALLBACK;
 
 export const registerForPushNotificationsAsync = async () => {
   if (!Device.isDevice) return null;
@@ -28,8 +31,18 @@ export const registerForPushNotificationsAsync = async () => {
   }
   if (finalStatus !== 'granted') return null;
   const projectId = getExpoProjectId();
-  const tokenResponse = projectId
-    ? await Notifications.getExpoPushTokenAsync({ projectId })
-    : await Notifications.getExpoPushTokenAsync();
-  return tokenResponse?.data || null;
+  try {
+    const tokenResponse = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+    return tokenResponse?.data || null;
+  } catch (err) {
+    if (projectId === EAS_PROJECT_ID_FALLBACK) return null;
+    try {
+      const tokenResponse = await Notifications.getExpoPushTokenAsync();
+      return tokenResponse?.data || null;
+    } catch {
+      return null;
+    }
+  }
 };

@@ -68,30 +68,49 @@ export default function HomeScreen() {
     }
   }, []);
   const handleNotificationsPress = useCallback(async () => {
+    let token = null;
     try {
-      const token = await registerForPushNotificationsAsync();
-      if (!token) {
-        Alert.alert(
-          'Notificaciones',
-          'Activa las notificaciones en Ajustes para recibir alertas.',
-          Linking.openSettings
-            ? [{ text: 'Ir a Ajustes', onPress: () => Linking.openSettings() }, { text: 'OK' }]
-            : [{ text: 'OK' }]
-        );
-      } else {
-        await registerPushToken({
-          token,
-          cedula: user?.cedula,
-          email: user?.email,
-          platform: Platform.OS,
-        });
-      }
+      token = await registerForPushNotificationsAsync();
+    } catch (_err) {
+      Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
+      return;
+    }
+    if (!token) {
+      Alert.alert(
+        'Notificaciones',
+        'Activa las notificaciones en Ajustes para recibir alertas.',
+        Linking.openSettings
+          ? [{ text: 'Ir a Ajustes', onPress: () => Linking.openSettings() }, { text: 'OK' }]
+          : [{ text: 'OK' }]
+      );
+      setNotificationsOpen(true);
+      loadNotifications().catch(() => {});
+      return;
+    }
+    try {
+      await registerPushToken({
+        token,
+        cedula: user?.cedula,
+        email: user?.email,
+        platform: Platform.OS,
+      });
+    } catch (_err) {
+      setNotificationsOpen(true);
+      loadNotifications().catch(() => {});
+      Alert.alert(
+        'Notificaciones',
+        'Notificaciones activadas en este dispositivo. Si no recibes mensajes, revisa tu conexión e intenta de nuevo.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    try {
       await loadNotifications();
       setNotificationsOpen(true);
-    } catch (_error) {
-      Alert.alert('Notificaciones', 'No se pudieron activar las notificaciones.');
+    } catch (_err) {
+      setNotificationsOpen(true);
     }
-  }, [loadNotifications, markAllNotificationsRead, user?.cedula, user?.email]);
+  }, [loadNotifications, user?.cedula, user?.email]);
   const handleNotificationsClose = useCallback(() => {
     setNotificationsOpen(false);
   }, []);
